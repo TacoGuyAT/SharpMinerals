@@ -110,7 +110,7 @@ public static class PlayPacketHandler {
         if (broken.Has<Container>())
             server.Containers.ForceCloseChest(server, action.Position);
 
-        BroadcastPlay(server, new BlockUpdateS2C(action.Position, VanillaMapping.StateId(BlockRegistry.Air)));
+        BroadcastPlay(server, new BlockUpdateS2C(action.Position, TypeMapper.StateId(BlockRegistry.Air)));
         // The dropped ECS entity spawned by BreakBlock is announced and made pickable by DropSystem.
     }
 
@@ -136,7 +136,7 @@ public static class PlayPacketHandler {
 
         var target = Offset(use.Position, (BlockFace)use.Face);
         if (handle.World.PlaceBlock(target, block))
-            BroadcastPlay(server, new BlockUpdateS2C(target, VanillaMapping.StateId(block)));
+            BroadcastPlay(server, new BlockUpdateS2C(target, TypeMapper.StateId(block)));
     }
 
     static void MovePlayer(Server server, NetClient client, double? x, double? y, double? z, float? yaw, float? pitch) {
@@ -208,7 +208,7 @@ public static class PlayPacketHandler {
         if (!ContainerManager.TryPlayerWindowToStorage(creative.Slot, out int index))
             return; // crafting / drop slot — ignored
         var inventory = handle.World.Ecs.Get<EntityInventory>(handle.Entity);
-        inventory.Storage[index] = creative.VanillaItemId is { } id && VanillaMapping.FromItemId(id) is { } type
+        inventory.Storage[index] = creative.VanillaItemId is { } id && TypeMapper.FromItemId(id) is { } type
             ? new ItemStack(type, creative.Count)
             : default;
     }

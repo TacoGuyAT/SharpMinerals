@@ -62,7 +62,7 @@ public static class ChunkSerializer {
                 for (int z = 0; z < 16; z++)
                     for (int x = 0; x < 16; x++) {
                         var block = world.GetBlock(new Vector3i(chunkX * 16 + x, worldY, chunkZ * 16 + z));
-                        states[(y << 8) | (z << 4) | x] = VanillaMapping.StateId(block);
+                        states[(y << 8) | (z << 4) | x] = TypeMapper.StateId(block);
                         if (!block.IsAir) nonAir++;
                     }
             }

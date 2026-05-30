@@ -108,7 +108,7 @@ public static class SelfTest {
         Check("dig: block removed", server.DefaultWorld.GetBlock(digPos).IsAir);
         Check("dig: acknowledged sequence", client.Sent.Any(m => m is AckBlockChangeS2C a && a.Sequence == 42));
         Check("dig: BlockUpdate broadcast",
-            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == digPos && b.BlockStateId == VanillaMapping.StateId(BlockRegistry.Air)));
+            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == digPos && b.BlockStateId == TypeMapper.StateId(BlockRegistry.Air)));
         Network.Handlers.DropSystem.Tick(server); // drops are announced by the per-tick drop system
         Check("dig: drop announced (SpawnEntity)", capture.Broadcasts.Any(m => m is SpawnEntityS2C));
 
@@ -119,7 +119,7 @@ public static class SelfTest {
         ServerPacketHandler.Handle(client, new UseItemOnC2S(0, placeOn, (int)BlockFace.Top, 0.5f, 1f, 0.5f, false, 43));
         Check("place: stone placed above clicked face", server.DefaultWorld.GetBlock(placedAt) == BlockRegistry.Stone);
         Check("place: BlockUpdate broadcast",
-            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == placedAt && b.BlockStateId == VanillaMapping.StateId(BlockRegistry.Stone)));
+            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == placedAt && b.BlockStateId == TypeMapper.StateId(BlockRegistry.Stone)));
 
         // ── Containers: open a chest, move an item in, sync to a second viewer ──
         client.Sent.Clear();

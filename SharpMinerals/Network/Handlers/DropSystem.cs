@@ -42,7 +42,7 @@ public static class DropSystem {
                 EntityId: id, Uuid: Guid.NewGuid(), Type: ItemEntityType,
                 X: x, Y: y, Z: z, Pitch: 0, Yaw: 0, HeadYaw: 0, Data: 0,
                 VelocityX: 0, VelocityY: 0, VelocityZ: 0));
-            Broadcast(server, new SetItemEntityMetadataS2C(id, VanillaMapping.ItemId(stack.Type!), stack.Count));
+            Broadcast(server, new SetItemEntityMetadataS2C(id, TypeMapper.ItemId(stack.Type!), stack.Count));
             Broadcast(server, new BundleDelimiterS2C());
         }
     }

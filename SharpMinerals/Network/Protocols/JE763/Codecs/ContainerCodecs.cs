@@ -11,7 +11,7 @@ internal static class SlotWire {
         if (stack.IsEmpty)
             s.WriteEmptySlot();
         else
-            s.WriteSlot(VanillaMapping.ItemId(stack.Type!), stack.Count);
+            s.WriteSlot(TypeMapper.ItemId(stack.Type!), stack.Count);
     }
 }
 
