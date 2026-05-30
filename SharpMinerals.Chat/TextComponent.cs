@@ -1,5 +1,5 @@
 ﻿namespace SharpMinerals.Chat;
-public class TextComponent : Component {
+public class TextComponent : ChatComponent {
     public string Text;
     public TextComponent(string text) {
         Text = text;

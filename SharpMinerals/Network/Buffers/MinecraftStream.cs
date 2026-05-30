@@ -57,20 +57,14 @@ public sealed class MinecraftStream : Stream {
     public sbyte ReadByte2() => (sbyte)ReadUByte();
     public bool ReadBool() => ReadUByte() != 0;
 
-    public void ReadExactly(Span<byte> buffer) {
-        int read = 0;
-        while (read < buffer.Length) {
-            int n = inner.Read(buffer[read..]);
-            if (n <= 0) throw new EndOfStreamException();
-            read += n;
-        }
-    }
-
     public byte[] ReadBytes(int count) {
         var buf = new byte[count];
         ReadExactly(buf);
         return buf;
     }
+
+    /// <summary>Reads everything left in the (length-bounded) buffer — e.g. a Custom Payload's data.</summary>
+    public byte[] ReadRemaining() => ReadBytes((int)(Length - Position));
 
     public ushort ReadUShort() {
         Span<byte> b = stackalloc byte[2];
@@ -204,12 +198,65 @@ public sealed class MinecraftStream : Stream {
         inner.Write(b);
     }
 
+    // ── Angle: a rotation in degrees packed into one byte (1/256 of a turn) ──
+    public void WriteAngle(float degrees) => WriteUByte((byte)(int)MathF.Floor(degrees * 256f / 360f));
+    public float ReadAngle() => ReadUByte() * 360f / 256f;
+
+    // ── Slot (an item stack on the wire) ────────────────────────────────────
+    // present(bool); if present: VarInt item id, byte count, NBT (0x00 = none).
+    public void WriteEmptySlot() => WriteBool(false);
+
+    public void WriteSlot(int itemId, int count) {
+        WriteBool(true);
+        WriteVarInt(itemId);
+        WriteByte2((sbyte)count);
+        WriteUByte(0x00); // empty NBT (TAG_End)
+    }
+
+    /// <summary>
+    /// Reads a Slot's presence + item id + count, leaving any trailing NBT unread.
+    /// Safe because each packet decodes from its own buffer, so unread bytes are
+    /// discarded with it — we don't yet need item NBT.
+    /// </summary>
+    public (int ItemId, int Count)? ReadSlotLite() {
+        if (!ReadBool()) return null;
+        int id = ReadVarInt();
+        int count = ReadByte2();
+        return (id, count);
+    }
+
+    // ── Position (block coordinate packed into a long) ──────────────────────
+    // Layout: x (26 bits) | z (26 bits) | y (12 bits), most-significant first.
+    // https://minecraft.wiki/w/Java_Edition_protocol#Position
+    public void WritePosition(long x, long y, long z) =>
+        WriteLong(((x & 0x3FFFFFF) << 38) | ((z & 0x3FFFFFF) << 12) | (y & 0xFFF));
+
+    public (long X, long Y, long Z) ReadPosition() {
+        long value = ReadLong();
+        // Arithmetic shifts sign-extend each packed field back to a signed value.
+        long x = value >> 38;
+        long y = value << 52 >> 52;
+        long z = value << 26 >> 38;
+        return (x, y, z);
+    }
+
     // ── VarInt size helper (needed for packet framing) ──────────────────────
     public static int VarIntSize(int value) {
         uint v = (uint)value;
         int size = 1;
         while ((v & ~0x7Fu) != 0) { v >>= 7; size++; }
         return size;
+    }
+
+    /// <summary>
+    /// Builds a Guid from 16 big-endian bytes (Java's UUID byte order). Round-trips
+    /// with <see cref="WriteUuid"/>; used for deriving offline-mode player UUIDs.
+    /// </summary>
+    public static Guid GuidFromBigEndianBytes(ReadOnlySpan<byte> b) {
+        if (b.Length != 16) throw new ArgumentException("UUID requires 16 bytes.", nameof(b));
+        long msb = BinaryPrimitives.ReadInt64BigEndian(b[..8]);
+        long lsb = BinaryPrimitives.ReadInt64BigEndian(b[8..]);
+        return UuidFromMsbLsb(msb, lsb);
     }
 
     // ── UUID <-> (msb, lsb) using Java's big-endian byte ordering ───────────

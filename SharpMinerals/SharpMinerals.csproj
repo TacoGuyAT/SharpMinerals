@@ -8,15 +8,24 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Debug-only test/diagnostic features (self-test + dump CLIs, the server→client
+       control channel) are compiled in only when TEST_HARNESS is defined. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Arch" Version="2.1.0" />
     <PackageReference Include="HarmonyX" Version="2.13.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog" Version="4.0.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
   </ItemGroup>
 
+  <!-- Reserved for the Harmony-based modding API (see docs/RESOURCES.md); empty for now. -->
   <ItemGroup>
     <Folder Include="Modding\" />
-    <Folder Include="Blocks\" />
-    <Folder Include="Items\" />
   </ItemGroup>
 
   <ItemGroup>

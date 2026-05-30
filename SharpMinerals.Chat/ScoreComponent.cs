@@ -1,5 +1,5 @@
 ﻿namespace SharpMinerals.Chat;
-public class ScoreComponent : Component {
+public class ScoreComponent : ChatComponent {
     public Score Score;
     public ScoreComponent(Score score) {
         Score = score;

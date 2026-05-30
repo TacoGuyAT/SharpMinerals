@@ -1,14 +1,23 @@
-﻿using System.Net.Sockets;
+﻿using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Network;
+
+/// <summary>
+/// Converts a single message type to and from the wire for a given protocol
+/// version. Codecs operate on a <see cref="MinecraftStream"/> positioned at the
+/// start of the packet's payload (the packet id has already been read/written by
+/// the framing layer).
+/// </summary>
 public interface ICodec {
-    public ReadOnlySpan<byte> Serialize(IMessage packet);
-    public IMessage Deserialize(NetworkStream stream);
+    void Encode(MinecraftStream stream, IMessage message);
+    IMessage Decode(MinecraftStream stream);
 }
 
+/// <summary>Strongly-typed convenience layer over <see cref="ICodec"/>.</summary>
 public interface ICodec<T> : ICodec where T : IMessage {
-    ReadOnlySpan<byte> ICodec.Serialize(IMessage packet) => Serialize((T)packet);
-    IMessage ICodec.Deserialize(NetworkStream stream) => Deserialize(stream);
-    public ReadOnlySpan<byte> Serialize(T packet);
-    public new T Deserialize(NetworkStream stream);
+    void ICodec.Encode(MinecraftStream stream, IMessage message) => Encode(stream, (T)message);
+    IMessage ICodec.Decode(MinecraftStream stream) => Decode(stream);
+
+    void Encode(MinecraftStream stream, T message);
+    new T Decode(MinecraftStream stream);
 }
