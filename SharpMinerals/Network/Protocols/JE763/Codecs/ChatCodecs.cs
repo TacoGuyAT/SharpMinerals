@@ -13,6 +13,16 @@ internal sealed class SystemChatMessageS2CCodec : ICodec<SystemChatMessageS2C> {
         throw new NotSupportedException("SystemChatMessageS2C is clientbound only.");
 }
 
+internal sealed class PlayerListHeaderFooterS2CCodec : ICodec<PlayerListHeaderFooterS2C> {
+    public void Encode(MinecraftStream s, PlayerListHeaderFooterS2C m) {
+        s.WriteString(m.Header.ToString()); // JSON chat components (1.20.1)
+        s.WriteString(m.Footer.ToString());
+    }
+
+    public PlayerListHeaderFooterS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("PlayerListHeaderFooterS2C is clientbound only.");
+}
+
 internal sealed class ChatMessageC2SCodec : ICodec<ChatMessageC2S> {
     public void Encode(MinecraftStream s, ChatMessageC2S m) => s.WriteString(m.Message);
 

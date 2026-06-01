@@ -1,9 +1,9 @@
-﻿using SharpMinerals.Level;
+﻿using SharpMinerals.Blocks.Descriptors;
+using SharpMinerals.Level;
 using SharpMinerals.Math;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Nbt;
-using SharpMinerals.Network.Protocols.JE763;
 
 namespace SharpMinerals.Network;
 
@@ -21,8 +21,8 @@ public static class ChunkSerializer {
     const int LightSectionCount = SectionCount + 2; // one padding section above and below
     const int BiomeId = 0;                // single biome: minecraft:badlands (1.20.1 registry id 0) — its reddish tint makes the flat world distinctive
 
-    /// <summary>Builds the Chunk Data packet for the column at (chunkX, chunkZ).</summary>
-    public static ChunkDataS2C Build(World world, int chunkX, int chunkZ) {
+    /// <summary>Builds the Chunk Data packet for the column at (chunkX, chunkZ), mapping ids via <paramref name="types"/>.</summary>
+    public static ChunkDataS2C Build(ITypeMapper types, World world, int chunkX, int chunkZ) {
         using var ms = new MemoryStream();
         var s = new MinecraftStream(ms, leaveOpen: true);
 
@@ -30,11 +30,26 @@ public static class ChunkSerializer {
         s.WriteInt(chunkZ);
         WriteHeightmaps(s);
 
-        byte[] sections = BuildSections(world, chunkX, chunkZ);
+        // Block entities are derived from the block STATES (every chest block), not from the sparse
+        // server-side BlockEntity instances — those are created lazily (a chest only gets one when first
+        // opened), so a placed-but-unopened chest would otherwise be omitted and render invisibly.
+        var blockEntities = new List<(byte Packed, int Y, int TypeId)>();
+        byte[] sections = BuildSections(types, world, chunkX, chunkZ, blockEntities);
         s.WriteVarInt(sections.Length);
         s.Write(sections, 0, sections.Length);
 
-        s.WriteVarInt(0);                 // block entity count
+        // A block-entity-rendered block (a 1.20.1 chest has no normal model) needs its block entity in the
+        // chunk packet or it stays invisible until a later update. Each: packed local XZ byte, world-Y short,
+        // the version's block-entity-type id, then the data NBT (empty — the type renders it; a chest's
+        // contents stream via its window on open).
+        s.WriteVarInt(blockEntities.Count);
+        foreach (var (packed, y, typeId) in blockEntities) {
+            s.WriteUByte(packed);
+            s.WriteShort((short)y);
+            s.WriteVarInt(typeId);
+            new NbtCompound().WriteRoot(s); // empty data (1.20.1 named root)
+        }
+
         WriteLight(s);
 
         return new ChunkDataS2C(ms.ToArray());
@@ -50,7 +65,8 @@ public static class ChunkSerializer {
             .WriteRoot(s);
     }
 
-    static byte[] BuildSections(World world, int chunkX, int chunkZ) {
+    static byte[] BuildSections(ITypeMapper types, World world, int chunkX, int chunkZ,
+                                List<(byte Packed, int Y, int TypeId)> blockEntities) {
         using var ms = new MemoryStream();
         var s = new MinecraftStream(ms, leaveOpen: true);
 
@@ -61,9 +77,18 @@ public static class ChunkSerializer {
                 long worldY = MinY + sy * 16 + y;
                 for (int z = 0; z < 16; z++)
                     for (int x = 0; x < 16; x++) {
-                        var block = world.GetBlock(new Vector3i(chunkX * 16 + x, worldY, chunkZ * 16 + z));
-                        states[(y << 8) | (z << 4) | x] = TypeMapper.StateId(block);
-                        if (!block.IsAir) nonAir++;
+                        var pos = new Vector3i(chunkX * 16 + x, worldY, chunkZ * 16 + z);
+                        var block = world.GetBlock(pos);
+                        // Stateful blocks (chest facing, …) map via their stored state; the rest by type.
+                        states[(y << 8) | (z << 4) | x] =
+                            block.Has<StatesBlockDescriptor>() && world.GetBlockState(pos) is { } bs
+                                ? types.StateId(bs)
+                                : types.StateId(block);
+                        if (block.IsAir) continue;
+                        nonAir++;
+                        // A block that carries a block entity (chest) → emit it for the chunk packet so it renders.
+                        if (types.TryBlockEntityTypeId(block, out int beId))
+                            blockEntities.Add(((byte)((x << 4) | z), (int)worldY, beId));
                     }
             }
 

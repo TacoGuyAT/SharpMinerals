@@ -1,57 +1,51 @@
-using SharpMinerals.Blocks.Components;
-using SharpMinerals.Items.Components;
+using SharpMinerals.Blocks.Descriptors;
+using SharpMinerals.Components;
+using SharpMinerals.Items;
 
 namespace SharpMinerals.Blocks;
 
 /// <summary>
-/// The block registry. Air is always id 0. Every block is also an item (see
-/// <see cref="BlockType"/>). Built in two phases to dodge the static-init-order trap:
-/// the field initializers construct every flyweight first (Phase 1), then the static
-/// constructor wires up cross-referencing components like drops/placement (Phase 2),
-/// which runs only after all field initializers per the C# spec.
+/// The block registry. Air is id 0; every block is also an item. A block <b>places and
+/// drops itself by default</b>, so only the exceptions need spelling out — each block's
+/// whole definition is one line. Drop overrides use a lazy <c>() =&gt;</c> lambda so a block
+/// can reference a kind that's registered later.
 /// </summary>
 public static class BlockRegistry {
     static readonly List<BlockType> byId = new();
-    static readonly Dictionary<string, BlockType> byName = new();
+    static readonly Dictionary<string, BlockType> byName = [];
+    static bool frozen;
 
-    // ── Phase 1: construct flyweights (identity + air flag/marker) ──
-    // The Java Edition wire ids these map to are a network concern — see the JE763
-    // VanillaMapping translator, keyed by block name.
-    static BlockType Register(string name, bool isAir = false) {
+    static BlockType Define(string name, bool isAir = false) {
+        if (frozen)
+            throw new InvalidOperationException(
+                $"BlockRegistry is frozen — register block \"{name}\" during mod OnInitialize, before the palette is built.");
+        if (byName.ContainsKey(name))
+            throw new ArgumentException($"A block named \"{name}\" is already registered.", nameof(name));
         var block = new BlockType(byId.Count, name, isAir);
-        if (isAir) block.With(new Air());
         byId.Add(block);
         byName[name] = block;
         return block;
     }
 
-    public static readonly BlockType Air = Register("air", isAir: true);
-    public static readonly BlockType Bedrock = Register("bedrock");
-    public static readonly BlockType Stone = Register("stone");
-    public static readonly BlockType Dirt = Register("dirt");
-    public static readonly BlockType GrassBlock = Register("grass_block");
-    public static readonly BlockType Cobblestone = Register("cobblestone");
-    public static readonly BlockType Chest = Register("chest");
+    /// <summary>Registers a new block, returning it for fluent composition (<c>.DropSelf().Add(...)</c>).
+    /// For mods — call from <c>Mod.OnInitialize</c>; throws once the registry is <see cref="Freeze">frozen</see>.
+    /// The wire id of a modded block falls back to stone until a type-mapping component is added.</summary>
+    public static BlockType Register(string name) => Define(name);
 
-    // ── Phase 2: wire cross-referencing components (drops, placement) ──
-    static BlockRegistry() {
-        Stone.With(new Drops(Cobblestone));
-        Dirt.With(new Drops(Dirt));
-        GrassBlock.With(new Drops(Dirt));
-        Cobblestone.With(new Drops(Cobblestone));
+    /// <summary>Seals the registry so no further blocks can be added — the host calls this after mods
+    /// have initialised and before the protocols/type-mappers snapshot the palette.</summary>
+    public static void Freeze() => frozen = true;
 
-        // Every solid block places itself when held (it IS an item).
-        Bedrock.With(new Placeable(Bedrock));
-        Stone.With(new Placeable(Stone));
-        Dirt.With(new Placeable(Dirt));
-        GrassBlock.With(new Placeable(GrassBlock));
-        Cobblestone.With(new Placeable(Cobblestone));
-
-        // A chest places itself, drops itself when broken, and opens a 27-slot container.
-        Chest.With(new Placeable(Chest));
-        Chest.With(new Drops(Chest));
-        Chest.With(new Container(27));
-    }
+    public static readonly BlockType Air         = Define("air", isAir: true);
+    public static readonly BlockType Bedrock     = Define("bedrock");
+    public static readonly BlockType Cobblestone = Define("cobblestone").DropSelf();
+    public static readonly BlockType Stone       = Define("stone").Add(new DropBlockDescriptor(() => new ItemStack(Cobblestone)));
+    public static readonly BlockType Dirt        = Define("dirt").DropSelf();
+    public static readonly BlockType GrassBlock  = Define("grass_block").Add(new DropBlockDescriptor(() => new ItemStack(Dirt)));
+    public static readonly BlockType Chest       = Define("chest").DropSelf().Add(new ContainerBlockDescriptor(27), new StatesBlockDescriptor(State.Facing));
+    public static readonly BlockType Wool        = Define("wool").DropSelf().Add(new StatesBlockDescriptor(State.Color));
+    public static readonly BlockType Sand        = Define("sand").DropSelf().Add(new FallingBlockDescriptor());
+    public static readonly BlockType Gravel      = Define("gravel").DropSelf().Add(new FallingBlockDescriptor());
 
     public static IReadOnlyList<BlockType> All => byId;
     public static BlockType FromId(int id) => byId[id];

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The test-harness commands (/test …) packaged as a SharpMinerals mod. Loaded via the mod system
+       only in test/debug environments (the CLI references it under Debug; the test fixture loads it
+       through the real ModLoader). Uses only the core PUBLIC API, like any third-party mod. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+  </ItemGroup>
+
+</Project>

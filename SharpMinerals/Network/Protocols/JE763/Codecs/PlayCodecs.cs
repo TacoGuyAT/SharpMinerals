@@ -48,6 +48,26 @@ internal sealed class KeepAliveS2CCodec : ICodec<KeepAliveS2C> {
     public KeepAliveS2C Decode(MinecraftStream s) => new(s.ReadLong());
 }
 
+/// <summary>Respawn (0x41). Same dimension fields as Join Game's tail, minus the registry codec/entity id.
+/// copyMetadata=false resets the player's client-side metadata for a clean reload.</summary>
+internal sealed class RespawnS2CCodec : ICodec<RespawnS2C> {
+    public void Encode(MinecraftStream s, RespawnS2C m) {
+        s.WriteString(m.DimensionType);   // dimension type (must exist in the registry)
+        s.WriteString(m.WorldName);       // dimension (world) name
+        s.WriteLong(m.HashedSeed);
+        s.WriteUByte(m.GameMode);         // game mode
+        s.WriteUByte(0xFF);               // previous game mode (0xFF = none)
+        s.WriteBool(false);               // is debug
+        s.WriteBool(m.IsFlat);            // is flat
+        s.WriteBool(false);               // copy metadata (reset)
+        s.WriteBool(false);               // has death location
+        s.WriteVarInt(0);                 // portal cooldown
+    }
+
+    public RespawnS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("RespawnS2C is clientbound only.");
+}
+
 internal sealed class SetHealthS2CCodec : ICodec<SetHealthS2C> {
     public void Encode(MinecraftStream s, SetHealthS2C m) {
         s.WriteFloat(m.Health);
@@ -102,13 +122,13 @@ internal sealed class SynchronizePlayerPositionS2CCodec : ICodec<SynchronizePlay
 internal sealed class BlockUpdateS2CCodec : ICodec<BlockUpdateS2C> {
     public void Encode(MinecraftStream s, BlockUpdateS2C m) {
         s.WritePosition(m.Position.X, m.Position.Y, m.Position.Z);
-        s.WriteVarInt(m.BlockStateId);
+        // mapper set by Protocol.EncodePayload; no state override → the block's default state id.
+        s.WriteVarInt(m.State is { } st ? s.Types!.StateId(st) : s.Types!.StateId(m.Block));
     }
 
-    public BlockUpdateS2C Decode(MinecraftStream s) {
-        var (x, y, z) = s.ReadPosition();
-        return new BlockUpdateS2C(new Vector3i(x, y, z), s.ReadVarInt());
-    }
+    // Clientbound only — there is no reverse map from a wire state id back to our BlockState.
+    public BlockUpdateS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("BlockUpdateS2C is clientbound only.");
 }
 
 internal sealed class ChunkDataS2CCodec : ICodec<ChunkDataS2C> {
@@ -132,7 +152,7 @@ internal sealed class SetItemEntityMetadataS2CCodec : ICodec<SetItemEntityMetada
         s.WriteVarInt(m.EntityId);
         s.WriteUByte(ItemDataIndex);
         s.WriteVarInt(SlotMetadataType);
-        s.WriteSlot(m.ItemId, m.Count);
+        SlotWire.WriteStack(s, m.Stack); // maps our ItemStack → wire Slot via s.Types
         s.WriteUByte(MetadataEnd);
     }
 
@@ -144,25 +164,46 @@ internal sealed class SpawnEntityS2CCodec : ICodec<SpawnEntityS2C> {
     public void Encode(MinecraftStream s, SpawnEntityS2C m) {
         s.WriteVarInt(m.EntityId);
         s.WriteUuid(m.Uuid);
-        s.WriteVarInt(m.Type);
+        s.WriteVarInt(s.Types!.EntityTypeId(m.Type)); // mapper set by Protocol.EncodePayload
         s.WriteDouble(m.X);
         s.WriteDouble(m.Y);
         s.WriteDouble(m.Z);
         s.WriteUByte(m.Pitch);
         s.WriteUByte(m.Yaw);
         s.WriteUByte(m.HeadYaw);
-        s.WriteVarInt(m.Data);
+        // A falling_block carries its block-state id in Data; resolve it per protocol via the mapper.
+        s.WriteVarInt(m.BlockData is { } block ? s.Types!.StateId(block) : m.Data);
         s.WriteShort(m.VelocityX);
         s.WriteShort(m.VelocityY);
         s.WriteShort(m.VelocityZ);
     }
 
-    public SpawnEntityS2C Decode(MinecraftStream s) => new(
-        s.ReadVarInt(), s.ReadUuid(), s.ReadVarInt(),
-        s.ReadDouble(), s.ReadDouble(), s.ReadDouble(),
-        s.ReadUByte(), s.ReadUByte(), s.ReadUByte(),
-        s.ReadVarInt(),
-        s.ReadShort(), s.ReadShort(), s.ReadShort());
+    // Clientbound only — there is no reverse map from a wire entity-type id back to our EntityType.
+    public SpawnEntityS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("SpawnEntityS2C is clientbound only.");
+}
+
+internal sealed class SetEntityVelocityS2CCodec : ICodec<SetEntityVelocityS2C> {
+    public void Encode(MinecraftStream s, SetEntityVelocityS2C m) {
+        s.WriteVarInt(m.EntityId);
+        s.WriteShort(m.VelocityX);
+        s.WriteShort(m.VelocityY);
+        s.WriteShort(m.VelocityZ);
+    }
+
+    public SetEntityVelocityS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("SetEntityVelocityS2C is clientbound only.");
+}
+
+internal sealed class CollectItemS2CCodec : ICodec<CollectItemS2C> {
+    public void Encode(MinecraftStream s, CollectItemS2C m) {
+        s.WriteVarInt(m.CollectedEntityId);
+        s.WriteVarInt(m.CollectorEntityId);
+        s.WriteVarInt(m.PickupItemCount);
+    }
+
+    public CollectItemS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("CollectItemS2C is clientbound only.");
 }
 
 // ── Serverbound ──────────────────────────────────────────────────────────────
@@ -170,6 +211,11 @@ internal sealed class SpawnEntityS2CCodec : ICodec<SpawnEntityS2C> {
 internal sealed class KeepAliveC2SCodec : ICodec<KeepAliveC2S> {
     public void Encode(MinecraftStream s, KeepAliveC2S m) => s.WriteLong(m.Id);
     public KeepAliveC2S Decode(MinecraftStream s) => new(s.ReadLong());
+}
+
+internal sealed class ConfirmTeleportationC2SCodec : ICodec<ConfirmTeleportationC2S> {
+    public void Encode(MinecraftStream s, ConfirmTeleportationC2S m) => s.WriteVarInt(m.TeleportId);
+    public ConfirmTeleportationC2S Decode(MinecraftStream s) => new(s.ReadVarInt());
 }
 
 internal sealed class SetPlayerPositionC2SCodec : ICodec<SetPlayerPositionC2S> {

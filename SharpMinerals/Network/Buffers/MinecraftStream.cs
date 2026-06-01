@@ -14,8 +14,15 @@ public sealed class MinecraftStream : Stream {
     public const int VarIntMaxBytes = 5;
     public const int VarLongMaxBytes = 10;
 
-    readonly Stream inner;
+    Stream inner; // not readonly: EnableEncryption wraps it in an AES/CFB8 stream mid-connection
     readonly bool leaveOpen;
+    int pushback = -1; // a single peeked byte, re-served on the next read (used to sniff a new connection's framing)
+
+    /// <summary>
+    /// The protocol's type mapper for the current encode, set by <see cref="Protocol.EncodePayload"/>
+    /// so codecs can map block/item ids to this connection's protocol version. Null outside encoding.
+    /// </summary>
+    public ITypeMapper? Types { get; set; }
 
     public MinecraftStream(Stream inner, bool leaveOpen = false) {
         this.inner = inner;
@@ -31,7 +38,17 @@ public sealed class MinecraftStream : Stream {
     public override long Length => inner.Length;
     public override long Position { get => inner.Position; set => inner.Position = value; }
     public override void Flush() => inner.Flush();
-    public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+    public override int Read(byte[] buffer, int offset, int count) {
+        // Serve a peeked byte first so a sniffed connection reads identically to an un-sniffed one.
+        if (pushback >= 0 && count > 0) {
+            buffer[offset] = (byte)pushback;
+            pushback = -1;
+            if (count == 1) return 1;
+            int more = inner.Read(buffer, offset + 1, count - 1);
+            return 1 + (more < 0 ? 0 : more);
+        }
+        return inner.Read(buffer, offset, count);
+    }
     public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
     public override void SetLength(long value) => inner.SetLength(value);
     public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
@@ -42,6 +59,16 @@ public sealed class MinecraftStream : Stream {
         base.Dispose(disposing);
     }
 
+    /// <summary>
+    /// Switches the underlying stream to AES/CFB8 encryption (legacy 1.5.2 login). Everything read or
+    /// written after this is encrypted with the shared secret (key and IV). Must be called when no byte
+    /// is peeked (the handshake is plaintext and fully consumed by this point).
+    /// </summary>
+    public void EnableEncryption(byte[] sharedSecret) {
+        if (pushback >= 0) throw new InvalidOperationException("Cannot enable encryption with a peeked byte pending.");
+        inner = new AesCfb8Stream(inner, sharedSecret);
+    }
+
     /// <summary>Materialises everything written so far (only valid over a MemoryStream).</summary>
     public byte[] ToArray() => inner is MemoryStream ms
         ? ms.ToArray()
@@ -49,9 +76,20 @@ public sealed class MinecraftStream : Stream {
 
     // ── Primitive reads ─────────────────────────────────────────────────────
     public byte ReadUByte() {
+        if (pushback >= 0) { byte p = (byte)pushback; pushback = -1; return p; }
         int b = inner.ReadByte();
         if (b < 0) throw new EndOfStreamException();
         return (byte)b;
+    }
+
+    /// <summary>
+    /// Reads one byte but leaves it to be returned again by the next read — used to sniff a new
+    /// connection's framing (legacy pre-Netty clients open with a raw packet id, not a VarInt frame).
+    /// </summary>
+    public byte PeekUByte() {
+        byte b = ReadUByte();
+        pushback = b;
+        return b;
     }
 
     public sbyte ReadByte2() => (sbyte)ReadUByte();
@@ -123,6 +161,45 @@ public sealed class MinecraftStream : Stream {
         return Encoding.UTF8.GetString(bytes);
     }
 
+    /// <summary>
+    /// Reads a legacy (pre-1.7) string: a big-endian <c>short</c> count of UTF-16 code units
+    /// followed by that many UTF-16BE chars. Used by the JE61 (1.5.2) protocol.
+    /// </summary>
+    public string ReadString16(int maxLength = 32767) {
+        int length = ReadUShort();
+        if (length > maxLength)
+            throw new FormatException($"Legacy string length {length} is out of range.");
+        return Encoding.BigEndianUnicode.GetString(ReadBytes(length * 2));
+    }
+
+    /// <summary>Reads a legacy short-length-prefixed byte array (used by the 1.5.2 encryption packets).</summary>
+    public byte[] ReadByteArray16() {
+        int length = ReadShort();
+        if (length < 0) throw new FormatException($"Byte-array length {length} is negative.");
+        return ReadBytes(length);
+    }
+
+    /// <summary>
+    /// Consumes a 1.5.2 Slot: short item id (-1 = empty → stop); else byte count, short damage, short
+    /// NBT length (-1 = none, else that many gzip-NBT bytes). We don't model items here yet — this just
+    /// advances past the slot so a length-prefix-free legacy packet stays in sync.
+    /// </summary>
+    public void SkipLegacySlot() => ReadLegacySlot();
+
+    /// <summary>
+    /// Reads a 1.5.2 Slot, returning the item id (-1 = empty) and damage/metadata; NBT is consumed and
+    /// discarded. Used to resolve a creative client's held item on block placement.
+    /// </summary>
+    public (short Id, byte Count, short Damage) ReadLegacySlot() {
+        short id = ReadShort();
+        if (id == -1) return (-1, 0, 0);
+        byte count = ReadUByte();
+        short damage = ReadShort();
+        short nbtLength = ReadShort();
+        if (nbtLength >= 0) ReadBytes(nbtLength); // gzip NBT
+        return (id, count, damage);
+    }
+
     public Guid ReadUuid() {
         // Two big-endian longs (most-significant first), as MC encodes UUIDs.
         Span<byte> b = stackalloc byte[16];
@@ -190,6 +267,21 @@ public sealed class MinecraftStream : Stream {
         inner.Write(bytes);
     }
 
+    /// <summary>
+    /// Writes a legacy (pre-1.7) string: a big-endian <c>short</c> count of UTF-16 code units
+    /// followed by the UTF-16BE chars. Used by the JE61 (1.5.2) protocol.
+    /// </summary>
+    public void WriteString16(string value) {
+        WriteShort((short)value.Length);
+        inner.Write(Encoding.BigEndianUnicode.GetBytes(value));
+    }
+
+    /// <summary>Writes a legacy short-length-prefixed byte array (used by the 1.5.2 encryption packets).</summary>
+    public void WriteByteArray16(byte[] data) {
+        WriteShort((short)data.Length);
+        inner.Write(data, 0, data.Length);
+    }
+
     public void WriteUuid(Guid value) {
         (long msb, long lsb) = MsbLsbFromUuid(value);
         Span<byte> b = stackalloc byte[16];
@@ -211,6 +303,16 @@ public sealed class MinecraftStream : Stream {
         WriteVarInt(itemId);
         WriteByte2((sbyte)count);
         WriteUByte(0x00); // empty NBT (TAG_End)
+    }
+
+    /// <summary>Writes a 1.5.2 Slot: short item id (-1 = empty → stop); else byte count, short damage, and
+    /// short NBT length -1 (no gzip NBT). Mirrors <see cref="ReadLegacySlot"/>.</summary>
+    public void WriteLegacySlot(short itemId, byte count, short damage) {
+        WriteShort(itemId);
+        if (itemId < 0) return; // empty slot — nothing follows
+        WriteUByte(count);
+        WriteShort(damage);
+        WriteShort(-1); // no NBT
     }
 
     /// <summary>

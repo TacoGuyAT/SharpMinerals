@@ -52,7 +52,7 @@ public sealed class TcpNetServer : NetServer<TcpNetClient> {
                 break; // Listener stopped.
             }
 
-            var client = new TcpNetClient(NextClientId(), tcp, Registry.Default);
+            var client = new TcpNetClient(NextClientId(), tcp, Registry);
             Register(client);
 
             new Thread(() => {

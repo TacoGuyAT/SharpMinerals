@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using SharpMinerals.Level;
 using SharpMinerals.Network;
+using SharpMinerals.Persistence;
 
 namespace SharpMinerals;
 
@@ -15,4 +16,10 @@ public struct ServerContext {
     public string MOTD;
     public int MaxPlayers;
     public double TicksPerSecond;
+
+    /// <summary>
+    /// Backend for cross-session player persistence. Null ⇒ the server uses an in-memory store
+    /// (survives reconnects, not restarts); a host can supply a disk-backed one (RocksDB).
+    /// </summary>
+    public IPlayerStore? PlayerStore;
 }

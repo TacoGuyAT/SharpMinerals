@@ -25,9 +25,7 @@ dotnet run --project SharpMinerals -- selftest               # in-process verifi
 | Package | Version | Used for |
 |---|---|---|
 | [Arch](https://github.com/genaray/Arch) | 2.1.0 | Entity-Component-System — every world entity lives in an Arch `World`. |
-| [Serilog](https://serilog.net/) | 4.0.0 | Structured logging (core). |
-| Serilog.Extensions.Logging | 8.0.0 | Bridges Serilog under `Microsoft.Extensions.Logging`. |
-| Serilog.Sinks.Console | 6.0.0 | Console sink. |
+| [ZLogger](https://github.com/Cysharp/ZLogger) | 2.5.10 | Zero-allocation structured logging backend, in the host (console + daily rolling file). |
 | Microsoft.Extensions.Logging | 8.0.0 | Logging abstraction the code is written against (`Logging.For(category)`). |
 
 Built-in BCL, no package needed:
@@ -46,19 +44,38 @@ Built-in BCL, no package needed:
 > `SharpMinerals.Network.TCP` exists in the tree but is **dead/duplicate** code, not
 > in the solution — the live transport is `SharpMinerals/Network/Tcp/`.
 
-## Reserved — not yet wired
+## Modding API (`SharpMinerals.Modding`)
 
-| Package | Version | Intended use |
+A **HarmonyX-based modding API**, modelled on [`HarmonyMine`](../../HarmonyMine) but
+patching this server's own managed code (no IKVM/JVM).
+
+| Package | Version | Use |
 |---|---|---|
-| [HarmonyX](https://github.com/BepInEx/HarmonyX) | 2.13.0 | A planned **Harmony-based modding API** (Mixin-like runtime patching). |
+| [HarmonyX](https://github.com/BepInEx/HarmonyX) | 2.13.0 | Per-mod `Harmony` instance for runtime patching (`Mod.Harmony`). |
 
-The empty `Modding/` folder (namespace `SharpMinerals.Modding`) is reserved for it.
-The design follows [`HarmonyMine`](../../HarmonyMine) — a sibling project where mods
-are a `Mod` base class plus `[ModInfo]`/`[Command]` attributes, discovered by
-reflection and applied as Harmony patches. HarmonyMine patches a **Java** Minecraft
-server through IKVM; the SharpMinerals version will patch its own managed server
-directly. Nothing references HarmonyX in code yet — it is a forward-looking
-dependency.
+A mod is a `Mod` subclass plus an assembly-level `[ModInfo(id, version, authors)]`.
+Lifecycle, driven by `ModLoader`:
+
+1. **`OnInitialize()`** — register content (`BlockRegistry.Register`, `ItemRegistry.Register`,
+   `EntityRegistry.Register`) and apply Harmony patches. Runs **before** the protocols /
+   type-mappers snapshot the palette.
+2. **`OnServerStarted(Server)`** — server is up: register commands on `server.CommandDispatcher`,
+   subscribe to events, set `server.MOTD`, etc.
+3. **`OnServerStopping(Server)`** — shutdown cleanup.
+
+Loading (in `SharpMinerals.CLI/Program.cs`): `ModLoader.LoadFrom(...)` for compiled-in /
+consuming-assembly mods and `ModLoader.LoadDirectory("mods")` for file mods (`mods/*.dll`),
+then `ModContent.Freeze()` seals the registries before protocols are built; `StartAll` /
+`StopAll` run the runtime hooks. A modded block has no vanilla state id yet, so it renders
+as **stone** (the type-mapper fallback) on a stock client — a per-block type-mapping
+component (mod-chosen masquerade id) is the planned next step.
+
+- `SharpMinerals.TestMod` — the `/test` harness command, packaged as a mod. Loaded only on
+  Debug (CLI references it under `'$(Configuration)'=='Debug'`) and by the real-client test
+  fixture (through the real `ModLoader`), so the shipped Release server has no `/test`.
+- `SharpMinerals.SampleMod` — a worked example (custom MOTD + a `ruby_block` + a `/ruby`
+  command). **File-loaded**: build it and drop `SharpMinerals.SampleMod.dll` into the
+  server's `mods/` folder.
 
 ## Protocol references
 

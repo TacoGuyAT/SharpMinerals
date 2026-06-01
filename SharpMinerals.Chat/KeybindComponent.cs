@@ -1,5 +1,5 @@
 ﻿namespace SharpMinerals.Chat;
-public class KeybindComponent : ChatComponent {
+public sealed class KeybindComponent : ChatComponent<KeybindComponent> {
     public string Keybind;
     public KeybindComponent(string keybind) {
         Keybind = keybind;

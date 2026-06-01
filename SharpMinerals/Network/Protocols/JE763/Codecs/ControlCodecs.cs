@@ -19,6 +19,17 @@ internal sealed class TestCommandS2CCodec : ICodec<TestCommandS2C> {
         throw new NotSupportedException("TestCommandS2C is clientbound only.");
 }
 
+internal sealed class BrandS2CCodec : ICodec<BrandS2C> {
+    // Custom Payload on the minecraft:brand channel; the data is a single string.
+    public void Encode(MinecraftStream s, BrandS2C m) {
+        s.WriteString("minecraft:brand");
+        s.WriteString(m.Brand);
+    }
+
+    public BrandS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("BrandS2C is clientbound only.");
+}
+
 internal sealed class CustomPayloadC2SCodec : ICodec<CustomPayloadC2S> {
     public void Encode(MinecraftStream s, CustomPayloadC2S m) {
         s.WriteString(m.Channel);

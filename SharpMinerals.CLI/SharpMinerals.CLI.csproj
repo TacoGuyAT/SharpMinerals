@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Thin executable host for the SharpMinerals core library: wires a TCP server,
+       worlds and the console, then starts the loop. It uses only the library's PUBLIC
+       API, so it doubles as the reference for embedding SharpMinerals in another app. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>SharpMinerals.CLI</AssemblyName>
+    <RootNamespace>SharpMinerals.CLI</RootNamespace>
+    <ApplicationIcon>icon_temp.ico</ApplicationIcon>
+
+  <!-- The control-channel test harness + diagnostic dump commands compile in only on Debug,
+       matching the core library's TEST_HARNESS gating. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="icon_temp.ico" />
+  </ItemGroup>
+
+  <!-- The logging backend lives here, in the host — the core library only references the abstractions. -->
+  <ItemGroup>
+    <PackageReference Include="Kokuban" Version="0.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="ZLogger" Version="2.5.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+    <ProjectReference Include="..\SharpMinerals.Persistence.RocksDb\SharpMinerals.Persistence.RocksDb.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <ProjectReference Include="..\SharpMinerals.TestMod\SharpMinerals.TestMod.csproj" />
+    <ProjectReference Include="..\SharpMinerals.SampleMod\SharpMinerals.SampleMod.csproj" />
+  </ItemGroup>
+
+</Project>

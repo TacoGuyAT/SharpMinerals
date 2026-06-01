@@ -1,6 +1,7 @@
 using SharpMinerals.Items;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
+using SharpMinerals.Network.Nbt;
 
 namespace SharpMinerals.Network.Protocols.JE763.Codecs;
 
@@ -8,11 +9,73 @@ namespace SharpMinerals.Network.Protocols.JE763.Codecs;
 // type to its vanilla id. Empty stacks write a "not present" slot.
 internal static class SlotWire {
     public static void WriteStack(MinecraftStream s, ItemStack stack) {
-        if (stack.IsEmpty)
+        if (stack.IsEmpty) {
             s.WriteEmptySlot();
-        else
-            s.WriteSlot(TypeMapper.ItemId(stack.Type!), stack.Count);
+            return;
+        }
+        int id = s.Types!.ItemId(stack); // mapper set by Protocol.EncodePayload; stack-aware (wool colour, …)
+
+        // A mod-added type has no vanilla id, so it renders as the fallback item (stone). Attach NBT so the
+        // client still tells it apart: a custom display name (a translatable, falling back to a humanised
+        // name) and an identity marker, which also stops it stacking with the real fallback item or with
+        // other custom types that share it. Vanilla types write a plain slot (empty NBT).
+        if (s.Types.IsCustom(stack.Type!)) {
+            s.WriteBool(true);
+            s.WriteVarInt(id);
+            s.WriteByte2((sbyte)stack.Count);
+            CustomItemNbt(stack.Type!).WriteRoot(s, network: false);
+        } else {
+            s.WriteSlot(id, stack.Count);
+        }
     }
+
+    /// <summary>Reads a wire Slot back into our internal <see cref="ItemStack"/> (the inverse of
+    /// <see cref="WriteStack"/>): maps the vanilla id to our type, preferring the custom-type NBT marker so a
+    /// mod item the client knows only by its fallback id is restored. A not-present slot → an (empty) stack —
+    /// a deliberate clear; a present item this server has no type for → <c>null</c> (invalid), so the caller
+    /// can warn the client instead of silently clearing the slot.</summary>
+    public static ItemStack? ReadStack(MinecraftStream s) {
+        if (!s.ReadBool())
+            return default(ItemStack); // not present — a deliberately empty slot
+        int id = s.ReadVarInt();
+        int count = s.ReadByte2();
+        var nbt = NbtReader.ReadItemNbt(s);
+        if (nbt?.Children.GetValueOrDefault(CustomTypeKey) is NbtString marker && ItemRegistry.Resolve(marker.Value) is { } custom)
+            return new ItemStack(custom, count);
+        var stack = s.Types!.FromVanillaItem(id); // resolves colour/state too (e.g. coloured wool)
+        if (stack.IsEmpty)
+            return null; // present on the wire, but no SharpMinerals type maps to this id
+        stack.Count = count;
+        return stack;
+    }
+
+    /// <summary>The NBT key carrying a custom type's registry name on the wire — both the stacking
+    /// discriminator and the marker the server reads back to recover the type the client echoes.</summary>
+    public const string CustomTypeKey = "SharpMineralsType";
+
+    // The item NBT that gives a fallback-rendered custom type a distinct identity on the client.
+    static NbtCompound CustomItemNbt(ItemType type) {
+        var display = new NbtCompound().Put("Name", CustomNameJson(type));
+        return new NbtCompound()
+            .Put("display", display)
+            // The registry name, distinct per custom type → the client won't merge different customs (or
+            // the vanilla fallback) into one stack, and the server recovers the exact type when the client
+            // sends the slot back (e.g. a creative move) instead of seeing only the fallback item id.
+            .Put(CustomTypeKey, type.Name);
+    }
+
+    // A 1.20.1 item name is a JSON chat component (as a string). Use a translatable keyed by the type's
+    // name with a humanised fallback, so a resource pack can localise it but it reads well without one.
+    static string CustomNameJson(ItemType type) {
+        string fallback = Humanize(type.Name);
+        return $"{{\"translate\":\"item.sharpminerals.{Escape(type.Name)}\",\"fallback\":\"{Escape(fallback)}\",\"italic\":false}}";
+    }
+
+    static string Humanize(string name) =>
+        string.Join(' ', name.Split('_', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+
+    static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }
 
 // ── Clientbound ───────────────────────────────────────────────────────────────
@@ -102,7 +165,6 @@ internal sealed class SetCreativeModeSlotC2SCodec : ICodec<SetCreativeModeSlotC2
 
     public SetCreativeModeSlotC2S Decode(MinecraftStream s) {
         int slot = s.ReadShort();
-        var item = s.ReadSlotLite();
-        return new SetCreativeModeSlotC2S(slot, item?.ItemId, item?.Count ?? 0);
+        return new SetCreativeModeSlotC2S(slot, SlotWire.ReadStack(s)); // null Stack = an item we can't represent
     }
 }

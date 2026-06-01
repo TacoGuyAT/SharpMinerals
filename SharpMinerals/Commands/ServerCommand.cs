@@ -1,33 +1,31 @@
+using Brigadier.NET;
+using Brigadier.NET.Builder;
 using SharpMinerals.Entities.Components;
 
 namespace SharpMinerals.Commands;
 
-/// <summary>A composite command demonstrating subcommands: <c>/server tps|players|stop</c>.</summary>
-public sealed class ServerCommand : CompositeCommand {
-    public override string Name => "server";
-    public override string Description => "Server info and management";
-
-    public ServerCommand() {
-        Add(new LambdaCommand("tps", "Show the tick rate", "/server tps", ctx => {
-            var server = Server.Instance;
-            ctx.Reply($"TPS target {server?.TicksPerSecond ?? 0}, tick {server?.CurrentTick ?? 0}");
-            return Task.CompletedTask;
-        }));
-
-        Add(new LambdaCommand("players", "List online players", "/server players", ctx => {
-            var server = Server.Instance;
-            ctx.Reply($"Players online: {server?.PlayerCount ?? 0}");
-            if (server is not null)
-                foreach (var (clientId, handle) in server.Players)
-                    if (handle.World.Ecs.IsAlive(handle.Entity))
-                        ctx.Reply($"  {handle.World.Ecs.Get<NetworkedPlayer>(handle.Entity).Name} (#{clientId})");
-            return Task.CompletedTask;
-        }));
-
-        Add(new LambdaCommand("stop", "Stop the server", "/server stop", ctx => {
-            ctx.Reply("stopping");
-            Server.Instance?.Stop();
-            return Task.CompletedTask;
-        }));
-    }
+/// <summary><c>/server tps|players|stop</c> — server info and management (nested literal subcommands).</summary>
+public static class ServerCommand {
+    public static CommandDispatcher RegisterServer(this CommandDispatcher d) => d.Register(l => l
+        .Literal("server")
+        .Then(a => a.Literal("tps").Executes(c => {
+            var s = c.Source.Server;
+            c.Source.Reply($"TPS target {s?.TicksPerSecond ?? 0}, tick {s?.CurrentTick ?? 0}");
+            return 1;
+        }))
+        .Then(a => a.Literal("players").Executes(c => {
+            var s = c.Source.Server;
+            c.Source.Reply($"Players online: {s?.PlayerCount ?? 0}");
+            if (s is not null)
+                foreach (var (clientId, context) in s.Players)
+                    if (context.World.Ecs.IsAlive(context.Entity))
+                        c.Source.Reply($"  {context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity).Name} (#{clientId})");
+            return 1;
+        }))
+        .Then(a => a.Literal("stop").Executes(c => {
+            c.Source.Reply("stopping");
+            c.Source.Server?.Stop();
+            return 1;
+        }))
+        .Executes(c => { c.Source.Reply("/server <tps|players|stop>"); return 1; }));
 }

@@ -10,8 +10,10 @@ namespace SharpMinerals.Level;
 /// <see cref="BlockRegistry"/> (0 = air).
 /// </summary>
 public class Chunk : ITickable {
-    public const int Size = 16;
-    const int Volume = Size * Size * Size;
+    public const Mint Mask = 0b1111;
+    public const int Shifts = 4;
+    public const Mint Size = 1 << Shifts;
+    const Mint Volume = Size * Size * Size;
 
     readonly ushort[] states = new ushort[Volume]; // defaults to all-air (id 0)
 
@@ -19,25 +21,74 @@ public class Chunk : ITickable {
     // blocks that need state live here; plain blocks are just an id in `states`.
     readonly Dictionary<Vector3i, BlockEntity> blockEntities = new();
 
+    // The subset of block entities that tick (furnaces smelting, hoppers moving items, …). Kept as a
+    // separate list so Tick doesn't scan every block entity testing for ITickable each tick. Block
+    // entities are sparse and rarely added/removed, so maintaining this on set/remove is cheap.
+    readonly List<ITickable> tickingBlockEntities = new();
+
+    // Sparse per-cell block state (chest facing, slab type, …), keyed by local cell index.
+    // Only stateful cells live here; a plain cell is just its type id in `states`.
+    readonly Dictionary<int, BlockState> blockStates = new();
+
     /// <summary>This chunk's coordinate in chunk space (world = chunk * 16 + local).</summary>
     public Vector3i Position { get; }
 
+    /// <summary>True once gameplay has modified this chunk since it was last saved/loaded.</summary>
+    public bool Dirty { get; private set; }
+
     public Chunk(Vector3i position) => Position = position;
 
-    static int Index(int x, int y, int z) => x + z * Size + y * Size * Size;
+    /// <summary>Marks the chunk clean — its current contents are the persisted baseline.</summary>
+    public void ClearDirty() => Dirty = false;
 
-    public ushort GetState(int x, int y, int z) => states[Index(x, y, z)];
-    public void SetState(int x, int y, int z, ushort state) => states[Index(x, y, z)] = state;
+    static Mint Index(Mint x, Mint y, Mint z) => x + z * Size + y * Size * Size;
 
-    public BlockType GetBlock(int x, int y, int z) => BlockRegistry.FromState(GetState(x, y, z));
-    public void SetBlock(int x, int y, int z, BlockType block) => SetState(x, y, z, (ushort)block.Id);
+    public ushort GetState(Mint x, Mint y, Mint z) => states[Index(x, y, z)];
+    public void SetState(Mint x, Mint y, Mint z, ushort state) { states[Index(x, y, z)] = state; Dirty = true; }
+
+    // ── Serialization access (same-assembly persistence codec) ───────────────
+    internal ushort[] RawStates => states;                                       // dense block ids
+    internal IReadOnlyDictionary<int, BlockState> CellStates => blockStates;     // sparse, by cell index
+    internal void PutCellState(int cellIndex, BlockState state) => blockStates[cellIndex] = state;
+    internal IReadOnlyCollection<BlockEntity> Entities => blockEntities.Values;
+
+    public BlockType GetBlock(Mint x, Mint y, Mint z) => BlockRegistry.FromState(GetState(x, y, z));
+    public void SetBlock(Mint x, Mint y, Mint z, BlockType block) => SetState(x, y, z, (ushort)block.Id);
+
+    /// <summary>The block state at a local cell, or null if it's the type's default (stateless) state.</summary>
+    public BlockState? GetBlockState(Mint x, Mint y, Mint z) => blockStates.GetValueOrDefault((int)Index(x, y, z));
+    public BlockState? GetBlockState(Vector3i pos) => GetBlockState(pos.X, pos.Y, pos.Z);
+    public void SetBlockState(Mint x, Mint y, Mint z, BlockState? state) {
+        var i = (int)Index(x, y, z);
+        if (state is null) blockStates.Remove(i);
+        else blockStates[i] = state;
+        Dirty = true;
+    }
+    public void SetBlockState(Vector3i pos, BlockState? state) => SetBlockState(pos.X, pos.Y, pos.Z, state);
 
     /// <summary>The block entity at a world position, or null if that block has no instance data.</summary>
     public BlockEntity? GetBlockEntity(Vector3i worldPos) => blockEntities.GetValueOrDefault(worldPos);
-    public void SetBlockEntity(BlockEntity entity) => blockEntities[entity.Position] = entity;
-    public bool RemoveBlockEntity(Vector3i worldPos) => blockEntities.Remove(worldPos);
+
+    public void SetBlockEntity(BlockEntity entity) {
+        // Replacing one at this position drops the old from the ticking list first.
+        if (blockEntities.TryGetValue(entity.Position, out var prev) && prev is ITickable oldTick)
+            tickingBlockEntities.Remove(oldTick);
+        blockEntities[entity.Position] = entity;
+        if (entity is ITickable newTick) tickingBlockEntities.Add(newTick);
+        Dirty = true;
+    }
+
+    public bool RemoveBlockEntity(Vector3i worldPos) {
+        if (blockEntities.TryGetValue(worldPos, out var prev) && prev is ITickable oldTick)
+            tickingBlockEntities.Remove(oldTick);
+        bool removed = blockEntities.Remove(worldPos);
+        if (removed) Dirty = true;
+        return removed;
+    }
 
     public void Tick() {
-        // No block ticking yet — random ticks / block entities land with world systems.
+        // Only block entities that opted into ticking (implement ITickable) — e.g. furnaces, hoppers.
+        foreach (var be in tickingBlockEntities)
+            be.Tick();
     }
 }

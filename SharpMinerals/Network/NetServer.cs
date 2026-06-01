@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
 namespace SharpMinerals.Network;
@@ -14,6 +15,8 @@ public interface INetServer {
     Protocol Protocol { get; }
     void Start();
     void Stop();
+    /// <summary>The connected client with this id; false if not connected.</summary>
+    bool TryGetClient(ulong id, [MaybeNullWhen(false)] out NetClient client);
     void Send(ulong client, IMessage message);
     /// <summary>Sends to every client matching <paramref name="predicate"/> (or all if null).</summary>
     void Broadcast(IMessage message, Func<NetClient, bool>? predicate = null);
@@ -46,14 +49,23 @@ public abstract class NetServer<T> : INetServer
     public abstract void Start();
     public abstract void Stop();
 
+    public bool TryGetClient(ulong id, [MaybeNullWhen(false)] out NetClient client) {
+        bool found = Clients.TryGetValue(id, out var c);
+        client = c;
+        return found;
+    }
+
     public virtual void Send(ulong client, IMessage message) {
         if (Clients.TryGetValue(client, out var c))
             c.Send(message);
     }
 
     public virtual void Broadcast(IMessage message, Func<NetClient, bool>? predicate = null) {
+        // Wrap once: the message is encoded a single time per protocol version (cached on the
+        // packet) and the framed bytes are reused for every client on that version.
+        var packet = new CachedPacket(message);
         foreach (var c in Clients.Values)
             if (predicate is null || predicate(c))
-                c.Send(message);
+                c.Send(packet);
     }
 }

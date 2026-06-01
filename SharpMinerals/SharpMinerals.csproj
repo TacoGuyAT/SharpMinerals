@@ -1,31 +1,43 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- SharpMinerals core is an embeddable class library: host apps (SharpMinerals.CLI,
+       and any third-party launcher) reference it and drive it through its public API. -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <DefineConstants>$(DefineConstants);DOUBLE_PRECISION</DefineConstants>
   </PropertyGroup>
 
-  <!-- Debug-only test/diagnostic features (self-test + dump CLIs, the server→client
-       control channel) are compiled in only when TEST_HARNESS is defined. -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+  <!-- The test project is allowed white-box access to internals (capture doubles, etc.);
+       host apps are NOT — they must use the public API only, which keeps it embeddable. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SharpMinerals.Tests" />
+  </ItemGroup>
+
+  <!-- Test/diagnostic seams (the self-test + dump CLIs, the server→client control channel, the in-process
+       harness's reply event) are guarded by TEST_HARNESS. Defined in every configuration so the real-client
+       test project — which references these seams — compiles in Release as well as Debug. (The CLI keeps its
+       own Debug-only gating, so the shipped server still excludes the /test command and dump entry points.) -->
+  <PropertyGroup>
     <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
+    <PackageIcon></PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Arch" Version="2.1.0" />
     <PackageReference Include="HarmonyX" Version="2.13.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="Serilog" Version="4.0.0" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-  </ItemGroup>
-
-  <!-- Reserved for the Harmony-based modding API (see docs/RESOURCES.md); empty for now. -->
-  <ItemGroup>
-    <Folder Include="Modding\" />
+    <!-- Abstractions ONLY — the concrete logging backend (ZLogger) lives in the host (SharpMinerals.CLI). -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <!-- Brigadier.NET: the command tree/parser (official Brigadier API), which also powers tab-completion.
+         FastCache: caches parsed commands (the parse step is the costly one). Both live in core with the
+         dispatcher; netstandard2.0 / no transitive deps, so the embeddable surface stays clean. -->
+    <PackageReference Include="Brigadier.NET" Version="1.2.13" />
+    <PackageReference Include="Jitbit.FastCache" Version="1.3.0" />
+    <PackageReference Include="NuGet.Versioning" Version="7.6.0" />
   </ItemGroup>
 
   <ItemGroup>

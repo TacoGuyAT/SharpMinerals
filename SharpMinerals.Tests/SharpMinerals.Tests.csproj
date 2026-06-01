@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- xUnit tests for the SharpMinerals core. Granted white-box access to internals via
+       the core's InternalsVisibleTo, so it can drive handlers with in-memory transport
+       doubles. Run with `dotnet test`. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- The real-client harness drives the core's TEST_HARNESS-only seams (the /test command, the control-channel
+       reply event). Defined in every configuration so the harness compiles in Release too. -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+    <!-- The test-harness mod (/test), exercised through the real ModLoader by the RealClient fixture. -->
+    <ProjectReference Include="..\SharpMinerals.TestMod\SharpMinerals.TestMod.csproj" />
+  </ItemGroup>
+
+</Project>

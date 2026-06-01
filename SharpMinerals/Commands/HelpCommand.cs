@@ -1,21 +1,28 @@
+using Brigadier.NET;
+using Brigadier.NET.Builder;
+
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/help [command]</c> — lists commands or shows one command's usage.</summary>
-public sealed class HelpCommand : ICommand {
-    public string Name => "help";
-    public string Description => "Lists commands, or shows one command's usage";
-    public string Usage => "/help [command]";
-
-    public Task ExecuteAsync(CommandContext ctx) {
-        if (ctx.Args.Length == 0) {
-            ctx.Reply("Commands:");
-            foreach (var c in ctx.Dispatcher.Commands.Values.OrderBy(c => c.Name))
-                ctx.Reply($"  {c.Usage} - {c.Description}");
-        } else if (ctx.Dispatcher.Commands.TryGetValue(ctx.Args[0], out var cmd)) {
-            ctx.Reply($"{cmd.Usage} - {cmd.Description}");
-        } else {
-            ctx.Reply($"Unknown command: {ctx.Args[0]}");
-        }
-        return Task.CompletedTask;
-    }
+/// <summary><c>/help [command]</c> — lists command usages, or one command's usage. Usage strings come from
+/// the Brigadier tree and are filtered to what the source is allowed to run (the <c>restricted</c> flag).</summary>
+public static class HelpCommand {
+    public static CommandDispatcher RegisterHelp(this CommandDispatcher d) => d.Register(l => l
+        .Literal("help")
+        .Then(a => a.Argument("command", Arguments.Word()).Executes(c => {
+            var name = Arguments.GetString(c, "command");
+            var matches = d.Brigadier.GetAllUsage(d.Brigadier.GetRoot(), c.Source, restricted: true)
+                .Where(u => u == name || u.StartsWith(name + " "))
+                .ToArray();
+            if (matches.Length == 0)
+                c.Source.Reply($"Unknown command: {name}");
+            else
+                foreach (var usage in matches) c.Source.Reply($"/{usage}");
+            return 1;
+        }))
+        .Executes(c => {
+            c.Source.Reply("Commands:");
+            foreach (var usage in d.Brigadier.GetAllUsage(d.Brigadier.GetRoot(), c.Source, restricted: true))
+                c.Source.Reply($"/{usage}");
+            return 1;
+        }));
 }

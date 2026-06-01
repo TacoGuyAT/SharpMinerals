@@ -19,4 +19,8 @@ public sealed record SetHeldItemS2C(int Slot) : IMessage;
 public sealed record ClickContainerC2S(int WindowId, int Revision, int Slot, int Button, int Mode) : IMessage;
 public sealed record CloseContainerC2S(int WindowId) : IMessage;
 public sealed record SetHeldItemC2S(int Slot) : IMessage;
-public sealed record SetCreativeModeSlotC2S(int Slot, int? VanillaItemId, int Count) : IMessage;
+// Carries our internal ItemStack, already resolved by the protocol codec (wire id + any custom-type NBT
+// marker → ItemType). The handler stays protocol-agnostic — it never sees vanilla ids. Slot -1 = "throw".
+// A null Stack means the client placed an item this server can't represent (the handler warns instead of
+// clearing the slot); an empty (non-null) stack is a deliberate clear.
+public sealed record SetCreativeModeSlotC2S(int Slot, ItemStack? Stack) : IMessage;

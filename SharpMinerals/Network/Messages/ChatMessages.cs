@@ -8,6 +8,12 @@ namespace SharpMinerals.Network.Messages;
 /// </summary>
 public sealed record SystemChatMessageS2C(ChatComponent Content, bool Overlay) : IMessage;
 
+/// <summary>
+/// Set Tab List Header And Footer (0x65): the text shown above and below the player list. Both lines are
+/// JSON chat components in 1.20.1; an empty component blanks that line.
+/// </summary>
+public sealed record PlayerListHeaderFooterS2C(ChatComponent Header, ChatComponent Footer) : IMessage;
+
 /// <summary>Player chat message (0x05). Only the text is read; the signing data is ignored.</summary>
 public sealed record ChatMessageC2S(string Message) : IMessage;
 

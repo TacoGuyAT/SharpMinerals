@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A sample third-party mod: ported MOTD changer + a custom block + a custom command, built against
+       the core PUBLIC API only. Not referenced by any host — it's loaded from a file: build it and drop
+       SharpMinerals.SampleMod.dll into the server's `mods/` folder, where ModLoader.LoadDirectory finds it. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Private/no-copy: the host already ships SharpMinerals.dll; a mod must not redeploy the engine. -->
+    <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>

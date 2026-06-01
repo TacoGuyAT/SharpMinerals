@@ -1,14 +1,17 @@
 ﻿using System.Collections.Concurrent;
 using Arch.Core;
 using SharpMinerals.Blocks;
-using SharpMinerals.Blocks.Components;
+using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
+using SharpMinerals.Events;
 using SharpMinerals.Items;
 using SharpMinerals.Math;
+using SharpMinerals.Persistence;
 using ArchWorld = Arch.Core.World;
 using ArchEntity = Arch.Core.Entity;
+using SharpMinerals.Entities.Descriptors;
 
 namespace SharpMinerals.Level;
 
@@ -18,21 +21,18 @@ namespace SharpMinerals.Level;
 /// runs the per-tick systems; block reads/writes go through the chunk grid.
 /// </summary>
 public class World : ITickable {
-    // Reused query descriptions — building these is cheap but doing it once is tidier.
-    static readonly QueryDescription MovementQuery = new QueryDescription().WithAll<Transform, Velocity>();
-    static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<NetworkedPlayer>();
-    static readonly QueryDescription DropQuery = new QueryDescription().WithAll<DroppedItem, Velocity>();
-    static readonly QueryDescription DropPhysicsQuery = new QueryDescription().WithAll<DroppedItem, Transform, Velocity>();
-    // Only colliders (players) scan — dropped items never check around themselves.
-    static readonly QueryDescription ColliderQuery = new QueryDescription().WithAll<Transform, CollisionFeedback>();
+    static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
 
     // Half-extent of a dropped item's collision box.
-    const double ItemHalfSize = 0.2;
-
-    const double DropGravity = 0.04;
+    const double ItemHalfSize = 0.125;
 
     readonly IChunkGenerator chunkGenerator;
+    readonly IWorldStore? store;
     readonly ConcurrentDictionary<Vector3i, Chunk> loadedChunks = new();
+
+    // The per-tick entity systems, run in order each Tick. Behavior lives in these ITickable units
+    // (data stays in the ECS components) — mods can register more via the engine's system list.
+    readonly List<ITickable> systems;
 
     public string Name { get; }
 
@@ -41,44 +41,111 @@ public class World : ITickable {
 
     public bool IsActive { get; set; } = true;
 
-    public World(string name, IChunkGenerator chunkGenerator) {
+    /// <summary>The domain event bus the simulation publishes to (set by <see cref="Server"/> when it
+    /// owns this world). Null in standalone use (e.g. tests) — entity-move events are simply not raised.
+    /// Systems publish entity moves <b>deferred</b> here, since worlds tick on parallel threads.</summary>
+    public EventBus? Events { get; set; }
+
+    public World(string name, IWorldStore? store = null) : this(name, IChunkGenerator.Default, store) { }
+
+    public World(string name, IChunkGenerator chunkGenerator, IWorldStore? store = null) {
         Name = name;
         this.chunkGenerator = chunkGenerator;
+        this.store = store;
+        Entities = new SpatialIndex(this);
+        systems = new List<ITickable> {
+            new Systems.ItemLifecycleSystem(this),
+            new Systems.EntityPhysicsSystem(this),      // gravity + terrain collision; writes block-collision feedback
+            new Systems.FallingBlockSystem(this),       // lands falling blocks using that ground-contact feedback
+            new Systems.CollisionFeedbackSystem(this),  // entity-vs-entity overlap, on settled positions
+            new Systems.ItemPickupSystem(this),         // collects overlapped drops into player inventories
+        };
     }
 
     // ── Chunks ──────────────────────────────────────────────────────────────
-    static Vector3i ChunkOf(Vector3i world) => new(
-        MathHelper.FloorDiv(world.X, Chunk.Size),
-        MathHelper.FloorDiv(world.Y, Chunk.Size),
-        MathHelper.FloorDiv(world.Z, Chunk.Size));
-
-    /// <summary>Gets a chunk by chunk coordinate, generating it on first access.</summary>
+    /// <summary>Gets a chunk by chunk coordinate, loading it from the store (or generating) on first access.</summary>
     public Chunk GetChunk(Vector3i chunkPosition) =>
-        loadedChunks.GetOrAdd(chunkPosition, chunkGenerator.Generate);
+        loadedChunks.GetOrAdd(chunkPosition, LoadOrGenerate);
+
+    Chunk LoadOrGenerate(Vector3i pos) {
+        var chunk = store is not null && store.TryLoadChunk(Name, pos, out var data)
+            ? ChunkCodec.Deserialize(pos, data)
+            : chunkGenerator.Generate(pos);
+        chunk.ClearDirty(); // a freshly loaded/generated chunk is the baseline, not a pending change
+        return chunk;
+    }
 
     public int LoadedChunkCount => loadedChunks.Count;
 
+    /// <summary>
+    /// Persists every chunk modified since its last save to the world store and marks them clean.
+    /// No-op when the world has no store. Returns the number of chunks written.
+    /// </summary>
+    public int Save() {
+        if (store is null) return 0;
+        int saved = 0;
+        foreach (var chunk in loadedChunks.Values)
+            if (chunk.Dirty) {
+                store.SaveChunk(Name, chunk.Position, ChunkCodec.Serialize(chunk));
+                chunk.ClearDirty();
+                saved++;
+            }
+        return saved;
+    }
+
+    /// <summary>
+    /// Drops loaded chunks whose column is outside every kept centre (saving dirty ones first), to
+    /// bound memory/disk as players explore. A dirty chunk is kept if there's no store to save it
+    /// to, rather than losing the edit. Call on the single-writer (tick) thread. Returns the count.
+    /// </summary>
+    public int EvictChunks(IReadOnlyList<(long X, long Z)>? keptCenters, int keepRadius) {
+        int evicted = 0;
+        foreach (var (pos, chunk) in loadedChunks) {
+            if (IsKept(pos.X, pos.Z, keptCenters, keepRadius))
+                continue;
+            if (chunk.Dirty) {
+                if (store is null) continue; // no backend — keep it rather than lose the edit
+                store.SaveChunk(Name, pos, ChunkCodec.Serialize(chunk));
+            }
+            loadedChunks.TryRemove(pos, out _);
+            evicted++;
+        }
+        return evicted;
+
+        static bool IsKept(long cx, long cz, IReadOnlyList<(long X, long Z)>? centers, int radius) {
+            if (centers is null) return false; // no viewers in this world → evict everything
+            foreach (var c in centers)
+                if (System.Math.Abs(cx - c.X) <= radius && System.Math.Abs(cz - c.Z) <= radius)
+                    return true;
+            return false;
+        }
+    }
+
     // ── Blocks ──────────────────────────────────────────────────────────────
     public BlockType GetBlock(Vector3i pos) {
-        var chunk = GetChunk(ChunkOf(pos));
-        return chunk.GetBlock(LocalX(pos.X), LocalX(pos.Y), LocalX(pos.Z));
+        var chunk = GetChunk(pos.ToChunk());
+        pos = pos.ToLocal();
+        return chunk.GetBlock(pos.X, pos.Y, pos.Z);
     }
 
     public void SetBlock(Vector3i pos, BlockType block) {
-        var chunk = GetChunk(ChunkOf(pos));
-        chunk.SetBlock(LocalX(pos.X), LocalX(pos.Y), LocalX(pos.Z), block);
+        var chunk = GetChunk(pos.ToChunk());
+        pos = pos.ToLocal();
+        chunk.SetBlock(pos.X, pos.Y, pos.Z, block);
     }
 
-    static int LocalX(long world) => MathHelper.FloorMod(world, Chunk.Size);
-
     /// <summary>The block entity at <paramref name="pos"/>, or null if that block has no instance data.</summary>
-    public BlockEntity? GetBlockEntity(Vector3i pos) => GetChunk(ChunkOf(pos)).GetBlockEntity(pos);
-    public void SetBlockEntity(BlockEntity entity) => GetChunk(ChunkOf(entity.Position)).SetBlockEntity(entity);
-    public bool RemoveBlockEntity(Vector3i pos) => GetChunk(ChunkOf(pos)).RemoveBlockEntity(pos);
+    public BlockEntity? GetBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).GetBlockEntity(pos);
+    public void SetBlockEntity(BlockEntity entity) => GetChunk(entity.Position.ToChunk()).SetBlockEntity(entity);
+    public bool RemoveBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).RemoveBlockEntity(pos);
+
+    /// <summary>The block state at <paramref name="pos"/>, or null if it's the type's default state.</summary>
+    public BlockState? GetBlockState(Vector3i pos) => GetChunk(pos.ToChunk()).GetBlockState(pos.ToLocal());
+    public void SetBlockState(Vector3i pos, BlockState? state) => GetChunk(pos.ToChunk()).SetBlockState(pos.ToLocal(), state);
 
     /// <summary>
     /// Breaks the block at <paramref name="pos"/>: replaces it with air, fires the
-    /// block's break behaviors, and — if it has a <see cref="Drops"/> component — spawns
+    /// block's break behaviors, and — if it has a <see cref="DropBlockDescriptor"/> component — spawns
     /// the dropped item. Returns the block that was broken (air if nothing was there).
     /// </summary>
     public BlockType BreakBlock(Vector3i pos) {
@@ -91,15 +158,25 @@ public class World : ITickable {
         var ctx = new BlockContext { World = this, Position = pos, Block = block, Actor = default };
         Behavior.FireBroken(block, in ctx);
 
-        if (block.TryGet<Drops>(out var drops))
-            SpawnDroppedItem(pos, new ItemStack(drops.Item));
+        if (block.Drop is { } drop) {
+            // A block that drops itself carries its ITEM-IDENTITY state (e.g. wool colour) to the item,
+            // but placement state (facing) is reset. A block whose state is purely placement (a facing
+            // chest) drops with NO state, so re-placement orients it afresh.
+            if (drop.Type == block && GetBlockState(pos) is { } state) {
+                var dropState = state.ForDrop();
+                if (!dropState.Matches(new BlockState(block)))
+                    drop = drop.WithState(dropState);
+            }
+            SpawnDroppedItem(pos, drop);
+        }
 
         // Scatter any container contents (e.g. a chest) before the block entity goes away.
-        if (GetBlockEntity(pos) is { } entity && entity.TryGet<Inventory>(out var contents))
+        if (GetBlockEntity(pos) is { } entity && entity.TryGet<InventoryComponent>(out var contents))
             for (int i = 0; i < contents.Size; i++)
                 if (!contents[i].IsEmpty) SpawnDroppedItem(pos, contents[i]);
 
         RemoveBlockEntity(pos);
+        SetBlockState(pos, null); // the broken block's state goes with it
         return block;
     }
 
@@ -113,67 +190,107 @@ public class World : ITickable {
     }
 
     // ── Entities ────────────────────────────────────────────────────────────
-    /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
-    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId) =>
-        Player.Spawn(this, clientId, name, uuid, entityId, new Transform(0.5, FlatChunkGenerator.SurfaceY, 0.5));
+    /// <summary>The spatial index of this world's entities (ranged lookups, ranged broadcasts,
+    /// per-chunk processing). Maintained as entities spawn/despawn/move.</summary>
+    public SpatialIndex Entities { get; }
 
-    /// <summary>Spawns a dropped-item entity centred on a block with a small upward pop.</summary>
-    public ArchEntity SpawnDroppedItem(Vector3i blockPos, ItemStack stack) =>
-        Ecs.Create(
-            new Transform(blockPos.X + 0.5, blockPos.Y + 0.25, blockPos.Z + 0.5),
-            new Velocity(0, 0.2, 0),
-            new DroppedItem { Stack = stack, Age = 0, PickupDelay = 10 });
+    /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
+    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, PlayerState? saved = null) {
+        var entity = Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, FlatChunkGenerator.SurfaceY, 0.5), saved);
+        var t = Ecs.Get<TransformEntityComponent>(entity);
+        Entities.Add(entity, t.X, t.Y, t.Z); // restored spawns may not be at the default position
+        return entity;
+    }
+
+    /// <summary>Spawns a dropped-item entity centred on a block with a small random upward pop.</summary>
+    public ArchEntity SpawnDroppedItem(Vector3i blockPos, ItemStack stack) {
+        var rng = Random.Shared;
+        return SpawnItem(blockPos.X + 0.5, blockPos.Y + 0.25, blockPos.Z + 0.5,
+            new VelocityEntityComponent(rng.NextSingle() * 0.2f - 0.1f, 0.2f, rng.NextSingle() * 0.2f - 0.1f), stack, pickupDelay: 10);
+    }
+
+    /// <summary>Spawns a dropped-item entity at an explicit world position with an explicit velocity and
+    /// pickup delay — the primitive behind both block-break drops and player tosses.</summary>
+    public ArchEntity SpawnItem(double x, double y, double z, VelocityEntityComponent velocity, ItemStack stack, int pickupDelay) {
+        var entity = Ecs.Create(
+            new TransformEntityComponent(x, y, z),
+            velocity,
+            new ColliderEntityComponent(ItemHalfSize * 2, ItemHalfSize * 2),
+            new GravityEntityComponent(),
+            new TypeEntityDescriptor { Type = EntityRegistry.Item },
+            new PickupEntityComponent { Stack = stack, Age = 0, PickupDelay = pickupDelay });
+        Entities.Add(entity, x, y, z);
+        return entity;
+    }
+
+    // Player eye height (the toss origin) and the speed an item leaves the hand at.
+    const double EyeHeight = 1.62;
+    const double TossSpeed = 0.3;
+
+    /// <summary>Spawns <paramref name="stack"/> as a dropped item thrown from <paramref name="t"/>'s eye in
+    /// its look direction — the "press Q" toss — with a 40-tick pickup delay so it can't fly straight back in.
+    /// Returns the entity (null for an empty stack); the next announce pass tells clients about it.</summary>
+    public ArchEntity? TossItem(TransformEntityComponent t, ItemStack stack) {
+        if (stack.IsEmpty) return null;
+        double yaw = t.Yaw * System.Math.PI / 180.0, pitch = t.Pitch * System.Math.PI / 180.0;
+        double cosPitch = System.Math.Cos(pitch);
+        var velocity = new VelocityEntityComponent(
+            -System.Math.Sin(yaw) * cosPitch * TossSpeed,
+            -System.Math.Sin(pitch) * TossSpeed + 0.1,
+            System.Math.Cos(yaw) * cosPitch * TossSpeed);
+        return SpawnItem(t.X, t.Y + EyeHeight - 0.3, t.Z, velocity, stack, pickupDelay: 40);
+    }
+
+    // A falling block's collision box (vanilla falling_block is 0.98³).
+    const double FallingBlockSize = 0.98;
+
+    /// <summary>Spawns a <c>falling_block</c> entity for <paramref name="block"/> at the centre of
+    /// <paramref name="cell"/> with zero initial velocity. <c>EntityPhysicsSystem</c> pulls it down (it has
+    /// <see cref="GravityEntityComponent"/>) and records its ground contact; <c>FallingBlockSystem</c> reads
+    /// that to re-place it as a block (or drop it as an item) when it lands. The caller is responsible for
+    /// having cleared the source cell and announced that block change.</summary>
+    public ArchEntity SpawnFallingBlock(Vector3i cell, BlockType block) {
+        double x = cell.X + 0.5, y = cell.Y, z = cell.Z + 0.5;
+        var entity = Ecs.Create(
+            new TransformEntityComponent(x, y, z),
+            new VelocityEntityComponent(0, 0, 0),
+            new ColliderEntityComponent(FallingBlockSize, FallingBlockSize),
+            new GravityEntityComponent(),
+            new BlockCollisionFeedbackEntityComponent(),
+            new TypeEntityDescriptor { Type = EntityRegistry.FallingBlock },
+            new FallingBlockEntityComponent { Block = block, EntityId = 0 });
+        Entities.Add(entity, x, y, z);
+        return entity;
+    }
+
+    /// <summary>Despawns an entity: drops it from the spatial index, then destroys it in the ECS.
+    /// Route all entity destruction through here so the index never holds a dead handle.</summary>
+    public void DestroyEntity(ArchEntity entity) {
+        Entities.Remove(entity);
+        Ecs.Destroy(entity);
+    }
 
     /// <summary>Number of player entities currently in this world.</summary>
     public int PlayerCount => Ecs.CountEntities(in PlayerQuery);
 
+    /// <summary>Tears the world down so it can be dropped: stops ticking, releases all loaded chunks, and frees
+    /// the ECS's pooled storage. The caller (server) must have removed it from the world set and ensured it has
+    /// no players first. Not idempotent — the ECS is destroyed, so the world must not be used afterwards.</summary>
+    public void Unload() {
+        IsActive = false;
+        loadedChunks.Clear();
+        ArchWorld.Destroy(Ecs);
+    }
+
     public void Tick() {
         if (!IsActive) return;
 
-        // Dropped items fall under gravity until they (crudely) come to rest, and age.
-        Ecs.Query(in DropQuery, (ref DroppedItem drop, ref Velocity v) => {
-            drop.Age++;
-            if (drop.PickupDelay > 0) drop.PickupDelay--;
-            v.Y -= DropGravity;
-        });
+        // Entity systems (item lifecycle, physics, collision feedback), in registration order.
+        foreach (var system in systems)
+            system.Tick();
 
-        // Movement system: integrate velocity into the transform for everything that moves.
-        Ecs.Query(in MovementQuery, (ref Transform t, ref Velocity v) => {
-            t.X += v.X;
-            t.Y += v.Y;
-            t.Z += v.Z;
-        });
-
-        // Rest dropped items on the surface so they stay reachable for pickup (they have
-        // no terrain physics otherwise and would sink through the floor).
-        Ecs.Query(in DropPhysicsQuery, (ref Transform t, ref Velocity v) => {
-            var feet = new Vector3i((int)System.Math.Floor(t.X), (int)System.Math.Floor(t.Y), (int)System.Math.Floor(t.Z));
-            if (!GetBlock(feet).IsAir) { t.Y = System.Math.Floor(t.Y) + 1.0; v.Y = 0; }
-        });
-
-        DetectCollisions();
-
+        // Then block-level ticking (block entities such as furnaces) per loaded chunk.
         foreach (var chunk in loadedChunks.Values)
             chunk.Tick();
-    }
-
-    /// <summary>
-    /// Player-driven collision: each entity with a <see cref="CollisionFeedback"/> box
-    /// scans the dropped items and records the ones it overlaps. Items are passive — they
-    /// never scan, so cost is players × items, not items × everything.
-    /// </summary>
-    void DetectCollisions() {
-        var items = new List<(ArchEntity Entity, double X, double Y, double Z)>();
-        Ecs.Query(in DropPhysicsQuery, (ArchEntity e, ref Transform t) => items.Add((e, t.X, t.Y, t.Z)));
-
-        Ecs.Query(in ColliderQuery, (ref Transform t, ref CollisionFeedback c) => {
-            c.Touching.Clear();
-            if (items.Count == 0) return;
-            double reach = c.Width / 2 + ItemHalfSize;
-            foreach (var it in items)
-                if (System.Math.Abs(t.X - it.X) <= reach && System.Math.Abs(t.Z - it.Z) <= reach
-                    && it.Y >= t.Y - 1.0 && it.Y <= t.Y + c.Height)
-                    c.Touching.Add(it.Entity);
-        });
     }
 }

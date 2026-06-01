@@ -361,3 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# SharpMinerals runtime data + local config (generated at run time, see ServerConfig)
+/world/
+/logs/
+/mods/
+/server.json
