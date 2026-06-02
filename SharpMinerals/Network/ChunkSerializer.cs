@@ -13,9 +13,14 @@ namespace SharpMinerals.Network;
 /// </summary>
 public static class ChunkSerializer {
     const int MinY = -64;
+    const int MinSectionY = MinY / 16;    // chunk-cube Y of the bottom section (-4)
     const int SectionCount = 24;          // 384 / 16
     const int LightSectionCount = SectionCount + 2; // one padding section above and below
     const int BiomeId = 0;                // minecraft:badlands (1.20.1 registry id 0)
+
+    // A full-bright sky-light section (4096 nibbles = 2048 bytes, all 0xFF), written verbatim per section.
+    static readonly byte[] FullSkyLight = CreateFullSkyLight();
+    static byte[] CreateFullSkyLight() { var a = new byte[2048]; Array.Fill(a, (byte)0xFF); return a; }
 
     /// <summary>Builds the Chunk Data packet for the column at (chunkX, chunkZ), mapping ids via <paramref name="types"/>.</summary>
     public static ChunkDataS2C Build(ITypeMapper types, World world, int chunkX, int chunkZ) {
@@ -64,24 +69,24 @@ public static class ChunkSerializer {
 
         var states = new int[16 * 16 * 16];
         for (int sy = 0; sy < SectionCount; sy++) {
+            // A vanilla section IS one server chunk cube — fetch it once and read cells directly, rather than
+            // a GetBlock/GetChunk dictionary lookup (+ Vector3i alloc) per cell.
+            var cube = world.GetChunk(new Vector3i(chunkX, MinSectionY + sy, chunkZ));
             int nonAir = 0;
-            for (int y = 0; y < 16; y++) {
-                long worldY = MinY + sy * 16 + y;
+            for (int y = 0; y < 16; y++)
                 for (int z = 0; z < 16; z++)
                     for (int x = 0; x < 16; x++) {
-                        var pos = new Vector3i(chunkX * 16 + x, worldY, chunkZ * 16 + z);
-                        var block = world.GetBlock(pos);
+                        var block = cube.GetBlock(x, y, z);
                         // Stateful blocks (chest facing, …) map via their stored state; the rest by type.
                         states[(y << 8) | (z << 4) | x] =
-                            block.Has<StatesBlockDescriptor>() && world.GetBlockState(pos) is { } bs
+                            block.Has<StatesBlockDescriptor>() && cube.GetBlockState(x, y, z) is { } bs
                                 ? types.StateId(bs)
                                 : types.StateId(block);
                         if (block.IsAir) continue;
                         nonAir++;
                         if (types.TryBlockEntityTypeId(block, out int beId))
-                            blockEntities.Add(((byte)((x << 4) | z), (int)worldY, beId));
+                            blockEntities.Add(((byte)((x << 4) | z), MinY + sy * 16 + y, beId));
                     }
-            }
 
             s.WriteShort((short)nonAir);
             WritePalettedStates(s, states);
@@ -137,8 +142,8 @@ public static class ChunkSerializer {
 
         s.WriteVarInt(LightSectionCount);     // one full sky-light array per section
         for (int i = 0; i < LightSectionCount; i++) {
-            s.WriteVarInt(2048);
-            for (int b = 0; b < 2048; b++) s.WriteUByte(0xFF); // every nibble = light 15
+            s.WriteVarInt(FullSkyLight.Length);
+            s.Write(FullSkyLight, 0, FullSkyLight.Length); // every nibble = light 15
         }
 
         s.WriteVarInt(0);                     // no block light arrays
