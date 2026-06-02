@@ -1,6 +1,7 @@
 #if TEST_HARNESS
 using System.Globalization;
 using System.Threading.Tasks;
+using SharpMinerals.Level;
 using Xunit;
 
 namespace SharpMinerals.Tests.RealClient;
@@ -17,11 +18,18 @@ public sealed class MovementTests {
     readonly RealClientFixture f;
     public MovementTests(RealClientFixture f) => this.f = f;
 
-    // "pos 0.50 65.00 0.50 yaw 0.0 pitch 0.0" → the X coordinate.
-    static double PosX(string reply) =>
-        double.Parse(reply.Split(' ')[1], CultureInfo.InvariantCulture);
+    // "pos 0.50 65.00 0.50 yaw 0.0 pitch 0.0" → the X / Y coordinate.
+    static double PosX(string reply) => double.Parse(reply.Split(' ')[1], CultureInfo.InvariantCulture);
+    static double PosY(string reply) => double.Parse(reply.Split(' ')[2], CultureInfo.InvariantCulture);
 
     [RealClientFact, Order(1)]
+    public async Task SpawnsOnTheSurface() {
+        var pos = await f.Send("pos");
+        Assert.True(System.Math.Abs(PosY(pos) - FlatChunkGenerator.SurfaceY) < 1.5,
+            $"player should spawn on the flat surface (Y≈{FlatChunkGenerator.SurfaceY}), got '{pos}'");
+    }
+
+    [RealClientFact, Order(2)]
     public async Task WalksEastAcrossChunks() {
         double startX = PosX(await f.Send("pos"));
 
