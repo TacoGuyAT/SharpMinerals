@@ -1,0 +1,27 @@
+<Project>
+
+  <!-- Shared version for every project under SharpMinerals/ (the host exe matches the core library, and they
+       can't drift). $(Version) drives AssemblyVersion/FileVersion (-> 0.1.0.0) and any PackageVersion. -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!-- Build-flavor compile symbols, shared by every project under SharpMinerals/. Each is APPENDED to
+       DefineConstants (never overridden), so flavors stack and so you can add one from the command line by
+       passing its boolean property — the build does the appending. (Passing -p:DefineConstants=X directly does
+       NOT work: it's a global override that wipes the per-project constants like DOUBLE_PRECISION.) E.g.:
+         dotnet publish                       -> JIT (auto, see below)
+         dotnet build  -p:IN_MEMORY=true      -> JIT + IN_MEMORY
+         dotnet build  -p:AOT=true            -> exercise the AOT #if branches without publishing
+         dotnet publish -p:AOT=true          -> force an AOT publish -->
+
+  <PropertyGroup Condition="'$(AOT)' == 'true'">
+    <DefineConstants>$(DefineConstants);AOT</DefineConstants>
+  </PropertyGroup>
+
+  <!-- IN_MEMORY = ephemeral persistence (no disk store). Opt-in with -p:IN_MEMORY=true. -->
+  <PropertyGroup Condition="'$(IN_MEMORY)' == 'true'">
+    <DefineConstants>$(DefineConstants);IN_MEMORY</DefineConstants>
+  </PropertyGroup>
+
+</Project>

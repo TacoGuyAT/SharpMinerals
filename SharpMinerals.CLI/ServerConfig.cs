@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace SharpMinerals.CLI;
 
@@ -24,11 +25,13 @@ sealed record ServerConfig {
     public LogLevel LogLevel { get; init; } = LogLevel.Info;
     public string Startup { get; init; } = "";
 
-    static readonly JsonSerializerOptions Json = new() {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
+    // Built from the source-generated context (WriteIndented + case-insensitive are set there) so config I/O
+    // carries no reflection under AOT; the LogLevel string converter layers on top.
+    static readonly JsonSerializerOptions Json = new(ServerConfigJsonContext.Default.Options) {
         Converters = { new LogLevelJsonConverter() },
     };
+
+    static readonly JsonTypeInfo<ServerConfig> ConfigInfo = (JsonTypeInfo<ServerConfig>)Json.GetTypeInfo(typeof(ServerConfig));
 
     /// <summary>A loaded config plus an optional startup notice. Loading happens before logging is configured
     /// (logging is built from this config), so the notice is returned to be logged once the logger exists.</summary>
@@ -38,7 +41,7 @@ sealed record ServerConfig {
     public static LoadResult Load(string path) {
         if (File.Exists(path)) {
             try {
-                var config = JsonSerializer.Deserialize<ServerConfig>(File.ReadAllText(path), Json) ?? new ServerConfig();
+                var config = JsonSerializer.Deserialize(File.ReadAllText(path), ConfigInfo) ?? new ServerConfig();
                 return new LoadResult(config, null, false);
             } catch (Exception ex) {
                 return new LoadResult(new ServerConfig(), $"failed to read {path}: {ex.Message} — using defaults", true);
@@ -47,7 +50,7 @@ sealed record ServerConfig {
 
         var defaults = new ServerConfig();
         try {
-            File.WriteAllText(path, JsonSerializer.Serialize(defaults, Json));
+            File.WriteAllText(path, JsonSerializer.Serialize(defaults, ConfigInfo));
             return new LoadResult(defaults, $"wrote default config {path}", false);
         } catch (Exception ex) {
             return new LoadResult(defaults, $"could not write {path}: {ex.Message}", true);
@@ -73,3 +76,8 @@ sealed class LogLevelJsonConverter : JsonConverter<LogLevel> {
     public override void Write(Utf8JsonWriter writer, LogLevel value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.ToString().ToLowerInvariant());
 }
+
+// Source-generated metadata for the config record, so server.json load/save needs no reflection under AOT.
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(ServerConfig))]
+internal sealed partial class ServerConfigJsonContext : JsonSerializerContext;

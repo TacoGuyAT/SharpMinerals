@@ -7,6 +7,7 @@ namespace SharpMinerals.Entities.Components;
 
 /// <summary>ECS component for any entity that participates in chat/commands. Implements <see cref="ISender"/>:
 /// delivers messages to the backing connection (if any) and exposes its id as the command source.</summary>
+[Component]
 public struct SenderEntityComponent : ISender {
     public string SenderName;
     /// <summary>The backing connection (chat delivery + the command source's player identity), injected when

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace SharpMinerals.Events;
@@ -60,6 +61,10 @@ public sealed class EventBus {
     }
 
     // The concrete type plus all of its base classes (up to object) and interfaces — cached.
+    // GetInterfaces over a runtime event type can't be statically proven trim-safe, but every interface that
+    // matters here is an event contract a handler Subscribe<T>'d to, which roots it — so none are trimmed away.
+    [UnconditionalSuppressMessage("Trimming", "IL2070",
+        Justification = "Event interfaces used for dispatch are preserved by their Subscribe<T> registrations.")]
     Type[] DispatchChain(Type concrete) => dispatchChains.GetOrAdd(concrete, static t => {
         var types = new List<Type>();
         for (var b = t; b is not null; b = b.BaseType) types.Add(b);

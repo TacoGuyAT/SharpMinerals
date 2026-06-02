@@ -1,6 +1,7 @@
 namespace SharpMinerals.Entities.Components;
 
 /// <summary>Per-tick movement delta integrated into <see cref="TransformEntityComponent"/>.</summary>
+[Component]
 public struct VelocityEntityComponent {
     Vector3m vector;
     public Mfloat X { get => vector.X; set => vector.X = value; }

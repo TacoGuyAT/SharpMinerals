@@ -17,6 +17,14 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
   </PropertyGroup>
+
+  <!-- AOT flavor ($(AOT), defaulted in Directory.Build.props): the AOT symbol drops dynamic mod loading +
+       RocksDbSharp (both JIT-only); trim ICU too. -->
+  <PropertyGroup Condition="'$(AOT)' == 'true'">
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
   <ItemGroup>
     <Content Include="icon_temp.ico" />
   </ItemGroup>
@@ -24,14 +32,26 @@
   <!-- The logging backend lives here, in the host — the core library only references the abstractions. -->
   <ItemGroup>
     <PackageReference Include="Kokuban" Version="0.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="ZLogger" Version="2.5.10" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
-    <ProjectReference Include="..\SharpMinerals.Persistence.RocksDb\SharpMinerals.Persistence.RocksDb.csproj" />
   </ItemGroup>
+
+  <!-- Persistence backend differs by build: JIT uses RocksDbSharp (Reflection.Emit, full API); the AOT build
+       uses MinRocksDb ([LibraryImport], AOT-safe). Both write the same on-disk layout. Gated on $(AOT). -->
+  <Choose>
+    <When Condition="'$(IN_MEMORY)' != 'true'">
+      <ItemGroup Condition="'$(AOT)' != 'true'">
+        <ProjectReference Include="..\SharpMinerals.Persistence.RocksDb\SharpMinerals.Persistence.RocksDb.csproj" />
+      </ItemGroup>
+      <ItemGroup Condition="'$(AOT)' == 'true'">
+        <ProjectReference Include="..\SharpMinerals.Persistence.MinRocksDb\SharpMinerals.Persistence.MinRocksDb.csproj" />
+      </ItemGroup>
+    </When>
+  </Choose>
+
+  <!-- The test-harness mod (/test) is loaded via the mod system, compiled in only on Debug (matching
+       TEST_HARNESS); the shipped Release server has no /test. -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <ProjectReference Include="..\SharpMinerals.TestMod\SharpMinerals.TestMod.csproj" />
     <ProjectReference Include="..\SharpMinerals.SampleMod\SharpMinerals.SampleMod.csproj" />

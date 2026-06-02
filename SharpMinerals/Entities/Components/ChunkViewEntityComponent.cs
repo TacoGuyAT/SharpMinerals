@@ -2,6 +2,7 @@ namespace SharpMinerals.Entities.Components;
 
 /// <summary>Per-player record of which chunk columns its client currently has loaded, so the server can
 /// stream new columns (and forget out-of-range ones) as the player moves. Transient — never persisted.</summary>
+[Component]
 public sealed class ChunkViewEntityComponent {
     /// <summary>The chunk column the player is currently centred on.</summary>
     public Mint CenterX;

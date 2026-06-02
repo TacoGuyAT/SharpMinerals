@@ -1,5 +1,6 @@
 namespace SharpMinerals.Entities.Components;
 
+[Component]
 public struct HealthEntityComponent {
     public float Current;
     public float Max;

@@ -10,9 +10,19 @@ using SharpMinerals.Network.Protocols.JE61;
 using SharpMinerals.Network.Protocols.JE763;
 using SharpMinerals.Network.Tcp;
 using SharpMinerals.Persistence;
+#if !IN_MEMORY
+#if AOT
+using SharpMinerals.Persistence.MinRocksDb;
+#else
 using SharpMinerals.Persistence.RocksDb;
+#endif
+#endif
+#if DEBUG
 using SharpMinerals.SampleMod;
+#endif
+#if TEST_HARNESS
 using SharpMinerals.TestMod;
+#endif
 using System.Collections.Concurrent;
 using System.Net;
 
@@ -36,16 +46,28 @@ modLoader.TryLoad(new TestMod());
 #if DEBUG
 modLoader.TryLoad(new SampleMod());
 #endif
-modLoader.LoadDirectory(Path.Combine(Directory.GetCurrentDirectory(), "mods"));
+#if !AOT
+modLoader.LoadDirectory(Path.Combine(Directory.GetCurrentDirectory(), "mods")); // dynamic mod loading is JIT-only
+#endif
 ModContent.Freeze(); // seal the palette — no block/item/entity may register past this point
 
 // Supported protocols; each connection picks one (see ProtocolRegistry.Detect).
 var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE61());
 var endpoint = new IPEndPoint(IPAddress.Parse(config.Host), config.Port);
 
-// Disk-backed persistence (RocksDB) behind write-behind queues so saves never block hot paths.
+// Persistence behind write-behind queues so saves never block hot paths. The backing store is chosen at
+// compile time: IN_MEMORY = ephemeral (no disk), AOT = the AOT-safe MinRocksDb binding, else RocksDbSharp.
+// MinRocksDb and RocksDbSharp share an on-disk layout, so a world is portable between them.
+#if IN_MEMORY
+var worldStore = new AsyncWorldStore(new InMemoryWorldStore());
+var playerStore = new AsyncPlayerStore(new InMemoryPlayerStore());
+#elif AOT
+var worldStore = new AsyncWorldStore(new MinRocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
+var playerStore = new AsyncPlayerStore(new MinRocksDbPlayerStore(Path.Combine(config.DataDir, "players")));
+#else
 var worldStore = new AsyncWorldStore(new RocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
 var playerStore = new AsyncPlayerStore(new RocksDbPlayerStore(Path.Combine(config.DataDir, "players")));
+#endif
 
 // The configured main world, a persisted superflat.
 var worlds = new ConcurrentDictionary<string, World>();

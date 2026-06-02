@@ -7,10 +7,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <!-- Version is shared via Directory.Build.props so the host exe matches this library. -->
     <DefineConstants>$(DefineConstants);DOUBLE_PRECISION</DefineConstants>
   </PropertyGroup>
+
+  <!-- The AOT compile symbol (which #if's out HarmonyX + dynamic mod loading) is defined in Directory.Build.props
+       from $(AOT); HarmonyX below and the host's RocksDb references gate on the same property. -->
 
   <!-- The test project is allowed white-box access to internals (capture doubles, etc.);
        host apps are NOT — they must use the public API only, which keeps it embeddable. -->
@@ -27,9 +29,16 @@
     <PackageIcon></PackageIcon>
   </PropertyGroup>
 
+  <!-- HarmonyX (runtime IL patching) is JIT-only; omitted from the AOT publish, where the AOT symbol #if's out its use. -->
+  <ItemGroup Condition="'$(AOT)' != 'true'">
+    <PackageReference Include="HarmonyX" Version="2.13.0" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(AOT)' == 'true'">
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Arch" Version="2.1.0" />
-    <PackageReference Include="HarmonyX" Version="2.13.0" />
     <!-- Abstractions ONLY — the concrete logging backend (ZLogger) lives in the host (SharpMinerals.CLI). -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
     <!-- Brigadier.NET: the command tree/parser (official Brigadier API), which also powers tab-completion.
@@ -43,6 +52,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\PrecisionTimer\PrecisionTimer.csproj" />
     <ProjectReference Include="..\SharpMinerals.Chat\SharpMinerals.Chat.csproj" />
+    <ProjectReference Include="..\..\Arch.Extended\Arch.AOT.SourceGenerator\Arch.AOT.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
+    <Using Include="Arch.AOT.SourceGenerator" />
   </ItemGroup>
 
 </Project>

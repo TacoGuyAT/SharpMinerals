@@ -2,6 +2,7 @@ namespace SharpMinerals.Entities.Components;
 
 /// <summary>World-space placement: position (doubles) plus look direction in degrees. The transform every
 /// visible entity carries.</summary>
+[Component]
 public struct TransformEntityComponent {
     public Mfloat X, Y, Z;
     public float Yaw, Pitch;

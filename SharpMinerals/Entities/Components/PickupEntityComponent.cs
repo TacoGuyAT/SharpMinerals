@@ -3,6 +3,7 @@ using SharpMinerals.Items;
 namespace SharpMinerals.Entities.Components;
 
 /// <summary>A dropped item-stack entity: the stack it represents plus its lifetime.</summary>
+[Component]
 public struct PickupEntityComponent {
     public ItemStack Stack;
     /// <summary>Ticks since the item was dropped.</summary>

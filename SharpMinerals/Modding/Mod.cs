@@ -1,4 +1,6 @@
+#if !AOT
 using HarmonyLib;
+#endif
 using Microsoft.Extensions.Logging;
 using NuGet.Versioning;
 
@@ -20,9 +22,12 @@ public abstract class Mod {
 
     public SemanticVersion Version { get; private set; } = null!;
 
+#if !AOT
     /// <summary>A Harmony instance scoped to this mod (id = <see cref="ModInfoAttribute.ModId"/>). Call
-    /// <c>PatchAll()</c> from <see cref="OnInitialize"/> to apply the mod's patches.</summary>
+    /// <c>PatchAll()</c> from <see cref="OnInitialize"/> to apply the mod's patches. JIT builds only — runtime
+    /// patching is unavailable under Native AOT.</summary>
     public Harmony Harmony { get; internal set; } = null!;
+#endif
 
     /// <summary>A writable per-mod data directory (created for you), for config/state files.</summary>
     public string DataPath { get; internal set; } = null!;
@@ -30,9 +35,15 @@ public abstract class Mod {
     /// <summary>A logger categorised by the mod id, bound to the host's logging backend.</summary>
     protected ILogger Logger { get; private set; } = null!;
 
-    internal void Bind(ModInfoAttribute info, Harmony harmony, string dataPath) {
+    internal void Bind(ModInfoAttribute info,
+#if !AOT
+                       Harmony harmony,
+#endif
+                       string dataPath) {
         Info = info;
+#if !AOT
         Harmony = harmony;
+#endif
         DataPath = dataPath;
         Version = SemanticVersion.TryParse(info.Version, out var v) ? v : new SemanticVersion(0, 0, 0); // validated by the loader
         Logger = Logging.For($"Mod/{info.ModId}");

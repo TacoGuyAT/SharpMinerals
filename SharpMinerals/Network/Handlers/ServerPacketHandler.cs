@@ -237,12 +237,11 @@ public sealed class ServerPacketHandler {
     string BuildStatusJson(NetClient client) {
         var protocol = client.Protocol; // echo the connecting client's version so it shows compatible
 
-        var status = new {
-            version = new { name = protocol.VersionName, protocol = protocol.Version },
-            players = new { max = server.MaxPlayers, online = server.PlayerCount, sample = Array.Empty<object>() },
-            description = new { text = server.MOTD },
-        };
+        var status = new StatusResponse(
+            new StatusVersion(protocol.VersionName, protocol.Version),
+            new StatusPlayers(server.MaxPlayers, server.PlayerCount, Array.Empty<StatusSample>()),
+            new StatusDescription(server.MOTD));
 
-        return JsonSerializer.Serialize(status);
+        return JsonSerializer.Serialize(status, StatusJsonContext.Default.StatusResponse);
     }
 }

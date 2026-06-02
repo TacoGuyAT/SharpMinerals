@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Brigadier.NET.ArgumentTypes;
 using Brigadier.NET.Tree;
 using SharpMinerals.Network.Buffers;
@@ -67,6 +68,12 @@ static class CommandTreeSerializer {
         s.WriteVarInt(index[root]);
     }
 
+    // The argument extras (Type, CustomSuggestions) are read reflectively below to avoid naming the argument's
+    // value type T (an open set). DynamicDependency roots those properties on every ArgumentCommandNode<,> so
+    // trimming/AOT keeps them, and the suppression acknowledges the GetType()-flow the analyzer can't prove.
+    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicProperties, "Brigadier.NET.Tree.ArgumentCommandNode`2", "Brigadier.NET")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075",
+        Justification = "ArgumentCommandNode<,>.Type/CustomSuggestions are rooted via the DynamicDependency above.")]
     static void WriteNode(MinecraftStream s, CommandNode<SenderContext> node, Dictionary<CommandNode<SenderContext>, int> index) {
         int type = node switch {
             RootCommandNode<SenderContext> => 0,

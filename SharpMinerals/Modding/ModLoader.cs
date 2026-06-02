@@ -1,6 +1,9 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+#if !AOT
+using System.Diagnostics.CodeAnalysis;
 using HarmonyLib;
+#endif
 using Microsoft.Extensions.Logging;
 using NuGet.Versioning;
 
@@ -33,11 +36,22 @@ public sealed partial class ModLoader {
         return v is null ? new SemanticVersion(0, 0, 0) : new SemanticVersion(v.Major, v.Minor, v.Build);
     }
 
+#if !AOT
+    // Reflection over assembly types — the mod-discovery boundary. Declared (not suppressed) so the requirement
+    // propagates to hosts. Compiled out of AOT builds entirely (the AOT symbol); use the type-safe TryLoad<T>
+    // for compiled-in mods there.
+    const string DynamicModLoading = "Discovers mods by scanning assembly types via reflection and instantiating "
+        + "them; types may be trimmed and external assemblies can't be loaded under Native AOT. Use TryLoad<T> "
+        + "for compiled-in mods.";
+
     /// <summary>Loads mods from assemblies already in the process (a host's own referenced mod projects).</summary>
+    [RequiresUnreferencedCode(DynamicModLoading)]
+    [RequiresDynamicCode(DynamicModLoading)]
     public void LoadFrom(params Assembly[] assemblies) {
         foreach (var assembly in assemblies)
             TryLoad(assembly);
     }
+#endif
 
     public bool TryLoad(Mod mod, ModInfoAttribute info) {
         if(!ModIdPattern.IsMatch(info.ModId)) {
@@ -67,7 +81,11 @@ public sealed partial class ModLoader {
 
         var dataPath = Path.Combine("mods", "data", info.ModId);
         Directory.CreateDirectory(dataPath);
-        mod.Bind(info, new Harmony(info.ModId), dataPath);
+        mod.Bind(info,
+#if !AOT
+                 new Harmony(info.ModId),
+#endif
+                 dataPath);
 
         // TODO: better handling
         try {
@@ -88,8 +106,11 @@ public sealed partial class ModLoader {
         return TryLoad(new T(), attr);
     }
 
+#if !AOT
     /// <summary>Loads mods from every <c>*.dll</c> directly in <paramref name="directory"/> (created if absent).
     /// Each assembly that carries a <see cref="ModInfoAttribute"/> is treated as a mod; others are ignored.</summary>
+    [RequiresUnreferencedCode(DynamicModLoading)]
+    [RequiresDynamicCode(DynamicModLoading)]
     public void LoadDirectory(string directory) {
         Directory.CreateDirectory(directory);
         foreach (var file in Directory.GetFiles(directory, "*.dll", SearchOption.TopDirectoryOnly)) {
@@ -101,8 +122,9 @@ public sealed partial class ModLoader {
         }
     }
 
+    [RequiresUnreferencedCode(DynamicModLoading)]
+    [RequiresDynamicCode(DynamicModLoading)]
     bool TryLoad(Assembly assembly) {
-        // TODO: Figure out compiler warnings
         var candidates = assembly.GetExportedTypes()
             .Select(mod => {
                 if(mod.IsSubclassOf(typeof(Mod)) && !mod.IsAbstract && mod.GetCustomAttribute<ModInfoAttribute>() is ModInfoAttribute info) {
@@ -128,6 +150,7 @@ public sealed partial class ModLoader {
 
         return true;
     }
+#endif
 
     public void StartAll(Server server) => ForEach(server, (m, s) => m.OnServerStarted(s), "OnServerStarted");
 

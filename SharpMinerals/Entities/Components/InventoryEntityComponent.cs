@@ -5,6 +5,7 @@ namespace SharpMinerals.Entities.Components;
 
 /// <summary>An entity's inventory layout over a backing <see cref="InventoryComponent"/>: 36 main slots
 /// (hotbar 0-8 + storage 9-35), 4 armor slots, and an off-hand. The held item is the selected hotbar slot.</summary>
+[Component]
 public sealed class InventoryEntityComponent {
     public const int MainSize = 36;
     public const int HotbarSize = 9;

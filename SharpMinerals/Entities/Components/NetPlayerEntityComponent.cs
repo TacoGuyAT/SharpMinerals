@@ -1,6 +1,7 @@
 namespace SharpMinerals.Entities.Components;
 
 /// <summary>Marks an entity that is backed by a connected client.</summary>
+[Component]
 public struct NetPlayerEntityComponent {
     public ulong ClientId;
     public string Name;
