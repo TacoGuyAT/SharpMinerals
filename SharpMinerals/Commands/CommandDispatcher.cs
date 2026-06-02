@@ -37,7 +37,7 @@ public sealed class CommandDispatcher {
     // same way via CacheCapacity.)
     const int BaseCacheEntries = 256;
     const int CacheEntriesPerPlayer = 64;
-    int CacheCapacity => BaseCacheEntries + CacheEntriesPerPlayer * (Server?.PlayerCount ?? 0);
+    int CacheCapacity => BaseCacheEntries + CacheEntriesPerPlayer * Server.PlayerCount;
 
     // Bumped when the command tree changes (a Register) - invalidates every cached parse, console included.
     int generation;
@@ -46,11 +46,15 @@ public sealed class CommandDispatcher {
 
     /// <summary>The server this dispatcher drives, injected by <see cref="Server"/>. Commands reach it through
     /// <see cref="CommandContext.Server"/> instead of a global static.</summary>
-    public Server? Server { get; set; }
+    public Server Server { get; set; }
 
     /// <summary>The underlying Brigadier dispatcher, exposed so a later phase can serialize the command tree
     /// (the Declare Commands packet) and answer completion suggestions.</summary>
     public BrigadierDispatcher Brigadier => brig;
+
+    public CommandDispatcher(Server server) {
+        Server = server;
+    }
 
     /// <summary>Registers a command from a Brigadier builder lambda; chainable. Changing the tree invalidates
     /// every cached parse (their <c>.Requires</c> pruning may no longer hold).</summary>

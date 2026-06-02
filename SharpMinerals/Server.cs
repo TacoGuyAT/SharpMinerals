@@ -80,7 +80,7 @@ public class Server : ITickable {
     /// <summary>The command dispatcher, so any <see cref="Commands.ISender"/> can issue commands.
     /// Assigning it injects this server into the dispatcher (so it and its commands need no static access).</summary>
     public CommandDispatcher CommandDispatcher { get => commandDispatcher; }
-    readonly CommandDispatcher commandDispatcher = new();
+    readonly CommandDispatcher commandDispatcher;
 
     /// <summary>The server console as a command/chat sender, owned here so every host shares one console
     /// identity: the CLI wires its stdin/stdout to it, and an in-process test drives commands as it and reads
@@ -107,9 +107,7 @@ public class Server : ITickable {
     public Server(ServerContext ctx) {
         context = ctx;
         Sender = new(this);
-        // Inject ourselves so the dispatcher and its commands reach the server through the command source
-        // (CommandContext.Server) rather than a global static.
-        commandDispatcher.Server = this;
+        commandDispatcher = new(this);
         if (context.TicksPerSecond <= 0)
             context.TicksPerSecond = 20.0;
         playerStore = ctx.PlayerStore ?? new InMemoryPlayerStore();
