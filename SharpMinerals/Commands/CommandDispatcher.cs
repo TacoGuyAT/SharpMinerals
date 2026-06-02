@@ -15,7 +15,7 @@ namespace SharpMinerals.Commands;
 /// commands via Brigadier builder lambdas.
 /// </summary>
 public sealed class CommandDispatcher {
-    static readonly ILogger Log = Logging.For("CommandDispatcher");
+    static readonly ILogger Log = Logging.For<CommandDispatcher>();
 
     readonly CommandDispatcher<SenderContext> brig = new();
 

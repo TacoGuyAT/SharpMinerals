@@ -11,7 +11,7 @@ namespace SharpMinerals.Level;
 /// chunk boundaries (forgetting out-of-range ones so they re-send on return). Driven by lifecycle events.
 /// </summary>
 public static class Streaming {
-    static readonly ILogger Log = Logging.For("Net.Chunks");
+    static readonly ILogger Log = Logging.For("Streaming");
 
     /// <summary>Max column radius (eviction keep-set reference); per-client radius is <see cref="Protocol.ChunkViewRadius"/>.</summary>
     public const int ViewRadius = 5;

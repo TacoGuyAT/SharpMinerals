@@ -9,7 +9,7 @@ namespace SharpMinerals.Network.Tcp;
 /// own receive thread. Decoded packets are routed to the supplied handler.
 /// </summary>
 public sealed class TcpNetServer : NetServer<TcpNetClient> {
-    static readonly ILogger Log = Logging.For("Net.Tcp");
+    static readonly ILogger Log = Logging.For<TcpNetServer>();
 
     readonly TcpListener listener;
     readonly Action<NetClient, IMessage> handler;
