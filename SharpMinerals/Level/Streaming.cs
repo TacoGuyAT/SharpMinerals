@@ -2,15 +2,15 @@ using Microsoft.Extensions.Logging;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
-using SharpMinerals.Level;
+using SharpMinerals.Network;
 
-namespace SharpMinerals.Network;
+namespace SharpMinerals.Level;
 
 /// <summary>
 /// Streams chunk columns to each player: an initial view on join, then new columns as they cross
 /// chunk boundaries (forgetting out-of-range ones so they re-send on return). Driven by lifecycle events.
 /// </summary>
-public static class ChunkStreamer {
+public static class Streaming {
     static readonly ILogger Log = Logging.For("Net.Chunks");
 
     /// <summary>Max column radius (eviction keep-set reference); per-client radius is <see cref="Protocol.ChunkViewRadius"/>.</summary>
@@ -34,7 +34,7 @@ public static class ChunkStreamer {
     /// </summary>
     static void Stream(PlayerContext context, bool initial) {
         var ecs = context.World.Ecs;
-        NetClient client = context.Client;
+        var client = context.Client;
         if (!ecs.IsAlive(context.Entity))
             return;
         var view = ecs.Get<ChunkViewEntityComponent>(context.Entity);

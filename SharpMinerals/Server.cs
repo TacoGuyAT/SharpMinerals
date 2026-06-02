@@ -106,7 +106,7 @@ public class Server : ITickable {
         Events.Subscribe<PlayerLeft>((e) => commandDispatcher.Forget(e.Context.Client.Id));
 
         // Chunk streaming registered before visibility so a joining client gets terrain before other spawns.
-        ChunkStreamer.Register(Events);
+        Streaming.Register(Events);
         PlayerVisibility.Register(Events);
     }
 
@@ -274,7 +274,7 @@ public class Server : ITickable {
             centers.Add((view.CenterX, view.CenterZ));
         }
 
-        int keepRadius = ChunkStreamer.ViewRadius + EvictMargin;
+        int keepRadius = Streaming.ViewRadius + EvictMargin;
         foreach (var world in Worlds.Values) {
             centersByWorld.TryGetValue(world, out var centers);
             int evicted = world.EvictChunks(centers, keepRadius);
@@ -373,7 +373,7 @@ public class Server : ITickable {
         // Reload the client into the target world (WorldName = target's unique key forces the teardown).
         client.Send(new RespawnS2C("minecraft:overworld", target.Name, HashedSeed: 0, GameMode: 1, IsFlat: true));
         client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
-        ChunkStreamer.StreamInitial(moved); // fresh ChunkView ⇒ streams the new world's columns
+        Streaming.StreamInitial(moved); // fresh ChunkView ⇒ streams the new world's columns
         var t = target.Ecs.Get<TransformEntityComponent>(moved.Entity);
         client.Send(new SynchronizePlayerPositionS2C(t.X, t.Y, t.Z, t.Yaw, t.Pitch, BeginTeleport(clientId)));
         client.Send(new SetHealthS2C(target.Ecs.Get<HealthEntityComponent>(moved.Entity).Current, 20, 5f));
@@ -422,7 +422,7 @@ public class Server : ITickable {
 
         // Stream terrain around the destination now and re-file the spatial index; the per-tick movement system
         // shows the move to other players. Then teleport the client.
-        ChunkStreamer.Restream(context);
+        Streaming.Restream(context);
         Events.Publish(new EntityMoved(context.World, context.Entity));
         client.Send(new SynchronizePlayerPositionS2C(x, y, z, yaw, pitch, teleportId));
     }

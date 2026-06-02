@@ -34,7 +34,7 @@ public abstract class Protocol {
     public abstract IMessage? ReadMessage(MinecraftStream stream, ConnectionState state, PacketDirection direction);
 
     // Chunk streaming: the chunk wire format is the most protocol-divergent S2C payload, so the
-    // protocol owns it; ChunkStreamer only decides which columns to send.
+    // protocol owns it; Streaming only decides which columns to send.
 
     public abstract IMessage BuildChunk(World world, int cx, int cz);
 
