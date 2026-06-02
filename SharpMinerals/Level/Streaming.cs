@@ -38,32 +38,46 @@ public static class Streaming {
         var view = ecs.Get<ChunkViewEntityComponent>(context.Entity);
         var transform = ecs.Get<TransformEntityComponent>(context.Entity);
 
-        long cx = (long)System.Math.Floor(transform.X / Chunk.Size);
-        long cz = (long)System.Math.Floor(transform.Z / Chunk.Size);
+        Mint cx = (Mint)System.Math.Floor(transform.X) >> Chunk.Shifts;
+        Mint cz = (Mint)System.Math.Floor(transform.Z) >> Chunk.Shifts;
         view.CenterX = cx;
         view.CenterZ = cz;
         view.Initialized = true;
 
-        var protocol = context.Client.Protocol;
-        if (protocol.ChunkViewCenter((int)cx, (int)cz) is IMessage center)
-            context.Client.Send(center); // must precede the chunk data, or the client discards off-grid columns
-        if (view.Loaded.Add((cx, cz)))
-            context.Client.Send(protocol.BuildChunk(context.World, (int)cx, (int)cz));
+        Recenter(context, cx, cz);
+        StreamColumn(context, view, cx, cz);
     }
 
-    /// <summary>
-    /// Streams the columns around a player. The wire format is resolved by the protocol, not here.
-    /// </summary>
+    /// <summary>Sends a single chunk column to the player, unless they already have it loaded; returns whether
+    /// it was sent. The wire format is the protocol's. Mods can call this to push a specific column to a player
+    /// (e.g. a custom view distance, or refreshing an edited far column).</summary>
+    public static bool StreamColumn(PlayerContext context, Mint columnX, Mint columnZ) =>
+        context.World.Ecs.IsAlive(context.Entity)
+        && StreamColumn(context, context.World.Ecs.Get<ChunkViewEntityComponent>(context.Entity), columnX, columnZ);
+
+    static bool StreamColumn(PlayerContext context, ChunkViewEntityComponent view, Mint columnX, Mint columnZ) {
+        if (!view.Loaded.Add((columnX, columnZ))) return false; // the client already has this column
+        context.Client.Send(context.Client.Protocol.BuildChunk(context.World, (int)columnX, (int)columnZ));
+        return true;
+    }
+
+    /// <summary>Tells the client which chunk its view is centred on; must precede chunk data or off-grid
+    /// columns are discarded client-side.</summary>
+    static void Recenter(PlayerContext context, Mint cx, Mint cz) {
+        if (context.Client.Protocol.ChunkViewCenter((int)cx, (int)cz) is IMessage center)
+            context.Client.Send(center);
+    }
+
+    /// <summary>Streams the columns around a player. The wire format is resolved by the protocol, not here.</summary>
     static void Stream(PlayerContext context, bool initial) {
         var ecs = context.World.Ecs;
-        var client = context.Client;
         if (!ecs.IsAlive(context.Entity))
             return;
         var view = ecs.Get<ChunkViewEntityComponent>(context.Entity);
         var transform = ecs.Get<TransformEntityComponent>(context.Entity);
 
-        long cx = (long)System.Math.Floor(transform.X / Chunk.Size);
-        long cz = (long)System.Math.Floor(transform.Z / Chunk.Size);
+        Mint cx = (Mint)System.Math.Floor(transform.X) >> Chunk.Shifts;
+        Mint cz = (Mint)System.Math.Floor(transform.Z) >> Chunk.Shifts;
         if (!initial && view.Initialized && cx == view.CenterX && cz == view.CenterZ)
             return; // still in the same column
 
@@ -71,26 +85,19 @@ public static class Streaming {
         view.CenterZ = cz;
         view.Initialized = true;
 
-        var protocol = client.Protocol;
-        int radius = protocol.ChunkViewRadius;
-        if (protocol.ChunkViewCenter((int)cx, (int)cz) is IMessage center)
-            client.Send(center); // must precede the chunk data, or the client discards off-grid columns
+        Recenter(context, cx, cz);
 
+        int radius = context.Client.Protocol.ChunkViewRadius;
         int sent = 0;
-        for (long dx = -radius; dx <= radius; dx++)
-            for (long dz = -radius; dz <= radius; dz++) {
-                long colX = cx + dx, colZ = cz + dz;
-                if (view.Loaded.Add((colX, colZ))) {
-                    client.Send(protocol.BuildChunk(context.World, (int)colX, (int)colZ));
-                    sent++;
-                }
-            }
+        for (Mint dx = -radius; dx <= radius; dx++)
+            for (Mint dz = -radius; dz <= radius; dz++)
+                if (StreamColumn(context, view, cx + dx, cz + dz)) sent++;
 
         // Forget columns now outside the view so they re-send if the player returns.
         view.Loaded.RemoveWhere(c =>
             System.Math.Abs(c.X - cx) > radius || System.Math.Abs(c.Z - cz) > radius);
 
         if (sent > 0)
-            Log.LogDebug("Streamed {Count} column(s) to #{Client} around chunk ({X},{Z})", sent, client.Id, cx, cz);
+            Log.LogDebug("Streamed {Count} column(s) to #{Client} around chunk ({X},{Z})", sent, context.Client.Id, cx, cz);
     }
 }
