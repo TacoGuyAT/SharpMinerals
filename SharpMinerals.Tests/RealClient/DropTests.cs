@@ -20,8 +20,7 @@ public sealed class DropTests {
         await f.EnterFreshWorld("test_drop_one");
         Assert.Equal(0, await f.CountItems());
         await f.Send("drop");
-        await Task.Delay(2000); // server spawns + announces, client renders
-        Assert.Equal(1, await f.CountItems());
+        Assert.Equal(1, await PollItems(1)); // server spawns + announces, client renders
     }
 
     [RealClientFact, Order(2)]
@@ -29,8 +28,17 @@ public sealed class DropTests {
         await f.EnterFreshWorld("test_drop_stack");
         Assert.Equal(0, await f.CountItems()); // fresh world ⇒ the previous test's item is gone (isolation)
         await f.Send("drop all");
-        await Task.Delay(2000);
-        Assert.Equal(1, await f.CountItems());
+        Assert.Equal(1, await PollItems(1));
+    }
+
+    // Polls the client's rendered item count until it reaches target (or times out), exiting as soon as it does.
+    async Task<int> PollItems(int target) {
+        int count = 0;
+        for (int i = 0; i < 10 && count != target; i++) {
+            await Task.Delay(400);
+            count = await f.CountItems();
+        }
+        return count;
     }
 }
 #endif

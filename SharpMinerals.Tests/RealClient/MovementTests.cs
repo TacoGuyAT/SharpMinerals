@@ -26,9 +26,13 @@ public sealed class MovementTests {
         double startX = PosX(await f.Send("pos"));
 
         await f.Send("goto 48 0"); // east into chunk (3,0); Baritone paths only over streamed terrain
-        await Task.Delay(20000);   // ~48 blocks of flat-ground pathing
 
-        double endX = PosX(await f.Send("pos"));
+        // Poll until it's crossed the chunk boundaries, exiting as soon as it has (instead of a flat 20s wait).
+        double endX = startX;
+        for (int i = 0; i < 24 && endX - startX <= 32; i++) {
+            await Task.Delay(1000);
+            endX = PosX(await f.Send("pos"));
+        }
         Assert.True(endX - startX > 32,
             $"player should have walked east across chunk boundaries (start x={startX}, end x={endX})");
     }
