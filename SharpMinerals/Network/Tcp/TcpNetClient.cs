@@ -2,15 +2,19 @@ using System.Net.Sockets;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using SharpMinerals.Network.Buffers;
+using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.Network.Tcp;
 
 /// <summary>
 /// A client connected over TCP. A blocking read loop on its own thread decodes inbound packets; outbound
-/// packets go onto a per-client queue drained by one writer task. So a send only enqueues — it never blocks the
-/// caller (e.g. the tick) on a slow socket: a client that can't keep up backs up its own queue (and is dropped
-/// past <see cref="MaxQueued"/>) instead of stalling the simulation or other clients. A single writer also
-/// gives per-client ordering for free, with no lock.
+/// packets go onto a per-client two-lane queue drained by one writer task. So a send only enqueues — it never
+/// blocks the caller (e.g. the tick) on a slow socket: a client that can't keep up backs up its own queue (and
+/// is dropped past <see cref="MaxQueued"/>) instead of stalling the simulation or other clients.
+/// <para>Two priority lanes: <b>instant</b> (gameplay — movement, block updates, chat, health, …) is fully
+/// drained before <b>bulk</b> (chunk data), and a newly-arrived instant packet preempts the bulk backlog. So a
+/// chunk-streaming burst never delays instant feedback; chunks just trail behind. A single writer also gives
+/// per-lane ordering for free, with no lock.</para>
 /// </summary>
 public sealed class TcpNetClient : NetClient {
     static readonly ILogger Log = Logging.For("Net.Tcp");
@@ -24,14 +28,28 @@ public sealed class TcpNetClient : NetClient {
     readonly MinecraftStream stream;
     readonly ProtocolRegistry registry;
 
-    readonly Channel<OutboundItem> outbound =
-        Channel.CreateUnbounded<OutboundItem>(new UnboundedChannelOptions { SingleReader = true });
+    // Two lanes drained by one writer: instant first, bulk (chunks) deferred behind it.
+    readonly Channel<OutboundItem> priorityQueue = NewLane();
+    readonly Channel<OutboundItem> queue = NewLane();
     int queued;
     readonly Task writer;
 
-    // A queued send: framed bytes to write, or (Secret set) a request to switch the stream to encryption —
+    static Channel<OutboundItem> NewLane() =>
+        Channel.CreateUnbounded<OutboundItem>(new UnboundedChannelOptions { SingleReader = true });
+
+    // A queued send: framed bytes to write, or (Secret set) a request to switch the stream to encryption,
     // queued so the writer flips it in order, after the last plaintext packet.
     readonly record struct OutboundItem(byte[]? Frame, byte[]? Secret);
+
+    enum Lane { Instant, Bulk }
+
+    // Bulk lane = chunk data (deferred behind gameplay) + the player's position sync, which must stay ordered
+    // AFTER the chunks it's placed onto (else the client is positioned before terrain loads and sinks). Both
+    // share the lane so instant gameplay can overtake them but they never overtake each other.
+    static Lane LaneOf(IMessage message) => message switch {
+        ChunkDataS2C or SynchronizePlayerPositionS2C => Lane.Bulk,
+        _ => Lane.Instant,
+    };
 
     public TcpNetClient(ulong id, TcpClient tcp, ProtocolRegistry registry) : base(id, registry.Default) {
         this.tcp = tcp;
@@ -47,7 +65,7 @@ public sealed class TcpNetClient : NetClient {
             Log.LogDebug("→ #{Client} {Packet} — no {Version} codec, dropped", Id, message.GetType().Name, Protocol.VersionName);
             return;
         }
-        Enqueue(new OutboundItem(Protocol.Frame(message), null), message);
+        Enqueue(new OutboundItem(Protocol.Frame(message), null), LaneOf(message), message);
     }
 
     public override void Send(CachedPacket packet) {
@@ -55,36 +73,32 @@ public sealed class TcpNetClient : NetClient {
             Log.LogDebug("→ #{Client} {Packet} — no {Version} codec, dropped", Id, packet.Message.GetType().Name, Protocol.VersionName);
             return;
         }
-        Enqueue(new OutboundItem(packet.Framed(Protocol), null), packet.Message);
+        Enqueue(new OutboundItem(packet.Framed(Protocol), null), LaneOf(packet.Message), packet.Message);
     }
 
-    void Enqueue(in OutboundItem item, IMessage? message) {
+    void Enqueue(in OutboundItem item, Lane lane, IMessage? message) {
         if (Interlocked.Increment(ref queued) > MaxQueued) {
             Log.LogWarning("→ #{Client} outbound backlog over {Max} — dropping slow client", Id, MaxQueued);
             Disconnect();
             return;
         }
-        if (!outbound.Writer.TryWrite(item))
+        var channel = lane == Lane.Bulk ? queue : priorityQueue;
+        if (!channel.Writer.TryWrite(item))
             Interlocked.Decrement(ref queued); // queue already completed (disconnecting) — drop silently
         else if (message is not null)
-            Log.LogDebug("→ #{Client} [{State}] {Packet} queued", Id, State, message.GetType().Name);
+            Log.LogDebug("→ #{Client} [{State}] {Packet} queued ({Lane})", Id, State, message.GetType().Name, lane);
     }
 
-    /// <summary>Drains the outbound queue on a dedicated task: writes framed packets (one flush per drained
-    /// batch) and applies encryption switches in order. Closes the socket when the queue completes or a write
-    /// fails — so packets queued before <see cref="Disconnect"/> (e.g. a kick reason) are delivered first.</summary>
+    /// <summary>Drains the queue on a dedicated task: instant lane first, then one bulk item at a time, yielding
+    /// to any instant packet that arrives between bulk items. Flushes once per drained batch. Closes the socket
+    /// when both lanes complete or a write fails — so packets queued before <see cref="Disconnect"/> are sent.</summary>
     async Task WriteLoop() {
         try {
-            var reader = outbound.Reader;
-            while (await reader.WaitToReadAsync()) {
-                while (reader.TryRead(out var item)) {
-                    Interlocked.Decrement(ref queued);
-                    if (item.Secret is { } secret)
-                        stream.EnableEncryption(secret);
-                    else if (item.Frame is { } frame)
-                        stream.Write(frame, 0, frame.Length);
-                }
-                stream.Flush();
+            while (true) {
+                while (priorityQueue.Reader.TryRead(out var hi)) { Interlocked.Decrement(ref queued); WriteItem(hi); }
+                if (queue.Reader.TryRead(out var lo)) { Interlocked.Decrement(ref queued); WriteItem(lo); continue; }
+                stream.Flush();                 // both lanes momentarily empty — flush the batch, then wait
+                if (!await WaitForData()) break; // both lanes completed → done
             }
         } catch (Exception ex) when (ex is IOException or ObjectDisposedException or SocketException) {
             Log.LogDebug("→ #{Client} writer stopped — connection closed ({Reason})", Id, ex.GetType().Name);
@@ -93,10 +107,32 @@ public sealed class TcpNetClient : NetClient {
         }
     }
 
-    public override void Disconnect() => outbound.Writer.TryComplete(); // writer drains, flushes, then closes
+    void WriteItem(in OutboundItem item) {
+        if (item.Secret is { } secret) stream.EnableEncryption(secret);
+        else if (item.Frame is { } frame) stream.Write(frame, 0, frame.Length);
+    }
+
+    // Waits until either lane has an item; returns false only once BOTH lanes are completed and empty.
+    async Task<bool> WaitForData() {
+        var hi = priorityQueue.Reader.WaitToReadAsync().AsTask();
+        var lo = queue.Reader.WaitToReadAsync().AsTask();
+        await Task.WhenAny(hi, lo);
+        if (hi.IsCompletedSuccessfully && hi.Result) return true;
+        if (lo.IsCompletedSuccessfully && lo.Result) return true;
+        // Whichever completed did so as false (lane closed); await the other before declaring both done.
+        if (!hi.IsCompleted) return await hi;
+        if (!lo.IsCompleted) return await lo;
+        return false;
+    }
+
+    public override void Disconnect() {
+        priorityQueue.Writer.TryComplete(); // writer drains both lanes, flushes, then closes
+        queue.Writer.TryComplete();
+    }
 
     public override void EnableEncryption(byte[] sharedSecret) =>
-        Enqueue(new OutboundItem(null, sharedSecret), null); // applied in order by the writer
+        // Instant lane: applied in order, after the prior login packets (legacy 1.5.2 only, pre-Play → no bulk).
+        Enqueue(new OutboundItem(null, sharedSecret), Lane.Instant, null);
 
     /// <summary>
     /// Blocking receive loop. Decodes packets against the connection's <see cref="NetClient.State"/>
@@ -125,7 +161,7 @@ public sealed class TcpNetClient : NetClient {
         } catch (Exception ex) when (ex is EndOfStreamException or IOException or ObjectDisposedException or InvalidOperationException) {
             Log.LogDebug("← #{Client} disconnected ({Reason})", Id, ex.GetType().Name);
         } finally {
-            outbound.Writer.TryComplete(); // connection ended → let the writer task drain + close and exit
+            Disconnect(); // connection ended → complete both lanes so the writer task drains + closes and exits
         }
     }
 }
