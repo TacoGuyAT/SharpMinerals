@@ -58,6 +58,8 @@ public class World : ITickable {
             new Systems.CollisionFeedbackSystem(this),  // entity-vs-entity overlap, on settled positions
             new Systems.ItemPickupSystem(this),         // collects overlapped drops into player inventories
             new Systems.EquipmentVisibilitySystem(this),// diffs each player's equipment → others (post-tick)
+            new Systems.PlayerMovementSystem(this),     // relays each player's movement → others (post-tick)
+            new Systems.ChunkStreamingSystem(this),     // streams columns as a player crosses chunks (post-tick)
         };
     }
 

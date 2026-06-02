@@ -420,8 +420,10 @@ public class Server : ITickable {
         ref var t = ref context.World.Ecs.Get<TransformEntityComponent>(context.Entity);
         t.X = x; t.Y = y; t.Z = z; t.Yaw = yaw; t.Pitch = pitch;
 
-        // Stream chunks around the destination + broadcast the move, then teleport the client.
-        Events.Publish(new PlayerMoved(context));
+        // Stream terrain around the destination now and re-file the spatial index; the per-tick movement system
+        // shows the move to other players. Then teleport the client.
+        ChunkStreamer.Restream(context);
+        Events.Publish(new EntityMoved(context.World, context.Entity));
         client.Send(new SynchronizePlayerPositionS2C(x, y, z, yaw, pitch, teleportId));
     }
 

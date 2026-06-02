@@ -18,14 +18,16 @@ public static class ChunkStreamer {
 
     public static void Register(EventBus events) {
         events.Subscribe<PlayerJoined>(OnJoin);
-        events.Subscribe<PlayerMoved>(OnMove);
     }
 
     static void OnJoin(PlayerJoined e) => Stream(e.Context, initial: true);
-    static void OnMove(PlayerMoved e) => Stream(e.Context, initial: false);
 
-    /// <summary>Streams a player's initial chunk view on demand (e.g. after a world switch's Respawn).</summary>
+    /// <summary>Streams a player's initial chunk view on demand (join, or after a world switch's Respawn).</summary>
     public static void StreamInitial(PlayerContext context) => Stream(context, initial: true);
+
+    /// <summary>Re-streams as a player moves (no-op until they cross into a new column). Driven each tick by
+    /// <c>ChunkStreamingSystem</c>.</summary>
+    public static void Restream(PlayerContext context) => Stream(context, initial: false);
 
     /// <summary>
     /// Streams the columns around a player. The wire format is resolved by the protocol, not here.

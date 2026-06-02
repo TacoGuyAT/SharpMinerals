@@ -21,6 +21,8 @@ public static class Player {
 
         return world.Ecs.Create(
             transform,
+            // Seed the movement-relay baseline to spawn, so a freshly-joined player doesn't re-broadcast it.
+            new SyncedTransformEntityComponent { X = transform.X, Y = transform.Y, Z = transform.Z, Yaw = transform.Yaw, Pitch = transform.Pitch },
             new VelocityEntityComponent(0, 0, 0),
             health,
             inventory,

@@ -879,12 +879,14 @@ public class PlayStateTests {
         // Before confirming the join teleport, the client's position is stale → ignored (no stream).
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(40.0, FlatChunkGenerator.SurfaceY, 0.5, true));
+        server.FlushSystems(); // streaming is now a per-tick system, not synchronous on the move packet
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "position ignored while teleport unconfirmed");
 
         // Confirm the teleport; now a move into a new column streams (spawn chunk 0,0; x=40 → chunk 2).
         handler.Handle(client, new ConfirmTeleportationC2S(joinTeleport.TeleportId));
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(40.0, FlatChunkGenerator.SurfaceY, 0.5, true));
+        server.FlushSystems();
         Assert.True(client.Sent.OfType<SetCenterChunkS2C>().Any(c => c.ChunkX == 2 && c.ChunkZ == 0),
             "recenters on the new chunk");
         Assert.True(client.Sent.OfType<ChunkDataS2C>().Any(), "streams newly-visible columns");
@@ -892,6 +894,7 @@ public class PlayStateTests {
         // Moving within the same column streams nothing new.
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(41.0, FlatChunkGenerator.SurfaceY, 1.0, true));
+        server.FlushSystems();
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "no chunks while staying in a column");
     }
 
@@ -1301,24 +1304,6 @@ public class PlayStateTests {
         moved.Clear();
         for (int i = 0; i < 5; i++) { world.Tick(); events.DrainDeferred(); }
         Assert.Empty(moved); // at rest: no more move events
-    }
-
-    // ── Events: a player move reaches generic EntityMoved subscribers (polymorphic dispatch) ────
-    [Fact]
-    public void PlayerMovedIsAnEntityMoved() {
-        var bus = new EventBus();
-        int entityMoves = 0, playerMoves = 0;
-        bus.Subscribe<EntityMoved>(_ => entityMoves++);
-        bus.Subscribe<PlayerMoved>(_ => playerMoves++);
-
-        // A PlayerMoved needs a context; its base args come from the context (World+Entity).
-        var world = new World("pmove", new FlatChunkGenerator());
-        var entity = world.Ecs.Create(new TransformEntityComponent(0, 5, 0));
-        var context = new PlayerContext(null!, world, entity, null!);
-        bus.Publish(new PlayerMoved(context));
-
-        Assert.Equal(1, playerMoves);  // reaches the specific handler
-        Assert.Equal(1, entityMoves);  // AND the generic base handler
     }
 
     // ── Ticking: a tickable block entity is ticked through World.Tick → Chunk.Tick ─────

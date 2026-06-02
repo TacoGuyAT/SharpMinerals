@@ -263,8 +263,9 @@ public sealed class PlayPacketHandler {
         if (yaw is not null) transform.Yaw = yaw.Value;
         if (pitch is not null) transform.Pitch = pitch.Value;
 
-        // Subscribers mirror it to other players and stream new chunks as the player crosses columns.
-        server.Events.Publish(new PlayerMoved(context));
+        // Re-file the player in the spatial index; the per-tick movement + chunk systems project the move to
+        // other players and stream new columns as they cross chunk boundaries.
+        server.Events.Publish(new EntityMoved(context.World, context.Entity));
     }
 
     void HandleInteract(NetClient client, InteractEntityC2S interact) {

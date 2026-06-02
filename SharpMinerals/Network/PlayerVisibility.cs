@@ -16,7 +16,6 @@ public static class PlayerVisibility {
 
     public static void Register(EventBus events) {
         events.Subscribe<PlayerJoined>(e => OnJoin(e.Context.Server, e.Context.Client));
-        events.Subscribe<PlayerMoved>(e => OnMove(e.Context.Server, e.Context.Client));
         events.Subscribe<PlayerLeft>(e => OnLeave(e.Context.Server, e.Context.Player));
     }
 
@@ -113,19 +112,6 @@ public static class PlayerVisibility {
         // Show the newcomer's equipment to everyone else and seed its SyncedEquipment (a restored player
         // may already hold/wear items). Same path as any later inventory change.
         OnInventoryChanged(self);
-    }
-
-    public static void OnMove(Server server, NetClient client) {
-        if (!server.TryGetPlayer(client.Id, out var self) || !self.World.Ecs.IsAlive(self.Entity))
-            return;
-
-        var info = self.World.Ecs.Get<NetPlayerEntityComponent>(self.Entity);
-        var pos = self.World.Ecs.Get<TransformEntityComponent>(self.Entity);
-
-        // In-world recipients include legacy clients; each gets the movement in its own format. Never the mover itself.
-        bool ToOthers(NetClient c) => c.InWorld && c.Id != client.Id;
-        server.NetServer.Broadcast(new TeleportEntityS2C(info.EntityId, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch, true), ToOthers);
-        server.NetServer.Broadcast(new EntityHeadRotationS2C(info.EntityId, pos.Yaw), ToOthers);
     }
 
     public static void OnLeave(Server server, NetPlayerEntityComponent info) {
