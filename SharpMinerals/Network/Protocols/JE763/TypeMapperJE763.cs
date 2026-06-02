@@ -42,6 +42,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         ["wool"] = 180, // default = white_wool item (colours: 180 + colour index)
         ["sand"] = 44,
         ["gravel"] = 48,
+        ["stick"] = 807,
     };
 
     // Reverse map (vanilla item id → our definition) and state ids by BlockType.Id (O(1) on the serializer hot path).

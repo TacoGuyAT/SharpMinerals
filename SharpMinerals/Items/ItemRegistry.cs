@@ -41,4 +41,7 @@ public static class ItemRegistry {
 
     /// <summary>The item-type (item or block) registered under <paramref name="name"/>, or null.</summary>
     public static ItemType? FromName(string name) => byName.GetValueOrDefault(name);
+
+    // ── Built-in (non-block) items; blocks are defined in BlockRegistry and register themselves here too ──
+    public static readonly ItemType Stick = Register("stick");
 }
