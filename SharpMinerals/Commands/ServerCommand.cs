@@ -14,7 +14,7 @@ public static class ServerCommand {
         }))
         .Then(x => x.Literal("players").Executes(ctx => {
             var server = ctx.Source.Server;
-            ctx.Source.Reply($"Players online: {server?.PlayerCount ?? 0}");
+            ctx.Source.Reply($"Players online: {server.PlayerCount}");
             foreach (var (clientId, context) in server.Players)
                 if (context.World.Ecs.IsAlive(context.Entity))
                     ctx.Source.Reply($"  {context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity).Name} (#{clientId})");
