@@ -4,13 +4,13 @@ namespace SharpMinerals.Entities.Components;
 /// from its feet. Read by both the physics step (terrain collision) and <see cref="CollisionFeedbackEntityComponent"/>
 /// (entity overlap).</summary>
 public struct ColliderEntityComponent {
-    public double Width;
-    public double Height;
+    public Mfloat Width;
+    public Mfloat Height;
 
-    public ColliderEntityComponent(double width, double height) {
+    public ColliderEntityComponent(Mfloat width, Mfloat height) {
         Width = width;
         Height = height;
     }
 
-    public readonly double HalfWidth => Width / 2;
+    public readonly Mfloat HalfWidth => Width / 2;
 }
