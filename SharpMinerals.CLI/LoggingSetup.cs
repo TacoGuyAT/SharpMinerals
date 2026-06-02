@@ -64,10 +64,19 @@ static class LoggingSetup {
         formatter.SetPrefixFormatter(
             $"[{0:HH:mm:ss.fff} {1}] {2}: ",
             (in MessageTemplate template, in LogInfo info) =>
-                template.Format(info.Timestamp, Abbreviate(info.LogLevel), info.Category));
+                template.Format(info.Timestamp, AbbreviateColored(info.LogLevel), info.Category));
 
-    // Three-letter upper-case level token, coloured by severity.
     static string Abbreviate(MsLogLevel level) => level switch {
+        MsLogLevel.Trace => "TRC",
+        MsLogLevel.Debug => "DBG",
+        MsLogLevel.Information => "INF",
+        MsLogLevel.Warning => "WRN",
+        MsLogLevel.Error => "ERR",
+        MsLogLevel.Critical => "CRT",
+        _ => "OFF",
+    };
+
+    static string AbbreviateColored(MsLogLevel level) => level switch {
         MsLogLevel.Trace => Chalk.Gray["TRC"],
         MsLogLevel.Debug => Chalk.Cyan["DBG"],
         MsLogLevel.Information => Chalk.BrightBlue["INF"],
