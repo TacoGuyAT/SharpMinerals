@@ -13,9 +13,11 @@ public class Chunk : ITickable {
     const Mint Volume = Size * Size * Size;
 
     readonly ushort[] states = new ushort[Volume];
-    readonly Dictionary<Vector3i, BlockEntity> blockEntities = new();
-    readonly List<ITickable> tickingBlockEntities = new();
-    readonly Dictionary<int, BlockState> blockStates = new(); // keyed by local cell index, not world position
+    readonly Dictionary<Vector3i, BlockEntity> blockEntities = [];
+    readonly List<ITickable> tickingBlockEntities = [];
+    readonly Dictionary<int, BlockState> blockStates = []; // keyed by local cell index, not world position
+
+    public Dictionary<Vector3i, BlockEntity> BlockEntities => blockEntities;
 
     /// <summary>This chunk's coordinate in chunk space (world = chunk * 16 + local).</summary>
     public Vector3i Position { get; }

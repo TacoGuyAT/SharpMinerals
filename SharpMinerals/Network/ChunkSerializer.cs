@@ -1,4 +1,5 @@
-﻿using SharpMinerals.Blocks.Descriptors;
+﻿using Microsoft.Win32.SafeHandles;
+using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Level;
 using SharpMinerals.Math;
 using SharpMinerals.Network.Buffers;
@@ -73,8 +74,8 @@ public static class ChunkSerializer {
             // a GetBlock/GetChunk dictionary lookup (+ Vector3i alloc) per cell.
             var cube = world.GetChunk(new Vector3i(chunkX, MinSectionY + sy, chunkZ));
             int nonAir = 0;
-            for (int y = 0; y < 16; y++)
-                for (int z = 0; z < 16; z++)
+            for (int y = 0; y < 16; y++) {
+                for (int z = 0; z < 16; z++) {
                     for (int x = 0; x < 16; x++) {
                         var block = cube.GetBlock(x, y, z);
                         // Stateful blocks (chest facing, …) map via their stored state; the rest by type.
@@ -84,9 +85,15 @@ public static class ChunkSerializer {
                                 : types.StateId(block);
                         if (block.IsAir) continue;
                         nonAir++;
-                        if (types.TryBlockEntityTypeId(block, out int beId))
-                            blockEntities.Add(((byte)((x << 4) | z), MinY + sy * 16 + y, beId));
                     }
+                }
+            }
+
+            foreach(var (pos, blockEntity) in cube.BlockEntities) {
+                if(types.BlockEntityTypeId(blockEntity) is int beId) {
+                    blockEntities.Add(((byte)((pos.X << 4) | pos.Z), (int)pos.Y, beId));
+                }
+            }
 
             s.WriteShort((short)nonAir);
             WritePalettedStates(s, states);
