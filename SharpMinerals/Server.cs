@@ -237,6 +237,7 @@ public class Server : ITickable {
         lock (ecsGate) {
             // Single-writer phase: apply queued mutations on THIS thread first so the rest of the tick
             // (and autosave) sees a consistent world with no concurrent chunk edits from network threads.
+            // This drains work that arrived since the last tick, so it's simulated THIS tick (low latency).
             Events.DrainDeferred();
 
             // Announce newly-spawned entities BEFORE physics, so the client gets their un-decayed spawn
@@ -248,6 +249,12 @@ public class Server : ITickable {
 
             // Project this tick's simulation results to clients on this thread, after the parallel ticks settle.
             FlushSystems();
+
+            // Second drain: apply work the tick itself deferred (entity-index re-files, chained handler work)
+            // plus any packets that landed during this tick, so it takes effect before autosave and the next
+            // tick rather than waiting a full tick. Spawns created here are announced next tick (Announce above
+            // already ran); the simulation-result projection for them follows the same tick they're announced.
+            Events.DrainDeferred();
 
             // Keepalive once a second; one generic packet mapped per protocol at encode.
             if (currentTick % (long)TicksPerSecond == 0)
