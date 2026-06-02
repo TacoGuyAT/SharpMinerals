@@ -15,7 +15,6 @@ public sealed class ConsoleInput {
 
     public ConsoleInput(ServerSender sender) {
         this.sender = sender;
-        // Log whatever the sender receives, rendered to ANSI. Stays in the log pipeline as one ordered stream.
         sender.MessageReceived += m => Log.LogInformation("{Message}", ChatAnsi.Render(m));
     }
 
