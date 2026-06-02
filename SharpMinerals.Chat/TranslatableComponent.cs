@@ -1,6 +1,6 @@
 ﻿namespace SharpMinerals.Chat;
 public sealed class TranslatableComponent : ChatComponent<TranslatableComponent> {
-    public string Translate;
+    public new string Translate;
     public string? Fallback;
     public List<ChatComponent>? With;
     public TranslatableComponent(string translate) {

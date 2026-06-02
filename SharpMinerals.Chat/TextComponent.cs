@@ -1,6 +1,6 @@
 namespace SharpMinerals.Chat;
 public sealed class TextComponent : ChatComponent<TextComponent> {
-    public string Text;
+    public new string Text;
     public TextComponent(string text) {
         Text = text;
     }

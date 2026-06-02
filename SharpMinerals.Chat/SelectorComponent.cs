@@ -1,6 +1,6 @@
 ﻿namespace SharpMinerals.Chat;
 public sealed class SelectorComponent : ChatComponent<SelectorComponent> {
-    public string Selector;
+    public new string Selector;
     public ChatComponent? Separator;
     public SelectorComponent(string selector) {
         Selector = selector;
