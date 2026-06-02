@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SharpMinerals.Blocks;
 using SharpMinerals.Entities;
 using SharpMinerals.Items;
@@ -9,6 +10,7 @@ namespace SharpMinerals.Network.Protocols.JE763;
 /// vanilla wire ids by internal name. Unmapped kinds fall back to a placeholder.
 /// </summary>
 public sealed class TypeMapperJE763 : ITypeMapper {
+    static readonly ILogger Log = Logging.For<TypeMapperJE763>();
     const int FallbackStateId = 1; // minecraft:stone
     const int FallbackItemId = 1;  // minecraft:stone
 
@@ -68,10 +70,11 @@ public sealed class TypeMapperJE763 : ITypeMapper {
     }
 
     Dictionary<int, ItemType> BuildReverseItemTable() {
+        _ = BlockRegistry.All; // force block registration (which, via ItemRegistry, also registers built-in items)
         var table = new Dictionary<int, ItemType>();
         foreach (var (name, id) in itemIdByName)
-            if (BlockRegistry.FromName(name) is { } block)
-                table[id] = block;
+            if (ItemRegistry.FromName(name) is { } type) // any registered type — items too, not just blocks
+                table[id] = type;
         return table;
     }
 
@@ -118,7 +121,13 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         _ => throw new ArgumentOutOfRangeException(nameof(type), type.Name, "No JE763 wire id for this entity type."),
     };
 
-    public bool TryBlockEntityTypeId(BlockType block, out int id) => blockEntityIdByName.TryGetValue(block.Name, out id);
+    public int BlockEntityTypeId(BlockEntity blockEntity) {
+        if(blockEntityIdByName.TryGetValue(blockEntity.Type.Name, out var id)) {
+            return id;
+        }
+        Log?.LogWarning("Invalid mapping for block entity {blockEntity} ({type})", blockEntity, blockEntity.Type);
+        return 1;
+    }
 
     public int ItemId(ItemType item) => itemIdByName.GetValueOrDefault(item.Name, FallbackItemId);
 

@@ -37,7 +37,7 @@ public sealed class TypeMapperJE61 : ITypeMapper {
     public int StateId(BlockState state) => StateId(state.Type);
     public int ItemId(ItemType item) => blockIdByName.GetValueOrDefault(item.Name, FallbackId);
     public bool IsCustom(ItemType item) => !blockIdByName.ContainsKey(item.Name);
-    public bool TryBlockEntityTypeId(BlockType block, out int id) { id = 0; return false; } // legacy uses its own chunk format
+    public int BlockEntityTypeId(BlockEntity blockEntity) => 0;
     public int ItemId(ItemStack stack) => stack.Type is { } t ? ItemId(t) : 0;
     public ItemType? FromItemId(int vanillaId) => blockById.GetValueOrDefault(vanillaId);
     public ItemStack FromVanillaItem(int vanillaId) => FromItemId(vanillaId) is { } t ? new ItemStack(t) : default;
