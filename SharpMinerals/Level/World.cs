@@ -135,8 +135,16 @@ public class World : ITickable {
     public void SetBlockEntity(BlockEntity entity) => GetChunk(entity.Position.ToChunk()).SetBlockEntity(entity);
     public bool RemoveBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).RemoveBlockEntity(pos);
 
-    public BlockEntity CreateBlockEntity(Vector3i pos, BlockType type) {
-        var entity = new BlockEntity(pos, type);
+    /// <summary>The block entity at <paramref name="pos"/>, creating and initializing one (via the block's
+    /// <see cref="IBlockEntityDescriptor"/>) if the block carries a block entity but none exists yet — the one
+    /// funnel for materializing instances, so the initializer runs exactly once. Null if the block at
+    /// <paramref name="pos"/> carries no block entity.</summary>
+    public BlockEntity? GetOrCreateBlockEntity(Vector3i pos) {
+        if (GetBlockEntity(pos) is { } existing) return existing;
+        var block = GetBlock(pos);
+        if (block.GetAll<IBlockEntityDescriptor>().FirstOrDefault() is not { } descriptor) return null;
+        var entity = new BlockEntity(pos, block);
+        descriptor.Initialize(entity);
         SetBlockEntity(entity);
         return entity;
     }
