@@ -1,0 +1,17 @@
+# Gradle / Loom
+.gradle/
+build/
+out/
+run/
+.loom-cache/
+remappedSrc/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Mod runtime artifacts
+crash.log
