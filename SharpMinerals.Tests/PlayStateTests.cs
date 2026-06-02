@@ -108,6 +108,9 @@ public class PlayStateTests {
             "item: vanilla wool id → coloured stack (red 194 → colour 14)");
         Assert.True(Types.ItemId(Types.FromVanillaItem(194)) == 194,
             "item: coloured wool stack round-trips its vanilla id (red 194)");
+        Assert.True(Types.FromVanillaItem(807).Type == ItemRegistry.Stick && Types.FromVanillaItem(807).Type is not BlockType,
+            "item: a non-block item (stick = 807) is recovered by the reverse table, not just blocks");
+        Assert.True(Types.ItemId(ItemRegistry.Stick) == 807, "item: stick round-trips its vanilla id");
 
         var woolInv = new InventoryEntityComponent();
         woolInv.Add(Types.FromVanillaItem(194)); // red wool
