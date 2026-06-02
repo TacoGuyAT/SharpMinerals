@@ -25,3 +25,8 @@ public interface IOnLand { void OnLand(in BlockContext ctx); }
 
 /// <summary>A block behavior that reacts to a redstone signal (reserved; not yet fired).</summary>
 public interface IRedstoneActivated { void OnRedstoneActivated(in BlockContext ctx); }
+
+/// <summary>Marks a descriptor whose presence means the block carries a block entity (a "tile entity": a chest's
+/// contents, a sign's text, …). Drives <see cref="BlockType.IsBlockEntity"/>, so the chunk packet lists the block
+/// even before its server-side <see cref="BlockEntity"/> instance is lazily created on first use.</summary>
+public interface IBlockEntityDescriptor { }

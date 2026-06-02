@@ -16,6 +16,14 @@ public class BlockType : ItemType {
     /// <summary>A field (not a component lookup) because it's on the hot serialization path.</summary>
     public bool IsAir { get; }
 
+    bool? isBlockEntity;
+
+    /// <summary>Whether this block carries a block entity (a tile entity) and so must be listed in the chunk
+    /// packet even before its server-side instance is lazily created. Computed once from the presence of an
+    /// <see cref="IBlockEntityDescriptor"/> and cached, because it's tested per non-air block on the hot
+    /// serialization path. Block composition is finished before any block is serialized.</summary>
+    public bool IsBlockEntity => isBlockEntity ??= GetAll<IBlockEntityDescriptor>().Any();
+
     /// <summary>The stack dropped when broken, if the block has a <see cref="DropBlockDescriptor"/> component (no automatic self-drop).</summary>
     public ItemStack? Drop => TryGet<DropBlockDescriptor>(out var d) ? d.Stack : null;
 

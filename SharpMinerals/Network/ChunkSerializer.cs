@@ -73,6 +73,7 @@ public static class ChunkSerializer {
             // A vanilla section IS one server chunk cube — fetch it once and read cells directly, rather than
             // a GetBlock/GetChunk dictionary lookup (+ Vector3i alloc) per cell.
             var cube = world.GetChunk(new Vector3i(chunkX, MinSectionY + sy, chunkZ));
+            int sectionBaseY = (MinSectionY + sy) * 16;
             int nonAir = 0;
             for (int y = 0; y < 16; y++) {
                 for (int z = 0; z < 16; z++) {
@@ -85,13 +86,13 @@ public static class ChunkSerializer {
                                 : types.StateId(block);
                         if (block.IsAir) continue;
                         nonAir++;
-                    }
-                }
-            }
 
-            foreach(var (pos, blockEntity) in cube.BlockEntities) {
-                if(types.BlockEntityTypeId(blockEntity) is int beId) {
-                    blockEntities.Add(((byte)((pos.X << 4) | pos.Z), (int)pos.Y, beId));
+                        // Block entities are derived from the block itself, not the lazily-created server-side
+                        // BlockEntity instances (empty for a placed-but-unopened chest). IsBlockEntity is a cheap
+                        // cached gate so the wire-id lookup only runs for the rare block that carries one.
+                        if (block.IsBlockEntity)
+                            blockEntities.Add(((byte)((x << 4) | z), sectionBaseY + y, types.BlockEntityTypeId(block)));
+                    }
                 }
             }
 

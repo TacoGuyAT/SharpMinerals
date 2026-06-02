@@ -121,11 +121,11 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         _ => throw new ArgumentOutOfRangeException(nameof(type), type.Name, "No JE763 wire id for this entity type."),
     };
 
-    public int BlockEntityTypeId(BlockEntity blockEntity) {
-        if(blockEntityIdByName.TryGetValue(blockEntity.Type.Name, out var id)) {
+    public int BlockEntityTypeId(BlockType block) {
+        if(blockEntityIdByName.TryGetValue(block.Name, out var id)) {
             return id;
         }
-        Log?.LogWarning("Invalid mapping for block entity {blockEntity} ({type})", blockEntity, blockEntity.Type);
+        Log?.LogWarning("Invalid mapping for block entity {blockEntity}", block);
         return 1;
     }
 

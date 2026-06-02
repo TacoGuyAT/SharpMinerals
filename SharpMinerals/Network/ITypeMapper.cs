@@ -16,9 +16,7 @@ public interface ITypeMapper {
 
     int EntityTypeId(EntityType type);
 
-    /// <summary>The wire block-entity-type id for a block that carries one (e.g. a chest).
-    /// False if unmapped, so the serializer omits it (the block still renders from its state).</summary>
-    int BlockEntityTypeId(BlockEntity blockEntity);
+    int BlockEntityTypeId(BlockType block);
 
     int ItemId(ItemType item);
 

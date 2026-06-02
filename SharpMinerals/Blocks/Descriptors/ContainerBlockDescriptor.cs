@@ -1,7 +1,7 @@
 namespace SharpMinerals.Blocks.Descriptors;
 
-/// <summary>Marks a block that opens a container window when used.</summary>
-public sealed class ContainerBlockDescriptor : IInteract, IOnBroken {
+/// <summary>Marks a block that opens a container window when used. Carries a block entity (its contents).</summary>
+public sealed class ContainerBlockDescriptor : IInteract, IOnBroken, IBlockEntityDescriptor {
     public int Size;
     public ContainerBlockDescriptor(int size) => Size = size;
 
