@@ -54,6 +54,23 @@ public class Server : ITickable {
     public void BroadcastMessage(IMessage message, Func<NetClient, bool>? audience = null) =>
         NetServer.Broadcast(message, audience ?? (static c => c.InWorld));
 
+    /// <summary>Broadcasts a message only to in-world clients whose player is within range of a world position,
+    /// measured horizontally (x, z) since visibility is column-based. <paramref name="radius"/> (blocks) defaults
+    /// to each recipient's own chunk-view radius plus a chunk of margin, so a client receives the event exactly
+    /// when the affected column is within its loaded view. Use for transient, position-local updates (block
+    /// changes, effects) where a client outside its view neither holds the chunk nor needs the packet — not for
+    /// entity spawns, which a player must still receive to render an entity it later approaches.</summary>
+    public void BroadcastInRange(World world, double x, double z, IMessage message, double? radius = null) =>
+        NetServer.Broadcast(message, c => {
+            if (!c.InWorld || !players.TryGetValue(c.Id, out var ctx) || ctx.World != world
+                || !ctx.World.Ecs.IsAlive(ctx.Entity))
+                return false;
+            var t = ctx.World.Ecs.Get<TransformEntityComponent>(ctx.Entity);
+            double r = radius ?? (c.Protocol.ChunkViewRadius + 1) * 16.0;
+            double dx = t.X - x, dz = t.Z - z;
+            return dx * dx + dz * dz <= r * r;
+        });
+
     /// <summary>Broadcasts a chat component as a system chat message to an audience (default: in-world).</summary>
     public void BroadcastChatMessage(ChatComponent message, bool overlay = false, Func<NetClient, bool>? audience = null) {
         Sender.ReceiveMessage(message);

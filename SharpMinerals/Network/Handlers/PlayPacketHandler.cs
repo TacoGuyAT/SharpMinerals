@@ -173,7 +173,7 @@ public sealed class PlayPacketHandler {
         if (broken.IsAir)
             return; // nothing was there
 
-        BroadcastBlockChange(new BlockUpdateS2C(action.Position, BlockRegistry.Air));
+        BroadcastBlockChange(world, new BlockUpdateS2C(action.Position, BlockRegistry.Air));
         // The block above may have lost its support (sand/gravel); let it fall.
         FallingBlockSystem.TryStartFalling(server, world, action.Position + new Vector3i(0, 1, 0));
     }
@@ -207,7 +207,7 @@ public sealed class PlayPacketHandler {
         var target = Offset(new Vector3i(place.X, place.Y, place.Z), (BlockFace)place.Direction);
         if (!server.DefaultWorld.PlaceBlock(target, block))
             return;
-        BroadcastBlockChange(new BlockUpdateS2C(target, block));
+        BroadcastBlockChange(server.DefaultWorld, new BlockUpdateS2C(target, block));
         FallingBlockSystem.TryStartFalling(server, server.DefaultWorld, target); // sand/gravel placed over air falls
     }
 
@@ -243,7 +243,7 @@ public sealed class PlayPacketHandler {
         }
         if (state is not null)
             context.World.SetBlockState(target, state);
-        BroadcastBlockChange(new BlockUpdateS2C(target, block, state)); // null state ⇒ block default
+        BroadcastBlockChange(context.World, new BlockUpdateS2C(target, block, state)); // null state ⇒ block default
 
         FallingBlockSystem.TryStartFalling(server, context.World, target); // sand/gravel placed over air falls
     }
@@ -372,9 +372,11 @@ public sealed class PlayPacketHandler {
         inventory.Storage[index] = stack; // an empty (non-null) stack here is a deliberate clear
     }
 
-    /// <summary>Broadcasts a block change to every in-world client (modern and legacy); each protocol encodes it in its own format.</summary>
-    void BroadcastBlockChange(BlockUpdateS2C message) =>
-        server.NetServer.Broadcast(message, c => c.InWorld);
+    /// <summary>Broadcasts a block change to in-world clients within view of it (modern and legacy); each
+    /// protocol encodes it in its own format. A client outside its view distance doesn't hold the chunk and
+    /// receives the current block when the chunk streams in, so range-gating is a pure bandwidth saving.</summary>
+    void BroadcastBlockChange(World world, BlockUpdateS2C message) =>
+        server.BroadcastInRange(world, message.Position.X + 0.5, message.Position.Z + 0.5, message);
 
     static string FacingTowardPlayer(float yaw) {
         // Player yaw 0=south, 90=west, 180=north, 270=east; the block faces the player (opposite).

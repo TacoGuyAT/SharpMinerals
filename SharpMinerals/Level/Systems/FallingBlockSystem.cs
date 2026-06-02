@@ -38,7 +38,7 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
         if (!world.GetBlock(pos + Down).IsAir) return; // still supported — stays put
 
         world.SetBlock(pos, BlockRegistry.Air);
-        server.NetServer.Broadcast(new BlockUpdateS2C(pos, BlockRegistry.Air), c => c.InWorld);
+        server.BroadcastInRange(world, pos.X + 0.5, pos.Z + 0.5, new BlockUpdateS2C(pos, BlockRegistry.Air));
         world.SpawnFallingBlock(pos, block);
 
         TryStartFalling(server, world, pos + Up); // the block above lost its support too — propagate up
@@ -90,7 +90,8 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
         var ids = new int[landed.Count];
         for (int i = 0; i < landed.Count; i++) {
             var (netId, cell) = landed[i];
-            server.NetServer.Broadcast(new BlockUpdateS2C(cell, world.GetBlock(cell), world.GetBlockState(cell)), c => c.InWorld);
+            server.BroadcastInRange(world, cell.X + 0.5, cell.Z + 0.5,
+                new BlockUpdateS2C(cell, world.GetBlock(cell), world.GetBlockState(cell)));
             ids[i] = netId;
         }
         server.NetServer.Broadcast(new RemoveEntitiesS2C(ids), c => c.State == ConnectionState.Play);
