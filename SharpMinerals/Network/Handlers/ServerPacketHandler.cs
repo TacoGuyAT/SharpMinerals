@@ -127,14 +127,16 @@ public sealed class ServerPacketHandler {
 
         client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
 
-        // Anchor the player at its spawn BEFORE streaming terrain: the client then holds on "Loading terrain"
-        // until the chunks arrive, instead of ticking physics from a default position (which made it fall and
-        // snap back once the position packet arrived after the chunk-build stall).
+        // Send the player's own chunk column first so the client can place it on loaded terrain immediately,
+        // instead of free-falling through empty space until terrain arrives. The position sync rides the same
+        // (bulk) send lane right behind that column, and the surrounding columns stream afterward.
+        Streaming.StreamSpawnColumn(context);
+
         client.Send(new SynchronizePlayerPositionS2C(
             spawn.X, spawn.Y, spawn.Z, spawn.Yaw, spawn.Pitch, TeleportId: server.BeginTeleport(client.Id)));
         client.Send(new SetHealthS2C(health.Current, 20, 5f));
 
-        // Stream terrain around the player and spawn it to other players.
+        // Stream the rest of the view (skips the spawn column) and spawn the player to other players.
         server.Events.Publish(new PlayerJoined(context));
 
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
