@@ -1,16 +1,16 @@
+using SharpMinerals.Events.Contexts;
 using SharpMinerals.Level;
 using SharpMinerals.Math;
-using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Blocks;
 
 /// <summary>The context handed to a block behavior when an event fires: world/position, the block
-/// definition, and the acting entity (default = none).</summary>
+/// definition, and the acting player (null when no player triggered it, e.g. gravity or a command).</summary>
 public readonly struct BlockContext {
     public World World { get; init; }
     public Vector3i Position { get; init; }
     public BlockType Block { get; init; }
-    public ArchEntity Actor { get; init; }
+    public PlayerContext? Actor { get; init; }
 }
 
 /// <summary>A block behavior that reacts to a player/entity interacting with it.</summary>
@@ -29,8 +29,11 @@ public static class Behavior {
             if (c is IOnBroken handler) handler.OnBroken(in ctx);
     }
 
-    public static void FireInteract(BlockType block, in BlockContext ctx) {
+    /// <summary>Returns true if any component handled the interaction (so the caller suppresses block placement).</summary>
+    public static bool FireInteract(BlockType block, in BlockContext ctx) {
+        bool handled = false;
         foreach (var c in block.Components)
-            if (c is IInteract handler) handler.OnInteract(in ctx);
+            if (c is IInteract handler) { handler.OnInteract(in ctx); handled = true; }
+        return handled;
     }
 }

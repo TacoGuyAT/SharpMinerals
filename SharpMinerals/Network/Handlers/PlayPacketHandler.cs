@@ -165,15 +165,12 @@ public sealed class PlayPacketHandler {
         }
 
         var world = server.DefaultWorld;
-        var broken = world.BreakBlock(action.Position);
+        server.TryGetPlayer(client.Id, out var breaker);
+        var broken = world.BreakBlock(action.Position, breaker);
 
         client.Send(new AckBlockChangeS2C(action.Sequence));
         if (broken.IsAir)
             return; // nothing was there
-
-        // If a container block was broken, close it for anyone who had it open.
-        if (broken.Has<ContainerBlockDescriptor>())
-            server.Containers.ForceCloseChest(server, action.Position);
 
         BroadcastBlockChange(new BlockUpdateS2C(action.Position, BlockRegistry.Air));
         // The block above may have lost its support (sand/gravel); let it fall.
@@ -220,13 +217,11 @@ public sealed class PlayPacketHandler {
         if (!server.TryGetPlayer(client.Id, out var context))
             return;
 
-        // Right-clicking a container block opens it instead of placing.
+        // A block with interaction behavior (e.g. a container) consumes the right-click instead of placing.
         var clicked = context.World.GetBlock(use.Position);
-        if (clicked.Has<ContainerBlockDescriptor>()) {
-            var entity = context.World.GetBlockEntity(use.Position) ?? CreateBlockEntity(context.World, use.Position, clicked);
-            server.Containers.Open(server, client.Id, entity);
+        var interaction = new BlockContext { World = context.World, Position = use.Position, Block = clicked, Actor = context };
+        if (Behavior.FireInteract(clicked, in interaction))
             return;
-        }
 
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         var held = inventory.Held;
@@ -374,12 +369,6 @@ public sealed class PlayPacketHandler {
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         inventory.Storage[index] = stack; // an empty (non-null) stack here is a deliberate clear
         server.Events.Publish(new PlayerInventoryChanged(context));
-    }
-
-    static BlockEntity CreateBlockEntity(World world, Vector3i pos, BlockType type) {
-        var entity = new BlockEntity(pos, type);
-        world.SetBlockEntity(entity);
-        return entity;
     }
 
     /// <summary>Broadcasts a block change to every in-world client (modern and legacy); each protocol encodes it in its own format.</summary>

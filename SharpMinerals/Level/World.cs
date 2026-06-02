@@ -1,11 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using Arch.Core;
 using SharpMinerals.Blocks;
-using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
+using SharpMinerals.Events.Contexts;
 using SharpMinerals.Items;
 using SharpMinerals.Math;
 using SharpMinerals.Persistence;
@@ -128,20 +128,26 @@ public class World : ITickable {
     public void SetBlockEntity(BlockEntity entity) => GetChunk(entity.Position.ToChunk()).SetBlockEntity(entity);
     public bool RemoveBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).RemoveBlockEntity(pos);
 
+    public BlockEntity CreateBlockEntity(Vector3i pos, BlockType type) {
+        var entity = new BlockEntity(pos, type);
+        SetBlockEntity(entity);
+        return entity;
+    }
+
     /// <summary>The block state at <paramref name="pos"/>, or null if it's the type's default state.</summary>
     public BlockState? GetBlockState(Vector3i pos) => GetChunk(pos.ToChunk()).GetBlockState(pos.ToLocal());
     public void SetBlockState(Vector3i pos, BlockState? state) => GetChunk(pos.ToChunk()).SetBlockState(pos.ToLocal(), state);
 
     /// <summary>Breaks the block at <paramref name="pos"/>: replaces it with air, fires the block's break
     /// behaviors, and spawns its drop. Returns the block that was broken (air if nothing was there).</summary>
-    public BlockType BreakBlock(Vector3i pos) {
+    public BlockType BreakBlock(Vector3i pos, PlayerContext? actor = null) {
         var block = GetBlock(pos);
         if (block.IsAir)
             return block;
 
         SetBlock(pos, BlockRegistry.Air);
 
-        var ctx = new BlockContext { World = this, Position = pos, Block = block, Actor = default };
+        var ctx = new BlockContext { World = this, Position = pos, Block = block, Actor = actor };
         Behavior.FireBroken(block, in ctx);
 
         if (block.Drop is { } drop) {
