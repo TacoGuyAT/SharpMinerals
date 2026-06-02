@@ -30,6 +30,10 @@ public class World : ITickable {
     // The per-tick entity systems, run in registration order each Tick.
     readonly List<ITickable> systems;
 
+    /// <summary>The world's per-tick systems. The server scans these for <c>INetworkSystem</c> to drive each
+    /// one's client projection, so a world that omits a system also sends none of its packets.</summary>
+    public IReadOnlyList<ITickable> Systems => systems;
+
     public string Name { get; }
 
     public ArchWorld Ecs { get; } = ArchWorld.Create();
@@ -53,6 +57,7 @@ public class World : ITickable {
             new Systems.FallingBlockSystem(this),       // lands falling blocks using that ground-contact feedback
             new Systems.CollisionFeedbackSystem(this),  // entity-vs-entity overlap, on settled positions
             new Systems.ItemPickupSystem(this),         // collects overlapped drops into player inventories
+            new Systems.EquipmentVisibilitySystem(this),// diffs each player's equipment → others (post-tick)
         };
     }
 
@@ -148,7 +153,8 @@ public class World : ITickable {
         SetBlock(pos, BlockRegistry.Air);
 
         var ctx = new BlockContext { World = this, Position = pos, Block = block, Actor = actor };
-        Behavior.FireBroken(block, in ctx);
+        foreach (var b in block.GetAll<IOnBroken>())
+            b.OnBroken(in ctx);
 
         if (block.Drop is { } drop) {
             // A self-drop carries item-identity state (e.g. wool colour) but resets placement state (facing),

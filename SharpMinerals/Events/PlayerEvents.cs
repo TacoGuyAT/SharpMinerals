@@ -15,9 +15,3 @@ public sealed record PlayerMoved(PlayerContext Context)
 
 /// <summary>Raised when a player leaves, just before its entity is removed.</summary>
 public sealed record PlayerLeft(PlayerContext Context);
-
-/// <summary>Raised after a player's inventory contents or selected hotbar slot changed. An
-/// <see cref="EntityInventoryChanged"/>, so the equipment-visibility subscriber and any entity-inventory
-/// handler both see it.</summary>
-public sealed record PlayerInventoryChanged(PlayerContext PlayerContext)
-    : EntityInventoryChanged(PlayerContext);

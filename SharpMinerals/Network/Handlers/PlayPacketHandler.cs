@@ -4,6 +4,7 @@ using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Level;
+using SharpMinerals.Level.Systems;
 using SharpMinerals.Math;
 using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
@@ -174,7 +175,7 @@ public sealed class PlayPacketHandler {
 
         BroadcastBlockChange(new BlockUpdateS2C(action.Position, BlockRegistry.Air));
         // The block above may have lost its support (sand/gravel); let it fall.
-        EntityNetworking.TryStartFalling(server, world, action.Position + new Vector3i(0, 1, 0));
+        FallingBlockSystem.TryStartFalling(server, world, action.Position + new Vector3i(0, 1, 0));
     }
 
     /// <summary>Drop key (Q): toss the held item (whole stack on Ctrl+Q, else one), resync the window, update the visible hand.</summary>
@@ -195,7 +196,6 @@ public sealed class PlayPacketHandler {
 
         context.World.TossItem(context.World.Ecs.Get<TransformEntityComponent>(context.Entity), tossed);
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
-        server.Events.Publish(new PlayerInventoryChanged(context));
     }
 
     /// <summary>Legacy (1.5.2) block placement: a creative client sends the held item in the packet, placed directly.</summary>
@@ -208,7 +208,7 @@ public sealed class PlayPacketHandler {
         if (!server.DefaultWorld.PlaceBlock(target, block))
             return;
         BroadcastBlockChange(new BlockUpdateS2C(target, block));
-        EntityNetworking.TryStartFalling(server, server.DefaultWorld, target); // sand/gravel placed over air falls
+        FallingBlockSystem.TryStartFalling(server, server.DefaultWorld, target); // sand/gravel placed over air falls
     }
 
     void HandlePlacement(NetClient client, UseItemOnC2S use) {
@@ -220,7 +220,9 @@ public sealed class PlayPacketHandler {
         // A block with interaction behavior (e.g. a container) consumes the right-click instead of placing.
         var clicked = context.World.GetBlock(use.Position);
         var interaction = new BlockContext { World = context.World, Position = use.Position, Block = clicked, Actor = context };
-        if (Behavior.FireInteract(clicked, in interaction))
+        bool interacted = false;
+        foreach (var b in clicked.GetAll<IInteract>()) { b.OnInteract(in interaction); interacted = true; }
+        if (interacted)
             return;
 
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
@@ -243,7 +245,7 @@ public sealed class PlayPacketHandler {
             context.World.SetBlockState(target, state);
         BroadcastBlockChange(new BlockUpdateS2C(target, block, state)); // null state ⇒ block default
 
-        EntityNetworking.TryStartFalling(server, context.World, target); // sand/gravel placed over air falls
+        FallingBlockSystem.TryStartFalling(server, context.World, target); // sand/gravel placed over air falls
     }
 
     void MovePlayer(NetClient client, double? x, double? y, double? z, float? yaw, float? pitch) {
@@ -330,7 +332,7 @@ public sealed class PlayPacketHandler {
             return;
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         inventory.SelectedSlot = System.Math.Clamp(held.Slot, 0, InventoryEntityComponent.HotbarSize - 1);
-        server.Events.Publish(new PlayerInventoryChanged(context)); // main-hand item others see may have changed
+        // The held item others see may have changed; the per-tick equipment diff picks it up.
     }
 
     void HandleCreativeSlot(NetClient client, SetCreativeModeSlotC2S creative) {
@@ -348,7 +350,6 @@ public sealed class PlayPacketHandler {
                 // Swap onto a filled slot: the player grabbed its item onto the cursor; empty the slot, resync, drop the bad item.
                 var grabbed = current.Storage[swapIndex];
                 current.Storage[swapIndex] = default;
-                server.Events.Publish(new PlayerInventoryChanged(context));
                 client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(current), grabbed));
             } else {
                 // Empty/unsupported slot: revert just that slot, leaving the cursor as the client has it.
@@ -368,7 +369,6 @@ public sealed class PlayPacketHandler {
             return; // crafting slot — ignored
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         inventory.Storage[index] = stack; // an empty (non-null) stack here is a deliberate clear
-        server.Events.Publish(new PlayerInventoryChanged(context));
     }
 
     /// <summary>Broadcasts a block change to every in-world client (modern and legacy); each protocol encodes it in its own format.</summary>

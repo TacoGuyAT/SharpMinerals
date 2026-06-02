@@ -1,20 +1,24 @@
 using Arch.Core;
 using SharpMinerals.Entities.Components;
-using SharpMinerals.Events;
+using SharpMinerals.Items;
+using SharpMinerals.Network;
+using SharpMinerals.Network.Containers;
+using SharpMinerals.Network.Messages;
 using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
 /// <summary>Item pickup: each player whose collision-feedback box overlaps a pickable drop collects it and the
-/// item despawns. Runs after <see cref="CollisionFeedbackSystem"/>. Client effects go out as deferred
-/// <see cref="ItemPickedUp"/> events so networking runs on the server thread.</summary>
-public sealed class ItemPickupSystem : ITickable {
+/// item despawns. Runs after <see cref="CollisionFeedbackSystem"/>. The collect animation, the drop's removal,
+/// and the collector's window resync are projected to clients in <see cref="Flush"/> after the tick.</summary>
+public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     static readonly QueryDescription CollectorQuery =
         new QueryDescription().WithAll<NetPlayerEntityComponent, CollisionFeedbackEntityComponent, InventoryEntityComponent>();
 
     readonly World world;
     // Collected during the query, processed after (mutating inventories/despawning mid-iteration is unsafe).
     readonly List<(ArchEntity Collector, ArchEntity Drop)> pending = new();
+    readonly List<(ArchEntity Collector, int NetId, int Count, ItemStack Leftover)> collected = new(); // Tick → Flush hand-off
 
     public ItemPickupSystem(World world) => this.world = world;
 
@@ -44,7 +48,33 @@ public sealed class ItemPickupSystem : ITickable {
             else
                 pickup.Stack = leftover; // partial pickup — the rest stays on the ground
 
-            world.Events?.PublishDeferred(new ItemPickedUp(world, collector, netId, picked, leftover));
+            collected.Add((collector, netId, picked, leftover));
         }
     }
+
+    /// <summary>Post-tick: play the collect animation, remove/shrink the ground stack, and resync the
+    /// collector's window. Others see a newly-held item via the equipment diff later in the same flush.</summary>
+    public void Flush(Server server) {
+        if (collected.Count == 0) return;
+        var ecs = world.Ecs;
+        foreach (var (collector, netId, count, leftover) in collected) {
+            if (!ecs.IsAlive(collector)) continue;
+            int collectorNetId = ecs.Get<NetPlayerEntityComponent>(collector).EntityId;
+
+            Broadcast(server, new CollectItemS2C(netId, collectorNetId, count));
+            if (leftover.IsEmpty)
+                Broadcast(server, new RemoveEntitiesS2C(new[] { netId }));
+            else
+                Broadcast(server, new SetItemEntityMetadataS2C(netId, leftover));
+
+            if (ecs.Get<SenderEntityComponent>(collector).Client is { } client) {
+                var inventory = ecs.Get<InventoryEntityComponent>(collector);
+                server.NetServer.Send(client.Id, new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
+            }
+        }
+        collected.Clear();
+    }
+
+    static void Broadcast(Server server, IMessage message) =>
+        server.NetServer.Broadcast(message, c => c.State == ConnectionState.Play);
 }

@@ -88,7 +88,6 @@ public sealed class ContainerManager {
 
             SendContent(server, window, pinv);          // authoritative resync of the clicker
             BroadcastToOtherViewers(server, window);    // others viewing this chest
-            PublishInventoryChanged(server, clientId); // a click can move the held item — sync equipment
         }
     }
 
@@ -97,10 +96,8 @@ public sealed class ContainerManager {
         lock (gate) {
             if (windowId == PlayerWindowId) {
                 // The player inventory has no session to forget; just return any held cursor to it.
-                if (playerCursor.Remove(clientId, out var cursor) && !cursor.IsEmpty && PlayerInv(server, clientId) is { } pinv) {
+                if (playerCursor.Remove(clientId, out var cursor) && !cursor.IsEmpty && PlayerInv(server, clientId) is { } pinv)
                     PutIntoInventory(pinv, ref cursor);
-                    PublishInventoryChanged(server, clientId);
-                }
                 return;
             }
             if (!openByClient.TryGetValue(clientId, out var window) || window.Id != windowId) return;
@@ -168,7 +165,6 @@ public sealed class ContainerManager {
         }
 
         server.NetServer.Send(clientId, new SetContainerContentS2C(PlayerWindowId, 0, PlayerWindow(pinv), cursor));
-        PublishInventoryChanged(server, clientId);
     }
 
     // Applies a resolved click against the hovered <paramref name="slot"/> and <paramref name="cursor"/>.
@@ -418,11 +414,6 @@ public sealed class ContainerManager {
             ? h.World.Ecs.Get<InventoryEntityComponent>(h.Entity)
             : null;
 
-    // A click changed the player's inventory — let subscribers (equipment visibility) re-sync.
-    static void PublishInventoryChanged(Server server, ulong clientId) {
-        if (server.TryGetPlayer(clientId, out var context))
-            server.Events.Publish(new PlayerInventoryChanged(context));
-    }
 
     static InventoryComponent ChestInventory(BlockEntity chest) {
         if (chest.TryGet<InventoryComponent>(out var inv)) return inv;

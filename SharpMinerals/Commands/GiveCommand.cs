@@ -54,9 +54,8 @@ public static class GiveCommand {
         int given = count - leftover.Count;
         if (given <= 0) { ctx.Source.Reply("Your inventory is full."); return 0; }
 
-        // Resync the window; the event refreshes equipment others see.
+        // Resync the window; equipment others see is refreshed by the per-tick equipment diff.
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
-        server.Events.Publish(new PlayerInventoryChanged(context));
 
         ctx.Source.Reply($"Gave x{given} {type.Name}.");
         return given;

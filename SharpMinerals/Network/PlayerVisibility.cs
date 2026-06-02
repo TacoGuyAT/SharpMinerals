@@ -18,7 +18,6 @@ public static class PlayerVisibility {
         events.Subscribe<PlayerJoined>(e => OnJoin(e.Context.Server, e.Context.Client));
         events.Subscribe<PlayerMoved>(e => OnMove(e.Context.Server, e.Context.Client));
         events.Subscribe<PlayerLeft>(e => OnLeave(e.Context.Server, e.Context.Player));
-        events.Subscribe<PlayerInventoryChanged>(e => OnInventoryChanged(e.PlayerContext));
     }
 
     static PlayerListEntry Entry(in NetPlayerEntityComponent p) => new(p.Uuid, p.Name, CreativeMode, Listed: true, Latency: 0);

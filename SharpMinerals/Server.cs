@@ -108,7 +108,6 @@ public class Server : ITickable {
         // Chunk streaming registered before visibility so a joining client gets terrain before other spawns.
         ChunkStreamer.Register(Events);
         PlayerVisibility.Register(Events);
-        Network.Handlers.EntityNetworking.RegisterHandlers(this);
     }
 
     /// <summary>Cross-session player persistence backend (in-memory unless the host supplied one).</summary>
@@ -224,11 +223,13 @@ public class Server : ITickable {
 
             // Announce newly-spawned entities BEFORE physics, so the client gets their un-decayed spawn
             // position + velocity and mirrors the motion the server is about to run.
-            Network.Handlers.EntityNetworking.AnnounceNew(this);
+            AnnounceSystems();
 
-            // Worlds are independent, so they tick in parallel; their systems publish client effects as
-            // deferred events, broadcast on this thread when the bus next drains.
+            // Worlds are independent, so they tick in parallel; their systems mutate only world state.
             Worlds.Values.AsParallel().ForAll(w => w.Tick());
+
+            // Project this tick's simulation results to clients on this thread, after the parallel ticks settle.
+            FlushSystems();
 
             // Keepalive once a second; one generic packet mapped per protocol at encode.
             if (currentTick % (long)TicksPerSecond == 0)
@@ -243,6 +244,22 @@ public class Server : ITickable {
             if (currentTick > 0 && currentTick % EvictTicks == 0)
                 EvictChunks();
         }
+    }
+
+    /// <summary>Pre-tick client projection: run each world's network-aware systems' <c>Announce</c> (new
+    /// entities at their un-decayed spawn state), on this thread, before the parallel world ticks.</summary>
+    public void AnnounceSystems() {
+        foreach (var world in Worlds.Values)
+            foreach (var system in world.Systems)
+                if (system is Network.INetworkSystem ns) ns.Announce(this);
+    }
+
+    /// <summary>Post-tick client projection: run each world's network-aware systems' <c>Flush</c> (landings,
+    /// pickups, despawns, …), on this thread, after the parallel world ticks settle.</summary>
+    public void FlushSystems() {
+        foreach (var world in Worlds.Values)
+            foreach (var system in world.Systems)
+                if (system is Network.INetworkSystem ns) ns.Flush(this);
     }
 
     /// <summary>Drops chunks no online player can see (saving dirty ones first) across every world.</summary>

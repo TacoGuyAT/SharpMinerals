@@ -29,9 +29,8 @@ public static class ClearCommand {
                 if (!inventory.Storage[i].IsEmpty) cleared++;
             inventory.Storage.Clear();
 
-            // Resync the window; the event refreshes equipment others see.
+            // Resync the window; equipment others see is refreshed by the per-tick equipment diff.
             client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
-            server.Events.Publish(new PlayerInventoryChanged(context));
 
             ctx.Source.Reply(cleared > 0 ? $"Cleared {cleared} item stack(s)." : "Inventory already empty.");
             return 1;

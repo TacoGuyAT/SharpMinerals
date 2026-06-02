@@ -1,48 +1,102 @@
 using Arch.Core;
 using SharpMinerals.Blocks;
+using SharpMinerals.Blocks.Descriptors;
+using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
-using SharpMinerals.Events;
-using SharpMinerals.Items;
 using SharpMinerals.Math;
+using SharpMinerals.Network;
+using SharpMinerals.Network.Messages;
 using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
-/// <summary>Lands falling blocks (sand/gravel): when a falling-block entity rests on the ground (per
-/// <see cref="EntityPhysicsSystem"/>), its carried block is placed back into the world — or popped as an item
-/// if the cell is occupied — and the entity despawns. Client effects go out as a deferred
-/// <see cref="FallingBlockLanded"/> so networking runs on the server thread.</summary>
-public sealed class FallingBlockSystem : ITickable {
-    static readonly QueryDescription FallingQuery =
+/// <summary>Owns falling blocks (sand/gravel) end to end: detects when one rests on the ground and fires its
+/// <see cref="IOnLand"/> reaction (re-place, pop as an item, or whatever the block type defines), and projects
+/// the spawn + landing to clients via <see cref="INetworkSystem"/>. Because sim and its client view live in the
+/// one class, the landing hand-off is just a field — no ECS tag or extra query.</summary>
+public sealed class FallingBlockSystem : ITickable, INetworkSystem {
+    static readonly QueryDescription LiveQuery =
+        new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent>();
+    static readonly QueryDescription GroundedQuery =
         new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent, BlockCollisionFeedbackEntityComponent>();
 
+    static readonly Vector3i Down = new(0, -1, 0);
+    static readonly Vector3i Up = new(0, 1, 0);
+
     readonly World world;
-    // Collected during the query, applied after — placing blocks and despawning are not safe mid-iteration.
-    readonly List<(ArchEntity Entity, int NetId, BlockType Block, Vector3i Cell)> landed = new();
+    readonly List<(ArchEntity Entity, BlockType Block, Vector3i Cell)> grounded = new();
+    readonly List<(int NetId, Vector3i Cell)> landed = new(); // Tick → Flush hand-off (sequential phases, same instance)
 
     public FallingBlockSystem(World world) => this.world = world;
 
+    /// <summary>If the block at <paramref name="pos"/> is gravity-bound with air beneath it, detaches it into a
+    /// falling-block entity (clearing + broadcasting the cell) and walks up the column so a whole stack detaches
+    /// at once. Called from placement/break, not the tick — hence static, taking the server + world directly.</summary>
+    public static void TryStartFalling(Server server, World world, Vector3i pos) {
+        var block = world.GetBlock(pos);
+        if (!block.Has<FallingBlockDescriptor>()) return;
+        if (!world.GetBlock(pos + Down).IsAir) return; // still supported — stays put
+
+        world.SetBlock(pos, BlockRegistry.Air);
+        server.NetServer.Broadcast(new BlockUpdateS2C(pos, BlockRegistry.Air), c => c.InWorld);
+        world.SpawnFallingBlock(pos, block);
+
+        TryStartFalling(server, world, pos + Up); // the block above lost its support too — propagate up
+    }
+
     public void Tick() {
         var ecs = world.Ecs;
-        landed.Clear();
-        ecs.Query(in FallingQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t, ref BlockCollisionFeedbackEntityComponent fb) => {
-            // Announced (EntityId set, so the client tracks it) and on the ground → landed.
-            if (f.EntityId == 0 || !fb.OnGround) return;
-            var cell = new Vector3i((int)System.Math.Floor(t.X), (int)System.Math.Floor(t.Y), (int)System.Math.Floor(t.Z));
-            landed.Add((e, f.EntityId, f.Block, cell));
+        grounded.Clear();
+        ecs.Query(in GroundedQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t, ref BlockCollisionFeedbackEntityComponent fb) => {
+            if (f.EntityId == 0 || !fb.OnGround) return; // unannounced (client can't track it) or still falling
+            grounded.Add((e, f.Block, ToCell(t)));
         });
 
-        foreach (var (entity, netId, block, cell) in landed) {
+        foreach (var (entity, block, cell) in grounded) {
             if (!ecs.IsAlive(entity)) continue;
-            BlockType? placed = null;
-            if (world.GetBlock(cell).IsAir) {
-                world.SetBlock(cell, block);
-                placed = block;
-            } else {
-                world.SpawnDroppedItem(cell, new ItemStack(block)); // cell occupied — pop as an item
-            }
+            int netId = ecs.Get<FallingBlockEntityComponent>(entity).EntityId;
+            var ctx = new BlockContext { World = world, Position = cell, Block = block };
+            foreach (var b in block.GetAll<IOnLand>())
+                b.OnLand(in ctx);
             world.DestroyEntity(entity);
-            world.Events?.PublishDeferred(new FallingBlockLanded(world, netId, cell, placed));
+            landed.Add((netId, cell));
         }
     }
+
+    /// <summary>Pre-tick: give each freshly-detached block a network id and announce its spawn, so the client
+    /// tracks it from its un-decayed position and mirrors the fall.</summary>
+    public void Announce(Server server) {
+        var ecs = world.Ecs;
+        var fresh = new List<(ArchEntity Entity, BlockType Block, TransformEntityComponent Pos)>();
+        ecs.Query(in LiveQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t) => {
+            if (f.EntityId == 0) fresh.Add((e, f.Block, t));
+        });
+
+        foreach (var (entity, block, pos) in fresh) {
+            int id = server.NextEntityId();
+            ecs.Get<FallingBlockEntityComponent>(entity).EntityId = id;
+            server.NetServer.Broadcast(new SpawnEntityS2C(
+                EntityId: id, Uuid: Guid.NewGuid(), Type: EntityRegistry.FallingBlock,
+                X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0,
+                Data: 0, VelocityX: 0, VelocityY: 0, VelocityZ: 0, BlockData: block),
+                c => c.State == ConnectionState.Play);
+        }
+    }
+
+    /// <summary>Post-tick: broadcast each landed cell's resulting block (whatever the reaction left there) and
+    /// remove the now-despawned entity.</summary>
+    public void Flush(Server server) {
+        if (landed.Count == 0) return;
+        var ids = new int[landed.Count];
+        for (int i = 0; i < landed.Count; i++) {
+            var (netId, cell) = landed[i];
+            server.NetServer.Broadcast(new BlockUpdateS2C(cell, world.GetBlock(cell), world.GetBlockState(cell)), c => c.InWorld);
+            ids[i] = netId;
+        }
+        server.NetServer.Broadcast(new RemoveEntitiesS2C(ids), c => c.State == ConnectionState.Play);
+        landed.Clear();
+    }
+
+    static Vector3i ToCell(in TransformEntityComponent t) =>
+        new((int)System.Math.Floor(t.X), (int)System.Math.Floor(t.Y), (int)System.Math.Floor(t.Z));
 }

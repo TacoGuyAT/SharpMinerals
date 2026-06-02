@@ -20,6 +20,10 @@ public class ComponentObject {
         return false;
     }
 
+    /// <summary>Every component assignable to <typeparamref name="T"/> — used to dispatch a behavior to all
+    /// components implementing its interface. Matches by assignability, not the exact-type key of <see cref="Get{T}"/>.</summary>
+    public IEnumerable<T> GetAll<T>() => components.Values.OfType<T>();
+
     /// <summary>Adds or replaces a component (keyed by its runtime type).</summary>
     internal void Set(object component) => components[component.GetType()] = component;
 

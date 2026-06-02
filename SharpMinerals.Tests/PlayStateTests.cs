@@ -159,7 +159,7 @@ public class PlayStateTests {
         Assert.True(
             capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == digPos && b.Block == BlockRegistry.Air),
             "dig: BlockUpdate broadcast");
-        EntityNetworking.AnnounceNew(server); // the pre-physics announce broadcasts new drops' SpawnEntity
+        server.AnnounceSystems(); // the pre-physics announce broadcasts new drops' SpawnEntity
         Assert.True(capture.Broadcasts.Any(m => m is SpawnEntityS2C), "dig: drop announced (SpawnEntity)");
 
         // Placement (held item is Stone; placing on the top face of a grass block).
@@ -201,9 +201,9 @@ public class PlayStateTests {
         // ── Item pickup: a dropped stack near the player is collected via collision ──
         var dropEntity = server.DefaultWorld.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(BlockRegistry.Cobblestone, 1));
         server.DefaultWorld.Ecs.Get<VelocityEntityComponent>(dropEntity) = new VelocityEntityComponent(0, 0, 0); // pin it under the player (no random scatter)
-        EntityNetworking.AnnounceNew(server);                    // assign its network id (pickup ignores un-announced drops)
+        server.AnnounceSystems();                    // assign its network id (pickup ignores un-announced drops)
         for (int i = 0; i < 12; i++) server.DefaultWorld.Tick(); // age past pickup delay, settle, ItemPickupSystem collects it
-        server.Events.DrainDeferred();                           // flush the deferred pickup effects (collect + removal)
+        server.FlushSystems();                                   // project the pickup (collect animation + removal)
         Assert.True(!server.DefaultWorld.Ecs.IsAlive(dropEntity), "pickup: drop entity removed");
         server.TryGetPlayer(client.Id, out var context);
         var pickInv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
@@ -263,7 +263,7 @@ public class PlayStateTests {
         // Break a block → drop spawns with the upward pop (DropVelocity Y = 0.2). Announce BEFORE any
         // physics tick, so the velocity is the un-decayed spawn value.
         server.DefaultWorld.BreakBlock(new Vector3i(0, 4, 0));
-        EntityNetworking.AnnounceNew(server);
+        server.AnnounceSystems();
 
         // Velocity is delivered by the explicit Set Entity Velocity packet (the 1.20.1 client ignores
         // the spawn-packet velocity for items); the spawn packet's velocity is deliberately zeroed so it
@@ -298,21 +298,21 @@ public class PlayStateTests {
         var fallingQuery = new QueryDescription().WithAll<FallingBlockEntityComponent>();
 
         // Air beneath the sand → it detaches: the source cell clears and one falling entity appears.
-        EntityNetworking.TryStartFalling(server, world, sand);
+        SharpMinerals.Level.Systems.FallingBlockSystem.TryStartFalling(server, world, sand);
         Assert.True(world.GetBlock(sand).IsAir, "fall: the sand's source cell is cleared");
         Assert.Equal(1, world.Ecs.CountEntities(in fallingQuery));
 
         // Announced (pre-physics) as a falling_block carrying its block (Data = the per-protocol state id).
-        EntityNetworking.AnnounceNew(server);
+        server.AnnounceSystems();
         var spawn = capture.Broadcasts.OfType<SpawnEntityS2C>().First();
         Assert.Equal(EntityRegistry.FallingBlock, spawn.Type);
         Assert.Equal(BlockRegistry.Sand, spawn.BlockData);
 
-        // Landing now happens inside the world tick (FallingBlockSystem reads block-collision feedback); its
-        // client effects are deferred, so drain the bus afterwards to flush the block update + entity removal.
+        // Landing happens inside the world tick (FallingBlockSystem fires the block's IOnLand reaction and
+        // despawns the entity, recording the landing); its Flush then projects the block update + removal.
         for (int i = 0; i < 200 && world.Ecs.CountEntities(in fallingQuery) != 0; i++)
             world.Tick();
-        server.Events.DrainDeferred();
+        server.FlushSystems();
 
         Assert.Equal(0, world.Ecs.CountEntities(in fallingQuery));
         Assert.Equal(BlockRegistry.Sand, world.GetBlock(landed));
@@ -661,6 +661,7 @@ public class PlayStateTests {
         capture.Broadcasts.Clear();
         handler.Handle(client, new SetHeldItemC2S(2));
         server.Events.DrainDeferred(); // the held-item change is deferred to the tick
+        server.FlushSystems();         // equipment-visibility diff broadcasts the changed slot
         Assert.Equal(2, inv.SelectedSlot);
         var held = capture.Broadcasts.OfType<SetEquipmentS2C>().Single();
         Assert.Equal(eid, held.EntityId);
@@ -675,6 +676,7 @@ public class PlayStateTests {
         int win = client.Sent.OfType<OpenScreenS2C>().Last().WindowId;
         capture.Broadcasts.Clear();
         server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 0, 56, 0, 0)); // left-click held slot → cursor
+        server.FlushSystems(); // equipment-visibility diff broadcasts the now-empty hand
         Assert.True(inv.Held.IsEmpty, "container: held item moved onto the cursor");
         var cleared = capture.Broadcasts.OfType<SetEquipmentS2C>().Single();
         Assert.Equal(EquipmentSlot.MainHand, cleared.Slot);
