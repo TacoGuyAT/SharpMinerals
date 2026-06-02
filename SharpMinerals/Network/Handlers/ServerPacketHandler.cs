@@ -26,11 +26,7 @@ namespace SharpMinerals.Network.Handlers;
 public sealed class ServerPacketHandler {
     const byte CreativeMode = 1;
 
-    static readonly ILogger Log = Logging.For("Play");
-
-    /// <summary>The executing server assembly version (major.minor.build), for the server brand.</summary>
-    static readonly string ServerVersion =
-        typeof(Server).Assembly.GetName().Version?.ToString(3) ?? "?";
+    readonly ILogger Log = Logging.For("Play");
 
     readonly Server server;
     readonly PlayPacketHandler play;
@@ -132,7 +128,7 @@ public sealed class ServerPacketHandler {
 
         // Advertise the server brand ("server vendor") so the client's F3 screen
         // shows us instead of "null".
-        client.Send(new BrandS2C($"SharpMinerals v{ServerVersion}"));
+        client.Send(new BrandS2C($"SharpMinerals v{server.Version}"));
 
         // Read the player's actual placement (it may have been restored from the store) so we
         // can sync the client to it; terrain + visibility are handled by PlayerJoined subscribers.
@@ -184,7 +180,7 @@ public sealed class ServerPacketHandler {
     /// and request encryption (0xFD) with the server's RSA public key. Offline mode uses server id "-"
     /// (the client then skips session.minecraft.net auth) — but the AES encryption itself is mandatory.
     /// </summary>
-    static void HandleLegacyHandshake(NetClient client, LegacyHandshakeC2S hs) {
+    void HandleLegacyHandshake(NetClient client, LegacyHandshakeC2S hs) {
         if (client.Protocol is not ProtocolJE61 je61) return;
         client.PlayerName = hs.Username;
         Log.LogInformation("Legacy (1.5.2) login start: {Name} (protocol {Proto})", hs.Username, hs.ProtocolVersion);

@@ -309,6 +309,8 @@ public class Server : ITickable {
     /// <summary>Every connected player (client id → world + entity).</summary>
     public IEnumerable<KeyValuePair<ulong, PlayerContext>> Players => players;
 
+    public readonly string Version = typeof(Server).Assembly.GetName().Version?.ToString(3) ?? "?";
+
     /// <summary>Spawns a player for a freshly logged-in client and returns its network entity id.</summary>
     public int AddPlayer(NetClient client, string name, Guid uuid) {
         var world = DefaultWorld;
