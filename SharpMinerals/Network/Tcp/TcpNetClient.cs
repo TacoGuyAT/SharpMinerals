@@ -1,26 +1,44 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Network.Tcp;
 
 /// <summary>
-/// A client connected over TCP. Wraps the socket in a <see cref="MinecraftStream"/>
-/// and runs a blocking read loop on its own thread, decoding each framed packet
-/// with the active protocol and forwarding it to the server's handler.
+/// A client connected over TCP. A blocking read loop on its own thread decodes inbound packets; outbound
+/// packets go onto a per-client queue drained by one writer task. So a send only enqueues — it never blocks the
+/// caller (e.g. the tick) on a slow socket: a client that can't keep up backs up its own queue (and is dropped
+/// past <see cref="MaxQueued"/>) instead of stalling the simulation or other clients. A single writer also
+/// gives per-client ordering for free, with no lock.
 /// </summary>
 public sealed class TcpNetClient : NetClient {
     static readonly ILogger Log = Logging.For("Net.Tcp");
 
+    // A client whose queue grows past this (not draining its socket) is disconnected rather than buffered forever.
+    const int MaxQueued = 8192;
+    // Bounds a write to a wedged client (full TCP window) so the writer task can't block indefinitely.
+    const int SendTimeoutMs = 30_000;
+
     readonly TcpClient tcp;
     readonly MinecraftStream stream;
     readonly ProtocolRegistry registry;
-    readonly object writeLock = new();
+
+    readonly Channel<OutboundItem> outbound =
+        Channel.CreateUnbounded<OutboundItem>(new UnboundedChannelOptions { SingleReader = true });
+    int queued;
+    readonly Task writer;
+
+    // A queued send: framed bytes to write, or (Secret set) a request to switch the stream to encryption —
+    // queued so the writer flips it in order, after the last plaintext packet.
+    readonly record struct OutboundItem(byte[]? Frame, byte[]? Secret);
 
     public TcpNetClient(ulong id, TcpClient tcp, ProtocolRegistry registry) : base(id, registry.Default) {
         this.tcp = tcp;
         this.registry = registry;
+        tcp.SendTimeout = SendTimeoutMs;
         stream = new MinecraftStream(tcp.GetStream());
+        writer = Task.Run(WriteLoop);
     }
 
     public override void Send(IMessage message) {
@@ -29,10 +47,7 @@ public sealed class TcpNetClient : NetClient {
             Log.LogDebug("→ #{Client} {Packet} — no {Version} codec, dropped", Id, message.GetType().Name, Protocol.VersionName);
             return;
         }
-        byte[] framed = Protocol.Frame(message);
-        if (!WriteFramed(framed)) return;
-        Log.LogDebug("→ #{Client} [{State}] {Packet} ({Bytes} B)",
-            Id, State, message.GetType().Name, framed.Length);
+        Enqueue(new OutboundItem(Protocol.Frame(message), null), message);
     }
 
     public override void Send(CachedPacket packet) {
@@ -40,37 +55,48 @@ public sealed class TcpNetClient : NetClient {
             Log.LogDebug("→ #{Client} {Packet} — no {Version} codec, dropped", Id, packet.Message.GetType().Name, Protocol.VersionName);
             return;
         }
-        byte[] framed = packet.Framed(Protocol);
-        if (!WriteFramed(framed)) return;
-        Log.LogDebug("→ #{Client} [{State}] {Packet} ({Bytes} B, cached)",
-            Id, State, packet.Message.GetType().Name, framed.Length);
+        Enqueue(new OutboundItem(packet.Framed(Protocol), null), packet.Message);
     }
 
-    /// <summary>
-    /// Writes framed bytes to the socket under the write lock (read loop and tick-thread broadcasts both write).
-    /// Returns false rather than throwing if the connection is already gone (a send can race a disconnect).
-    /// </summary>
-    bool WriteFramed(byte[] framed) {
+    void Enqueue(in OutboundItem item, IMessage? message) {
+        if (Interlocked.Increment(ref queued) > MaxQueued) {
+            Log.LogWarning("→ #{Client} outbound backlog over {Max} — dropping slow client", Id, MaxQueued);
+            Disconnect();
+            return;
+        }
+        if (!outbound.Writer.TryWrite(item))
+            Interlocked.Decrement(ref queued); // queue already completed (disconnecting) — drop silently
+        else if (message is not null)
+            Log.LogDebug("→ #{Client} [{State}] {Packet} queued", Id, State, message.GetType().Name);
+    }
+
+    /// <summary>Drains the outbound queue on a dedicated task: writes framed packets (one flush per drained
+    /// batch) and applies encryption switches in order. Closes the socket when the queue completes or a write
+    /// fails — so packets queued before <see cref="Disconnect"/> (e.g. a kick reason) are delivered first.</summary>
+    async Task WriteLoop() {
         try {
-            lock (writeLock) {
-                stream.Write(framed, 0, framed.Length);
+            var reader = outbound.Reader;
+            while (await reader.WaitToReadAsync()) {
+                while (reader.TryRead(out var item)) {
+                    Interlocked.Decrement(ref queued);
+                    if (item.Secret is { } secret)
+                        stream.EnableEncryption(secret);
+                    else if (item.Frame is { } frame)
+                        stream.Write(frame, 0, frame.Length);
+                }
                 stream.Flush();
             }
-            return true;
         } catch (Exception ex) when (ex is IOException or ObjectDisposedException or SocketException) {
-            Log.LogDebug("→ #{Client} send skipped — connection closed ({Reason})", Id, ex.GetType().Name);
-            return false;
+            Log.LogDebug("→ #{Client} writer stopped — connection closed ({Reason})", Id, ex.GetType().Name);
+        } finally {
+            try { tcp.Close(); } catch { /* already gone */ }
         }
     }
 
-    public override void Disconnect() {
-        try { tcp.Close(); } catch { /* already gone */ }
-    }
+    public override void Disconnect() => outbound.Writer.TryComplete(); // writer drains, flushes, then closes
 
-    public override void EnableEncryption(byte[] sharedSecret) {
-        lock (writeLock)
-            stream.EnableEncryption(sharedSecret);
-    }
+    public override void EnableEncryption(byte[] sharedSecret) =>
+        Enqueue(new OutboundItem(null, sharedSecret), null); // applied in order by the writer
 
     /// <summary>
     /// Blocking receive loop. Decodes packets against the connection's <see cref="NetClient.State"/>
@@ -98,6 +124,8 @@ public sealed class TcpNetClient : NetClient {
             Log.LogWarning("← #{Client} protocol error, dropping connection: {Message}", Id, ex.Message);
         } catch (Exception ex) when (ex is EndOfStreamException or IOException or ObjectDisposedException or InvalidOperationException) {
             Log.LogDebug("← #{Client} disconnected ({Reason})", Id, ex.GetType().Name);
+        } finally {
+            outbound.Writer.TryComplete(); // connection ended → let the writer task drain + close and exit
         }
     }
 }
