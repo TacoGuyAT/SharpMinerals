@@ -127,12 +127,15 @@ public sealed class ServerPacketHandler {
 
         client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
 
-        // Must run BEFORE the position sync: the client needs terrain (streamed by subscribers) before being placed.
-        server.Events.Publish(new PlayerJoined(context));
-
+        // Anchor the player at its spawn BEFORE streaming terrain: the client then holds on "Loading terrain"
+        // until the chunks arrive, instead of ticking physics from a default position (which made it fall and
+        // snap back once the position packet arrived after the chunk-build stall).
         client.Send(new SynchronizePlayerPositionS2C(
             spawn.X, spawn.Y, spawn.Z, spawn.Yaw, spawn.Pitch, TeleportId: server.BeginTeleport(client.Id)));
         client.Send(new SetHealthS2C(health.Current, 20, 5f));
+
+        // Stream terrain around the player and spawn it to other players.
+        server.Events.Publish(new PlayerJoined(context));
 
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
         client.Send(new SetHeldItemS2C(inventory.SelectedSlot));
