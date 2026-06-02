@@ -99,7 +99,8 @@ server.CommandDispatcher
     .RegisterSave()
     .RegisterTp()
     .RegisterWorld()
-    .RegisterClear();
+    .RegisterClear()
+    .RegisterGive();
 
 // Mods run their OnServerStarted now (server is up, core commands registered): they layer their own
 // commands on top, set the MOTD, subscribe to events, etc. The /test command comes from the test mod.

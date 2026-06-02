@@ -580,6 +580,41 @@ public class PlayStateTests {
         Assert.True(resync.Carried.IsEmpty);
     }
 
+    // ── /give adds an item (by registry name) to the player's inventory and resyncs the window ──
+    [Fact]
+    public void GiveCommandAddsItemAndResyncs() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator()),
+        };
+        var server = new Server(new ServerContext {
+            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
+        });
+        server.CommandDispatcher.RegisterGive();
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Assert.True(server.TryGetPlayer(client.Id, out var context));
+        var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
+        var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
+        client.Sent.Clear();
+
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "give cobblestone 10", client); // synchronous-bodied
+
+        int total = 0;
+        for (int i = 0; i < InventoryEntityComponent.MainSize; i++)
+            if (inv.Main(i).Type == BlockRegistry.Cobblestone) total += inv.Main(i).Count;
+        Assert.Equal(10, total);                                              // the 10 cobblestone landed in the inventory
+        Assert.NotEmpty(client.Sent.OfType<SetContainerContentS2C>());        // window resynced to the client
+
+        // An unknown item is rejected without touching the inventory.
+        client.Sent.Clear();
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "give not_a_real_item", client);
+        Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
+    }
+
     // ── Equipment: held item syncs as Set Equipment; off-hand never reaches a legacy client ─────────
     [Fact]
     public void EquipmentSyncsAndOffhandSkipsLegacy() {
