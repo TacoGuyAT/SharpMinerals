@@ -15,11 +15,8 @@ using SharpMinerals.Entities.Descriptors;
 
 namespace SharpMinerals.Level;
 
-/// <summary>
-/// A single dimension. Owns an Arch ECS <see cref="ArchWorld"/> holding every
-/// entity in it and a lazily-generated grid of cuboid chunks. <see cref="Tick"/>
-/// runs the per-tick systems; block reads/writes go through the chunk grid.
-/// </summary>
+/// <summary>A single dimension: owns an Arch ECS <see cref="ArchWorld"/> and a lazily-generated grid of
+/// cuboid chunks. <see cref="Tick"/> runs the per-tick systems; block reads/writes go through the chunk grid.</summary>
 public class World : ITickable {
     static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
 
@@ -30,20 +27,17 @@ public class World : ITickable {
     readonly IWorldStore? store;
     readonly ConcurrentDictionary<Vector3i, Chunk> loadedChunks = new();
 
-    // The per-tick entity systems, run in order each Tick. Behavior lives in these ITickable units
-    // (data stays in the ECS components) — mods can register more via the engine's system list.
+    // The per-tick entity systems, run in registration order each Tick.
     readonly List<ITickable> systems;
 
     public string Name { get; }
 
-    /// <summary>The ECS backing store. Entities are created/queried through this.</summary>
     public ArchWorld Ecs { get; } = ArchWorld.Create();
 
     public bool IsActive { get; set; } = true;
 
-    /// <summary>The domain event bus the simulation publishes to (set by <see cref="Server"/> when it
-    /// owns this world). Null in standalone use (e.g. tests) — entity-move events are simply not raised.
-    /// Systems publish entity moves <b>deferred</b> here, since worlds tick on parallel threads.</summary>
+    /// <summary>The domain event bus the simulation publishes to (null in standalone use, e.g. tests).
+    /// Systems publish deferred, since worlds tick on parallel threads.</summary>
     public EventBus? Events { get; set; }
 
     public World(string name, IWorldStore? store = null) : this(name, IChunkGenerator.Default, store) { }
@@ -77,10 +71,8 @@ public class World : ITickable {
 
     public int LoadedChunkCount => loadedChunks.Count;
 
-    /// <summary>
-    /// Persists every chunk modified since its last save to the world store and marks them clean.
-    /// No-op when the world has no store. Returns the number of chunks written.
-    /// </summary>
+    /// <summary>Persists every chunk modified since its last save and marks them clean. No-op without a
+    /// store. Returns the number of chunks written.</summary>
     public int Save() {
         if (store is null) return 0;
         int saved = 0;
@@ -93,11 +85,8 @@ public class World : ITickable {
         return saved;
     }
 
-    /// <summary>
-    /// Drops loaded chunks whose column is outside every kept centre (saving dirty ones first), to
-    /// bound memory/disk as players explore. A dirty chunk is kept if there's no store to save it
-    /// to, rather than losing the edit. Call on the single-writer (tick) thread. Returns the count.
-    /// </summary>
+    /// <summary>Drops loaded chunks outside every kept centre (saving dirty ones first) to bound memory/disk.
+    /// A dirty chunk with no store is kept rather than lose the edit. Call on the tick thread.</summary>
     public int EvictChunks(IReadOnlyList<(long X, long Z)>? keptCenters, int keepRadius) {
         int evicted = 0;
         foreach (var (pos, chunk) in loadedChunks) {
@@ -143,11 +132,8 @@ public class World : ITickable {
     public BlockState? GetBlockState(Vector3i pos) => GetChunk(pos.ToChunk()).GetBlockState(pos.ToLocal());
     public void SetBlockState(Vector3i pos, BlockState? state) => GetChunk(pos.ToChunk()).SetBlockState(pos.ToLocal(), state);
 
-    /// <summary>
-    /// Breaks the block at <paramref name="pos"/>: replaces it with air, fires the
-    /// block's break behaviors, and — if it has a <see cref="DropBlockDescriptor"/> component — spawns
-    /// the dropped item. Returns the block that was broken (air if nothing was there).
-    /// </summary>
+    /// <summary>Breaks the block at <paramref name="pos"/>: replaces it with air, fires the block's break
+    /// behaviors, and spawns its drop. Returns the block that was broken (air if nothing was there).</summary>
     public BlockType BreakBlock(Vector3i pos) {
         var block = GetBlock(pos);
         if (block.IsAir)
@@ -159,9 +145,8 @@ public class World : ITickable {
         Behavior.FireBroken(block, in ctx);
 
         if (block.Drop is { } drop) {
-            // A block that drops itself carries its ITEM-IDENTITY state (e.g. wool colour) to the item,
-            // but placement state (facing) is reset. A block whose state is purely placement (a facing
-            // chest) drops with NO state, so re-placement orients it afresh.
+            // A self-drop carries item-identity state (e.g. wool colour) but resets placement state (facing),
+            // so a purely-placement state drops with none and re-orients on re-placement.
             if (drop.Type == block && GetBlockState(pos) is { } state) {
                 var dropState = state.ForDrop();
                 if (!dropState.Matches(new BlockState(block)))
@@ -170,13 +155,13 @@ public class World : ITickable {
             SpawnDroppedItem(pos, drop);
         }
 
-        // Scatter any container contents (e.g. a chest) before the block entity goes away.
+        // Scatter container contents before the block entity goes away.
         if (GetBlockEntity(pos) is { } entity && entity.TryGet<InventoryComponent>(out var contents))
             for (int i = 0; i < contents.Size; i++)
                 if (!contents[i].IsEmpty) SpawnDroppedItem(pos, contents[i]);
 
         RemoveBlockEntity(pos);
-        SetBlockState(pos, null); // the broken block's state goes with it
+        SetBlockState(pos, null);
         return block;
     }
 
@@ -190,8 +175,6 @@ public class World : ITickable {
     }
 
     // ── Entities ────────────────────────────────────────────────────────────
-    /// <summary>The spatial index of this world's entities (ranged lookups, ranged broadcasts,
-    /// per-chunk processing). Maintained as entities spawn/despawn/move.</summary>
     public SpatialIndex Entities { get; }
 
     /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
@@ -228,8 +211,8 @@ public class World : ITickable {
     const double TossSpeed = 0.3;
 
     /// <summary>Spawns <paramref name="stack"/> as a dropped item thrown from <paramref name="t"/>'s eye in
-    /// its look direction — the "press Q" toss — with a 40-tick pickup delay so it can't fly straight back in.
-    /// Returns the entity (null for an empty stack); the next announce pass tells clients about it.</summary>
+    /// its look direction (the "press Q" toss), with a pickup delay so it can't fly straight back in.
+    /// Returns the entity (null for an empty stack).</summary>
     public ArchEntity? TossItem(TransformEntityComponent t, ItemStack stack) {
         if (stack.IsEmpty) return null;
         double yaw = t.Yaw * System.Math.PI / 180.0, pitch = t.Pitch * System.Math.PI / 180.0;
@@ -245,10 +228,8 @@ public class World : ITickable {
     const double FallingBlockSize = 0.98;
 
     /// <summary>Spawns a <c>falling_block</c> entity for <paramref name="block"/> at the centre of
-    /// <paramref name="cell"/> with zero initial velocity. <c>EntityPhysicsSystem</c> pulls it down (it has
-    /// <see cref="GravityEntityComponent"/>) and records its ground contact; <c>FallingBlockSystem</c> reads
-    /// that to re-place it as a block (or drop it as an item) when it lands. The caller is responsible for
-    /// having cleared the source cell and announced that block change.</summary>
+    /// <paramref name="cell"/>. EntityPhysicsSystem pulls it down; FallingBlockSystem re-places it (or drops
+    /// it) on landing. The caller must have cleared the source cell and announced that change.</summary>
     public ArchEntity SpawnFallingBlock(Vector3i cell, BlockType block) {
         double x = cell.X + 0.5, y = cell.Y, z = cell.Z + 0.5;
         var entity = Ecs.Create(
@@ -270,12 +251,10 @@ public class World : ITickable {
         Ecs.Destroy(entity);
     }
 
-    /// <summary>Number of player entities currently in this world.</summary>
     public int PlayerCount => Ecs.CountEntities(in PlayerQuery);
 
-    /// <summary>Tears the world down so it can be dropped: stops ticking, releases all loaded chunks, and frees
-    /// the ECS's pooled storage. The caller (server) must have removed it from the world set and ensured it has
-    /// no players first. Not idempotent — the ECS is destroyed, so the world must not be used afterwards.</summary>
+    /// <summary>Tears the world down: stops ticking, releases loaded chunks, and frees the ECS storage.
+    /// Not idempotent — the world must not be used afterwards.</summary>
     public void Unload() {
         IsActive = false;
         loadedChunks.Clear();
@@ -285,11 +264,10 @@ public class World : ITickable {
     public void Tick() {
         if (!IsActive) return;
 
-        // Entity systems (item lifecycle, physics, collision feedback), in registration order.
         foreach (var system in systems)
             system.Tick();
 
-        // Then block-level ticking (block entities such as furnaces) per loaded chunk.
+        // Block entities (furnaces, …) per loaded chunk.
         foreach (var chunk in loadedChunks.Values)
             chunk.Tick();
     }

@@ -6,22 +6,16 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
-/// <summary>
-/// Server-simulated physics for non-player entities (dropped items, falling blocks; future mobs/projectiles):
-/// velocity integration swept against solid terrain, gravity, then drag. The downward pull is applied only
-/// to entities carrying a <see cref="GravityEntityComponent"/> (opt-in), and an entity with a
-/// <see cref="BlockCollisionFeedbackEntityComponent"/> gets its ground contact recorded there. Players are
-/// client-driven and deliberately excluded (<c>WithNone&lt;NetPlayerEntityComponent&gt;</c>).
-/// </summary>
+/// <summary>Server-simulated physics for non-player entities (items, falling blocks): velocity integration
+/// swept against terrain, gravity (opt-in via <see cref="GravityEntityComponent"/>), then drag. Players are
+/// client-driven and excluded. Ground contact is recorded on any <see cref="BlockCollisionFeedbackEntityComponent"/>.</summary>
 public sealed class EntityPhysicsSystem : ITickable {
-    // Physics tuning (per tick). Gravity pulls Y down; air drag bleeds off velocity in flight, and the
-    // stronger ground friction stops an entity's horizontal slide soon after it lands.
+    // Physics tuning, per tick.
     const double Gravity = 0.04;
     const double Drag = 0.98;
     const double GroundFriction = 0.6;
     const double CollisionEpsilon = 1e-4;
-    // Below this per-tick displacement an entity is treated as at rest — no move event (so a settled
-    // item asymptotically creeping to a stop doesn't spam EntityMoved every tick).
+    // Below this per-tick displacement an entity is at rest — no move event (else a settling item spams it).
     const double MoveEpsilon = 1e-3;
 
     static readonly QueryDescription PhysicsQuery =
@@ -34,20 +28,17 @@ public sealed class EntityPhysicsSystem : ITickable {
     public void Tick() {
         world.Ecs.Query(in PhysicsQuery, (ArchEntity e, ref TransformEntityComponent t, ref VelocityEntityComponent v, ref ColliderEntityComponent box) => {
             double ox = t.X, oy = t.Y, oz = t.Z;
-            if (world.Ecs.Has<GravityEntityComponent>(e)) v.Y -= Gravity; // opt-in downward pull
+            if (world.Ecs.Has<GravityEntityComponent>(e)) v.Y -= Gravity;
             bool onGround = MoveWithCollision(ref t, ref v, box);
             double horizontalDrag = onGround ? GroundFriction : Drag;
             v.X *= horizontalDrag;
             v.Y *= Drag;
             v.Z *= horizontalDrag;
 
-            // Record block-collision feedback (ground contact) for entities that read it (falling blocks).
             if (world.Ecs.Has<BlockCollisionFeedbackEntityComponent>(e))
                 world.Ecs.Get<BlockCollisionFeedbackEntityComponent>(e).OnGround = onGround;
 
-            // Any entity (item today, mobs/projectiles later) raises a generic move event when it
-            // actually shifts. Deferred: worlds tick on parallel threads, so this enqueues onto the
-            // bus and the subscribers run on the single tick-writer thread (next DrainDeferred).
+            // Deferred: worlds tick on parallel threads, so subscribers run on the tick-writer thread.
             if (Moved(ox, oy, oz, in t))
                 world.Events?.PublishDeferred(new EntityMoved(world, e));
         });
@@ -58,20 +49,16 @@ public sealed class EntityPhysicsSystem : ITickable {
         || System.Math.Abs(t.Y - oy) > MoveEpsilon
         || System.Math.Abs(t.Z - oz) > MoveEpsilon;
 
-    /// <summary>
-    /// Integrates <paramref name="v"/> into <paramref name="t"/> one axis at a time, sweeping the
-    /// entity's AABB against solid blocks. On a hit the box is snapped flush to the block face and
-    /// that axis's velocity is zeroed. Axis-separated resolution keeps it simple and stable for the
-    /// thin boxes we have today; Y is resolved first so the horizontal axes settle on solid ground.
-    /// Returns true if the entity landed on a floor this step (used to apply ground friction).
-    /// </summary>
+    /// <summary>Integrates velocity into the transform one axis at a time, sweeping the AABB against solid
+    /// blocks; on a hit the box snaps flush and that axis's velocity zeroes. Y is resolved first so the
+    /// horizontal axes settle on solid ground. Returns true if the entity landed on a floor this step.</summary>
     bool MoveWithCollision(ref TransformEntityComponent t, ref VelocityEntityComponent v, in ColliderEntityComponent box) {
         double hw = box.HalfWidth, h = box.Height;
         bool onGround = false;
 
         double newY = t.Y + v.Y;
         if (v.Y != 0 && BoxHitsSolid(t.X - hw, newY, t.Z - hw, t.X + hw, newY + h, t.Z + hw)) {
-            if (v.Y < 0) { newY = System.Math.Floor(newY) + 1.0; onGround = true; } // land on top of the block
+            if (v.Y < 0) { newY = System.Math.Floor(newY) + 1.0; onGround = true; } // land on top
             else newY = System.Math.Floor(newY + h) - h;                            // bonk a ceiling
             v.Y = 0;
         }

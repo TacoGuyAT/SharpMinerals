@@ -5,20 +5,17 @@ using SharpMinerals.Network.Nbt;
 
 namespace SharpMinerals.Network.Protocols.JE763.Codecs;
 
-// Shared slot helper: encode one of our ItemStacks as a wire Slot, mapping the item
-// type to its vanilla id. Empty stacks write a "not present" slot.
+// Shared slot helper: encode our ItemStack as a wire Slot (empty stacks write "not present").
 internal static class SlotWire {
     public static void WriteStack(MinecraftStream s, ItemStack stack) {
         if (stack.IsEmpty) {
             s.WriteEmptySlot();
             return;
         }
-        int id = s.Types!.ItemId(stack); // mapper set by Protocol.EncodePayload; stack-aware (wool colour, …)
+        int id = s.Types!.ItemId(stack); // stack-aware (wool colour, …)
 
-        // A mod-added type has no vanilla id, so it renders as the fallback item (stone). Attach NBT so the
-        // client still tells it apart: a custom display name (a translatable, falling back to a humanised
-        // name) and an identity marker, which also stops it stacking with the real fallback item or with
-        // other custom types that share it. Vanilla types write a plain slot (empty NBT).
+        // A mod-added type renders as the fallback item; attach NBT (custom name + identity marker) so the
+        // client tells it apart and won't stack it with the fallback or other customs. Vanilla types write a plain slot.
         if (s.Types.IsCustom(stack.Type!)) {
             s.WriteBool(true);
             s.WriteVarInt(id);
@@ -29,11 +26,8 @@ internal static class SlotWire {
         }
     }
 
-    /// <summary>Reads a wire Slot back into our internal <see cref="ItemStack"/> (the inverse of
-    /// <see cref="WriteStack"/>): maps the vanilla id to our type, preferring the custom-type NBT marker so a
-    /// mod item the client knows only by its fallback id is restored. A not-present slot → an (empty) stack —
-    /// a deliberate clear; a present item this server has no type for → <c>null</c> (invalid), so the caller
-    /// can warn the client instead of silently clearing the slot.</summary>
+    /// <summary>Reads a wire Slot back into our <see cref="ItemStack"/> (inverse of <see cref="WriteStack"/>),
+    /// preferring the custom-type NBT marker. Not-present → empty stack (clear); a present unmappable item → null.</summary>
     public static ItemStack? ReadStack(MinecraftStream s) {
         if (!s.ReadBool())
             return default(ItemStack); // not present — a deliberately empty slot
@@ -49,23 +43,20 @@ internal static class SlotWire {
         return stack;
     }
 
-    /// <summary>The NBT key carrying a custom type's registry name on the wire — both the stacking
-    /// discriminator and the marker the server reads back to recover the type the client echoes.</summary>
+    /// <summary>NBT key carrying a custom type's registry name: the stacking discriminator and the marker the server reads back.</summary>
     public const string CustomTypeKey = "SharpMineralsType";
 
-    // The item NBT that gives a fallback-rendered custom type a distinct identity on the client.
+    // NBT giving a fallback-rendered custom type a distinct identity on the client.
     static NbtCompound CustomItemNbt(ItemType type) {
         var display = new NbtCompound().Put("Name", CustomNameJson(type));
         return new NbtCompound()
             .Put("display", display)
-            // The registry name, distinct per custom type → the client won't merge different customs (or
-            // the vanilla fallback) into one stack, and the server recovers the exact type when the client
-            // sends the slot back (e.g. a creative move) instead of seeing only the fallback item id.
+            // Distinct per custom type → the client won't merge customs/fallback into one stack, and the
+            // server recovers the exact type when the client sends the slot back.
             .Put(CustomTypeKey, type.Name);
     }
 
-    // A 1.20.1 item name is a JSON chat component (as a string). Use a translatable keyed by the type's
-    // name with a humanised fallback, so a resource pack can localise it but it reads well without one.
+    // A 1.20.1 item name is a JSON chat component. Use a translatable keyed by the type name with a humanised fallback.
     static string CustomNameJson(ItemType type) {
         string fallback = Humanize(type.Name);
         return $"{{\"translate\":\"item.sharpminerals.{Escape(type.Name)}\",\"fallback\":\"{Escape(fallback)}\",\"italic\":false}}";

@@ -9,10 +9,9 @@ using SharpMinerals.Network.Messages;
 namespace SharpMinerals.TestMod;
 
 /// <summary>
-/// The test-harness mod: registers <c>/test [@&lt;clientId&gt;] &lt;command&gt;</c>, which forwards a command to
-/// the SharpTester client mod over the control channel (one client with <c>@id</c>, else all play clients).
-/// Was a hard-wired <c>#if TEST_HARNESS</c> command in core; now it's a mod loaded only in test/debug, which
-/// also doubles as a worked example of a command-adding mod built against the public API.
+/// The test-harness mod: registers <c>/test [@&lt;clientId&gt;] &lt;command&gt;</c>, forwarding a command to the
+/// SharpTester client mod over the control channel (one client with <c>@id</c>, else all play clients). Also
+/// a worked example of a command-adding mod built against the public API.
 /// </summary>
 [ModInfo("sharpminerals_test", "1.0.0", ["__tacoguy"], TargetServerVersion = "0.1.0")]
 public sealed class TestMod : Mod {

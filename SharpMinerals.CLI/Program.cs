@@ -27,9 +27,8 @@ if (loaded.Notice is { } notice) {
 }
 
 // ── Mods ────────────────────────────────────────────────────────────────────
-// Discover and initialise mods BEFORE the protocols/type-mappers snapshot the block/item/entity palette:
-// a mod's OnInitialize registers content, so it must run first. File mods are `mods/*.dll`; the
-// test-harness mod (/test) is compiled in and loaded only on Debug builds (TEST_HARNESS).
+// Initialise mods before the protocols snapshot the palette (OnInitialize registers content). File mods are
+// `mods/*.dll`; the test/sample mods are compiled in and loaded only on the matching build flags.
 var modLoader = new ModLoader();
 #if TEST_HARNESS
 modLoader.TryLoad(new TestMod());
@@ -40,32 +39,26 @@ modLoader.TryLoad(new SampleMod());
 modLoader.LoadDirectory(Path.Combine(Directory.GetCurrentDirectory(), "mods"));
 ModContent.Freeze(); // seal the palette — no block/item/entity may register past this point
 
-// Supported protocol versions; each connection picks one — modern versions by their handshake
-// version, the legacy JE61 (1.5.2) by its non-Netty first byte (see ProtocolRegistry.Detect).
+// Supported protocols; each connection picks one (see ProtocolRegistry.Detect).
 var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE61());
 var endpoint = new IPEndPoint(IPAddress.Parse(config.Host), config.Port);
 
-// Disk-backed persistence (RocksDB), behind write-behind queues so saves never block hot paths.
-// Lives under the configured data dir (relative to the working directory, or absolute) — keep it
-// outside bin/ so the world survives rebuilds.
+// Disk-backed persistence (RocksDB) behind write-behind queues so saves never block hot paths.
 var worldStore = new AsyncWorldStore(new RocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
 var playerStore = new AsyncPlayerStore(new RocksDbPlayerStore(Path.Combine(config.DataDir, "players")));
 
-// The configured main world, generated as a superflat (and persisted to the store).
+// The configured main world, a persisted superflat.
 var worlds = new ConcurrentDictionary<string, World>();
 worlds[config.World] = new World(config.World, new FlatChunkGenerator(), worldStore);
 
-// Forward-declared so the transport callbacks below can reach them. They only fire once a client
-// connects (after Start), by which point both are assigned — no static singleton needed.
+// Forward-declared for the transport callbacks below; both are assigned before any client connects.
 Server server = null!;
 ServerPacketHandler packetHandler = null!;
 
-// TCP transport, feeding decoded packets into server logic and despawning players on drop.
 var netServer = new TcpNetServer(
     endpoint, protocols,
     (client, message) => packetHandler.Handle(client, message),
-    // RemovePlayer despawns the entity under the server's ECS gate, so it's safe to call straight from
-    // the network thread without racing the tick.
+    // RemovePlayer despawns under the ECS gate, so it's safe to call from the network thread.
     client => server.RemovePlayer(client.Id));
 
 var context = new ServerContext {
@@ -78,7 +71,7 @@ var context = new ServerContext {
 };
 
 server = new Server(context);
-packetHandler = new ServerPacketHandler(server); // the message handler, bound to the server
+packetHandler = new ServerPacketHandler(server);
 
 // Ctrl+C signals shutdown; the main thread (blocked on WaitForShutdown below) does the cleanup.
 Console.CancelKeyPress += (_, e) => {
@@ -89,8 +82,7 @@ Console.CancelKeyPress += (_, e) => {
 
 server.Start();
 
-// Command/chat console: lines from stdin (or a `run` script) drive the server;
-// '/cmd' runs a command, plain text broadcasts as chat.
+// ── Commands ────────────────────────────────────────────────────────────────
 server.CommandDispatcher
     .RegisterHelp()
     .RegisterRun()
@@ -102,12 +94,10 @@ server.CommandDispatcher
     .RegisterClear()
     .RegisterGive();
 
-// Mods run their OnServerStarted now (server is up, core commands registered): they layer their own
-// commands on top, set the MOTD, subscribe to events, etc. The /test command comes from the test mod.
+// Mods run OnServerStarted now (server up, core commands registered): they layer on their own commands, etc.
 modLoader.StartAll(server);
 
-// The console: the server owns the sender identity (shared with tests); the CLI just wires its stdin loop to
-// it and logs its replies. The sender lives in core; only the byte-level I/O is host-side.
+// Console: the server owns the sender (shared with tests); the CLI wires its stdin loop and logs replies.
 var console = new ConsoleInput(server.Sender);
 console.Start();
 
@@ -115,8 +105,7 @@ console.Start();
 if (!string.IsNullOrEmpty(config.Startup))
     server.Sender.RunCommand("run " + config.Startup);
 
-// Run for the server's lifetime. Ctrl+C or `/server stop` releases this; then we close the
-// stores and return, and — with every other thread now a background thread — the process exits.
+// Block for the server's lifetime; Ctrl+C or `/server stop` releases this, then we close the stores and exit.
 server.WaitForShutdown();
 modLoader.StopAll(server); // let mods release anything they own before the stores close
 playerStore.Dispose();

@@ -4,12 +4,9 @@ using SharpMinerals.Items.Components;
 
 namespace SharpMinerals.Items;
 
-/// <summary>
-/// A registered item type — a flyweight definition (one shared instance per kind),
-/// assembled from components. Identity (<see cref="Id"/>, <see cref="Name"/>) is kept as
-/// core fields; everything else (stack size, placement, …) lives in components added via
-/// <c>With(...)</c>. <see cref="BlockType"/> derives from this — every block is also an item.
-/// </summary>
+/// <summary>A registered item type — a flyweight definition (one shared instance per kind) assembled from
+/// components. Everything beyond identity (stack size, placement, …) lives in components.
+/// <see cref="BlockType"/> derives from this — every block is also an item.</summary>
 public class ItemType : ComponentObject {
     public int Id { get; }
     public string Name { get; }

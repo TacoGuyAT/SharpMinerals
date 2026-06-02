@@ -3,17 +3,10 @@ namespace SharpMinerals.Network.Messages;
 // Legacy (pre-Netty, JE61/1.5.2) protocol-mechanics messages. These have no version-agnostic
 // game-domain meaning — they are framing/handshake mechanics specific to the legacy wire format.
 
-/// <summary>
-/// Legacy Server List Ping (0xFE): the client asks for the server's status. Carries the trailing
-/// "magic" byte (1 for the simple 1.5.2 ping). The server replies with a <see cref="LegacyKickS2C"/>
-/// whose text is the §-delimited status string, then closes the connection.
-/// </summary>
+/// <summary>Legacy Server List Ping (0xFE); carries the trailing "magic" byte (1 for the 1.5.2 ping).</summary>
 public sealed record LegacyServerListPingC2S(byte Magic) : IMessage;
 
-/// <summary>
-/// Legacy Disconnect/Kick (0xFF): a single UTF-16BE reason string. Doubles as the server-list-ping
-/// response (the response is delivered as a kick whose text is the status string).
-/// </summary>
+/// <summary>Legacy Disconnect/Kick (0xFF): a UTF-16BE reason; also doubles as the server-list-ping response.</summary>
 public sealed record LegacyKickS2C(string Text) : IMessage;
 
 // ── Legacy login handshake (0x02 → 0xFD → 0xFC → 0xCD → 0x01), see Protocol Encryption ──────────
@@ -21,16 +14,10 @@ public sealed record LegacyKickS2C(string Text) : IMessage;
 /// <summary>Handshake (0x02): the client opens login with its protocol version, name, and the host it dialed.</summary>
 public sealed record LegacyHandshakeC2S(byte ProtocolVersion, string Username, string Host, int Port) : IMessage;
 
-/// <summary>
-/// Encryption Key Request (0xFD): server → client. Carries the server id ("-" in offline mode), the
-/// server's RSA public key (X.509 SubjectPublicKeyInfo) and a short random verify token.
-/// </summary>
+/// <summary>Encryption Key Request (0xFD): server id ("-" offline), RSA public key (X.509 SPKI), random verify token.</summary>
 public sealed record LegacyEncryptionRequestS2C(string ServerId, byte[] PublicKey, byte[] VerifyToken) : IMessage;
 
-/// <summary>
-/// Encryption Key Response (0xFC): client → server. The 16-byte AES shared secret and the verify
-/// token, each RSA/PKCS#1-encrypted with the server's public key.
-/// </summary>
+/// <summary>Encryption Key Response (0xFC): the 16-byte AES shared secret and verify token, each RSA/PKCS#1-encrypted.</summary>
 public sealed record LegacyEncryptionResponseC2S(byte[] SharedSecret, byte[] VerifyToken) : IMessage;
 
 /// <summary>Encryption Key Response (0xFC): server → client, EMPTY payload — the signal to enable AES/CFB8.</summary>
@@ -45,7 +32,7 @@ public sealed record LegacyLoginRequestS2C(
 
 // ── Post-login client chatter (accepted/ignored for now; world streaming is the next milestone) ──
 
-/// <summary>Client Settings (0xCC): locale, view distance, chat flags, difficulty, cape — sent after login.</summary>
+/// <summary>Client Settings (0xCC): sent after login.</summary>
 public sealed record LegacyClientSettingsC2S(string Locale, byte ViewDistance, byte ChatFlags, byte Difficulty, bool ShowCape) : IMessage;
 
 /// <summary>Plugin Message (0xFA): a channel name + opaque payload (e.g. the client's brand).</summary>
@@ -86,16 +73,12 @@ public sealed record LegacyKeepAliveS2C(int Id) : IMessage;
 public sealed record LegacySpawnPositionS2C(int X, int Y, int Z) : IMessage;
 
 /// <summary>
-/// Player Position and Look (0x0D), server → client. Positions the player and unlocks the
-/// "Downloading terrain" screen. NOTE the 1.5.2 quirk: the clientbound field order is
-/// X, <b>Stance, Y</b> (swapped vs serverbound), Z — the codec writes Stance = Y + eye height.
+/// Player Position and Look (0x0D): positions the player, unlocks "Downloading terrain".
+/// 1.5.2 quirk: clientbound field order is X, Stance, Y (swapped vs serverbound), Z; codec writes Stance = Y + eye height.
 /// </summary>
 public sealed record LegacyPlayerPositionLookS2C(
     double X, double Y, double Z, float Yaw, float Pitch, bool OnGround) : IMessage;
 
-/// <summary>
-/// Chunk Data (0x33): one column. The section block/light arrays are pre-built and zlib-compressed by
-/// <see cref="LegacyChunkSerializer"/>; the codec writes the header + the compressed blob.
-/// </summary>
+/// <summary>Chunk Data (0x33): one column; section arrays pre-built and zlib-compressed by <see cref="LegacyChunkSerializer"/>.</summary>
 public sealed record LegacyChunkDataS2C(
     int X, int Z, bool GroundUpContinuous, int PrimaryBitmap, int AddBitmap, byte[] CompressedData) : IMessage;

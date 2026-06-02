@@ -3,10 +3,8 @@ using SharpMinerals.Commands;
 namespace SharpMinerals.Network.Messages;
 
 /// <summary>
-/// Commands / "Declare Commands" (0x10): the command graph for a player, so the client can tab-complete
-/// locally and knows which arguments to ask the server about. Carries the command <see cref="Source"/>; the
-/// codec walks that source's dispatcher Brigadier tree, filtered (via <c>.Requires</c>) to what the source
-/// may run.
+/// Declare Commands (0x10): the command graph for a player (local tab-complete). The codec walks the
+/// <see cref="Source"/>'s Brigadier tree, filtered via <c>.Requires</c> to what the source may run.
 /// </summary>
 public sealed record DeclareCommandsS2C(SenderContext Source) : IMessage;
 

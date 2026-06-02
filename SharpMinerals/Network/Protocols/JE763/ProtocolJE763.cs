@@ -3,16 +3,10 @@ using SharpMinerals.Network.Protocols.JE763.Codecs;
 namespace SharpMinerals.Network.Protocols.JE763;
 
 /// <summary>
-/// Java Edition protocol 763 (Minecraft 1.20.1).
-/// <para/>
-/// Packet ids below are the authoritative 1.20.1 values (cross-checked against
-/// PrismarineJS minecraft-data and verified end-to-end against a real client).
-/// Ids are namespaced by (state, direction); the constants in <see cref="Cb"/> and
-/// <see cref="Sb"/> are the documented id table for this version. Names in comments
-/// are the wiki/registry packet names.
+/// Java Edition protocol 763 (Minecraft 1.20.1). Packet ids in <see cref="Cb"/>/<see cref="Sb"/> are the
+/// authoritative 1.20.1 values (namespaced by state+direction); comments give the wiki/registry names.
 /// </summary>
-// Not sealed: the modern-Java family is a delta chain — a future older protocol becomes this
-// class's base, and a future ProtocolJE765 extends this one (framing stays in ModernJavaProtocol).
+// Not sealed: the modern-Java family is a delta chain (a future ProtocolJE765 extends this one).
 public class ProtocolJE763 : ModernJavaProtocol {
     public override int Version => 763;
     public override string VersionName => "1.20.1";

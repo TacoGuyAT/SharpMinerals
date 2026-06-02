@@ -15,13 +15,8 @@ using SharpMinerals.Network.Protocols.JE61;
 namespace SharpMinerals.Network.Handlers;
 
 /// <summary>
-/// Turns decoded serverbound messages into server actions. This is the seam where
-/// the wire protocol meets game logic: it drives the handshake/status flow, the
+/// Turns decoded serverbound messages into server actions: drives the handshake/status flow, the
 /// offline-mode login, and hands Play-state packets to <see cref="PlayPacketHandler"/>.
-/// <para/>
-/// An instance bound to its <see cref="Server"/> (injected once) — the transport calls
-/// <see cref="Handle"/> per decoded message. Holds the server in a field rather than threading it
-/// through every method.
 /// </summary>
 public sealed class ServerPacketHandler {
     const byte CreativeMode = 1;
@@ -82,27 +77,20 @@ public sealed class ServerPacketHandler {
                 break;
 
             default:
-                // Everything else is a Play-state packet. Legacy in-world packets (movement, settings,
-                // keep-alive echoes, …) have no matching case here and are harmlessly ignored — they're
-                // decoded only so the length-prefix-free legacy stream stays in sync.
+                // Everything else is a Play-state packet. Unmatched legacy in-world packets are harmlessly
+                // ignored (decoded only to keep the length-prefix-free legacy stream in sync).
                 play.Handle(client, message);
                 break;
         }
     }
 
-    /// <summary>
-    /// Offline-mode login: no encryption or authentication. We accept the name,
-    /// derive a deterministic offline UUID, switch to Play, and send the opening
-    /// play packets before spawning the player into the world.
-    /// </summary>
+    /// <summary>Offline-mode login (no encryption or auth).</summary>
     void HandleLogin(NetClient client, LoginStartC2S start) => EnterWorld(client, start.Name);
 
-    /// <summary>Brings a logged-in client into the world synchronously (on the receive thread, so the
-    /// login packets and chunk stream go out in order while the client waits). The one structural step —
-    /// the ECS entity creation in <see cref="Server.AddPlayer"/> — is serialized against the tick there.</summary>
+    /// <summary>Brings a logged-in client into the world synchronously on the receive thread, so login
+    /// packets and the chunk stream go out in order. ECS entity creation is serialized against the tick.</summary>
     void EnterWorld(NetClient client, string requestedName) {
-        // Offline mode derives the UUID from the name, so two clients on the same
-        // account would collide — disambiguate so they're distinct players.
+        // Offline UUIDs derive from the name, so same-account clients would collide; disambiguate.
         string name = Disambiguate(requestedName);
         client.PlayerName = name;
         var uuid = OfflineUuid(name);
@@ -113,10 +101,9 @@ public sealed class ServerPacketHandler {
 
         int entityId = server.AddPlayer(client, name, uuid);
 
-        // Fetch the player's world up front so Join Game advertises the SAME dimension key a later world
-        // switch will Respawn with — keeping the client's world key consistent from the first packet.
+        // Fetch the world up front so Join Game advertises the same dimension key a later world switch's Respawn uses.
         if (!server.TryGetPlayer(client.Id, out var context))
-            return; // just added above, so this never trips — keeps the (now class) context non-null
+            return; // just added above, so this never trips
 
         client.Send(new JoinGameS2C(
             EntityId: entityId,
@@ -126,41 +113,34 @@ public sealed class ServerPacketHandler {
             ViewDistance: 10,
             ReducedDebugInfo: false));
 
-        // Advertise the server brand ("server vendor") so the client's F3 screen
-        // shows us instead of "null".
+        // Advertise the server brand so the client's F3 screen shows us instead of "null".
         client.Send(new BrandS2C($"SharpMinerals v{server.Version}"));
 
-        // Read the player's actual placement (it may have been restored from the store) so we
-        // can sync the client to it; terrain + visibility are handled by PlayerJoined subscribers.
+        // Read the player's placement (possibly restored) to sync the client; terrain + visibility via PlayerJoined.
         var ecs = context.World.Ecs;
         var spawn = ecs.Get<TransformEntityComponent>(context.Entity);
         var health = ecs.Get<HealthEntityComponent>(context.Entity);
         var inventory = ecs.Get<InventoryEntityComponent>(context.Entity);
 
-        // Advertise the command tree so the client can tab-complete (and ask us for server-side suggestions on
-        // ask_server arguments). Filtered to what this player may run.
+        // Advertise the command tree (filtered to what this player may run) for tab-completion.
         client.Send(new DeclareCommandsS2C(new SenderContext(ecs.Get<SenderEntityComponent>(context.Entity), server.CommandDispatcher, client)));
 
         client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
 
-        // Player joined: subscribers stream the initial chunk view (centre chunk + the surrounding
-        // columns) and introduce this player to the others. This must run BEFORE the position sync —
-        // the client discards chunks sent without a centre and needs terrain before being placed.
+        // Must run BEFORE the position sync: the client needs terrain (streamed by subscribers) before being placed.
         server.Events.Publish(new PlayerJoined(context));
 
         client.Send(new SynchronizePlayerPositionS2C(
             spawn.X, spawn.Y, spawn.Z, spawn.Yaw, spawn.Pitch, TeleportId: server.BeginTeleport(client.Id)));
         client.Send(new SetHealthS2C(health.Current, 20, 5f));
 
-        // Send the player's inventory (window 0) so the client reflects the server's contents.
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
         client.Send(new SetHeldItemS2C(inventory.SelectedSlot));
     }
 
     /// <summary>
-    /// Legacy (1.5.2 / protocol 61) server-list ping: reply with a 0xFF kick whose text is the
-    /// §1-delimited status string (protocol, version, MOTD, online/max players), then close. There is
-    /// no JSON and no Status state in the legacy protocol — the ping response IS a kick.
+    /// Legacy (1.5.2) server-list ping: reply with a 0xFF kick whose text is the §1-delimited status string.
+    /// The legacy protocol has no JSON or Status state; the ping response IS a kick.
     /// </summary>
     void HandleLegacyPing(NetClient client) {
         var p = client.Protocol;
@@ -170,46 +150,36 @@ public sealed class ServerPacketHandler {
             server.PlayerCount.ToString(), server.MaxPlayers.ToString());
         Log.LogInformation("#{Client} legacy ({Version}) server-list ping", client.Id, p.VersionName);
         client.Send(new LegacyKickS2C(status));
-        // Do NOT close the socket here. 1.5.2 clients have a documented race: closing immediately after
-        // the 0xFF response resets the connection before they read it, so the server list shows nothing.
-        // Leave it open and let the client close on receipt — the receive loop then ends on EOF.
+        // Do NOT close: 1.5.2 clients race — closing right after 0xFF resets the connection before they read it.
+        // Let the client close on receipt; the receive loop ends on EOF.
     }
 
     /// <summary>
-    /// Legacy login step 1: the client's handshake (0x02). Store the name, mint a 4-byte verify token,
-    /// and request encryption (0xFD) with the server's RSA public key. Offline mode uses server id "-"
-    /// (the client then skips session.minecraft.net auth) — but the AES encryption itself is mandatory.
+    /// Legacy login step 1 (client 0x02): store the name and request encryption (0xFD) with the RSA public key.
+    /// Offline mode uses server id "-" (client skips auth), but AES encryption is still mandatory.
     /// </summary>
     void HandleLegacyHandshake(NetClient client, LegacyHandshakeC2S hs) {
         if (client.Protocol is not ProtocolJE61 je61) return;
         client.PlayerName = hs.Username;
         Log.LogInformation("Legacy (1.5.2) login start: {Name} (protocol {Proto})", hs.Username, hs.ProtocolVersion);
-        // 0xFD requires a verify token; offline mode doesn't validate the echo, so a random one suffices.
+        // Verify token is required but unvalidated in offline mode, so a random one suffices.
         client.Send(new LegacyEncryptionRequestS2C("-", je61.PublicKeyDer, RandomNumberGenerator.GetBytes(4)));
     }
 
     /// <summary>
-    /// Legacy login step 2: the client's 0xFC. RSA-decrypt the shared secret + verify token, check the
-    /// token, then (offline: no Mojang auth) send the empty 0xFC and switch the connection to AES/CFB8.
+    /// Legacy login step 2 (client 0xFC): RSA-decrypt the shared secret, send the empty 0xFC, switch to AES/CFB8.
     /// </summary>
     static void HandleLegacyEncryptionResponse(NetClient client, LegacyEncryptionResponseC2S enc) {
         if (client.Protocol is not ProtocolJE61 je61) return;
 
-        // RSA-decrypt the shared secret (needed for AES). Offline mode does NOT authenticate or validate
-        // the echoed verify token — a wrong key just yields AES garbage and the connection drops next
-        // packet — so there's no per-connection login state to keep.
+        // Offline mode doesn't validate the verify token (a wrong key just yields AES garbage and drops next packet).
         byte[] sharedSecret = je61.DecryptRsa(enc.SharedSecret);
-        // Empty 0xFC goes out PLAINTEXT, then encryption turns on — so our next packet (and the client's)
-        // are AES/CFB8.
+        // Empty 0xFC goes out PLAINTEXT, then encryption turns on, so subsequent packets are AES/CFB8.
         client.Send(new LegacyEncryptionAcceptS2C());
         client.EnableEncryption(sharedSecret);
     }
 
-    /// <summary>
-    /// Legacy login step 3: the client's 0xCD ("initial spawn", over the now-encrypted channel). Send the
-    /// Login Request (0x01). World streaming (spawn position, the 1.5.2 chunk format, keep-alives) is
-    /// legacy-specific and is the next milestone — the client reaches "Downloading terrain" and waits.
-    /// </summary>
+    /// <summary>Legacy login step 3 (client 0xCD "initial spawn", encrypted): brings the player into the world.</summary>
     void HandleLegacyClientStatuses(NetClient client) => EnterLegacyWorld(client);
 
     void EnterLegacyWorld(NetClient client) {
@@ -225,13 +195,9 @@ public sealed class ServerPacketHandler {
             entityId, LevelType: "flat", GameMode: CreativeMode, Dimension: 0, Difficulty: 1,
             MaxPlayers: (byte)System.Math.Min(server.MaxPlayers, 255)));
         client.Send(new LegacySpawnPositionS2C((int)t.X, (int)t.Y, (int)t.Z));
-        // Same lifecycle event as a modern join: ChunkStreamer streams terrain (protocol-aware), and
-        // PlayerVisibility spawns this player to modern clients (modern packets) — while the modern
-        // packets aimed back at THIS legacy client are dropped by CanEncode. So modern players see the
-        // legacy player; the legacy client just doesn't see them yet (its clientbound entity packets
-        // are future work).
-        // A logged-in legacy client is a normal in-world player — the Play state (its decoding uses a
-        // fixed legacy state regardless, so this only affects the protocol-agnostic InWorld checks).
+        // Same lifecycle event as a modern join. Modern players see this legacy player; the modern packets
+        // aimed back at it are dropped by CanEncode (legacy clientbound entity packets are future work).
+        // Play state only affects the protocol-agnostic InWorld checks (legacy decoding uses a fixed state).
         client.State = ConnectionState.Play;
         server.Events.Publish(new PlayerJoined(context));
         client.Send(new LegacyPlayerPositionLookS2C(t.X, t.Y, t.Z, t.Yaw, t.Pitch, true));

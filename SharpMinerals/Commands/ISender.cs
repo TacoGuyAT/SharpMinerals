@@ -9,9 +9,7 @@ namespace SharpMinerals.Commands;
 /// comes back through <see cref="ReceiveMessage"/>.
 /// </summary>
 public interface ISender {
-    /// <summary>A display name for the sender (e.g. "Console" or a player name).</summary>
     string Name { get; }
 
-    /// <summary>Delivers a message to this sender (feedback, chat, command output).</summary>
     void ReceiveMessage(ChatComponent message);
 }

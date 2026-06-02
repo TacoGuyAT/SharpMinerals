@@ -3,13 +3,9 @@ using System.Security.Cryptography;
 namespace SharpMinerals.Network.Buffers;
 
 /// <summary>
-/// AES/CFB8 stream cipher over an inner stream — the legacy (1.5.2 / protocol 61) transport encryption.
-/// Per the protocol, the 16-byte shared secret is used as BOTH the AES key and the IV.
-/// <para/>
-/// CFB8 is implemented manually over AES-ECB (one block encryption per byte) rather than via
-/// <see cref="CipherMode.CFB"/>: .NET's built-in CFB transform reports a 16-byte block size and
-/// mishandles non-block-aligned stream data, whereas this is a true byte-granular stream cipher.
-/// Each direction keeps its own 16-byte shift register; the ciphertext byte is always fed back.
+/// AES/CFB8 stream cipher (legacy 1.5.2 transport encryption); the 16-byte shared secret is both key and IV.
+/// Implemented manually over AES-ECB because .NET's <see cref="CipherMode.CFB"/> mishandles non-block-aligned
+/// stream data. Each direction keeps its own 16-byte shift register; the ciphertext byte is always fed back.
 /// </summary>
 public sealed class AesCfb8Stream : Stream {
     readonly Stream inner;

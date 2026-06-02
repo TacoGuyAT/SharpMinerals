@@ -7,13 +7,9 @@ using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Persistence;
 
-/// <summary>
-/// Serializes a <see cref="Chunk"/> to a self-describing <c>byte[]</c> for disk-backed stores.
-/// Uses a <b>chunk-local palette header</b>: the distinct block NAMES in the chunk are written
-/// once, then each of the 4096 cells references a palette index — compact (a flat chunk has a
-/// handful of names) and id-shift safe. Sparse per-cell block states and block entities
-/// (chest contents, …) follow.
-/// </summary>
+/// <summary>Serializes a <see cref="Chunk"/> to a self-describing <c>byte[]</c>. Uses a chunk-local palette
+/// header (distinct block NAMES written once, then each cell references a palette index — compact and
+/// id-shift safe), followed by sparse per-cell states and block entities.</summary>
 public static class ChunkCodec {
     const byte Version = 1;
     const Mint Volume = Chunk.Size * Chunk.Size * Chunk.Size;
@@ -33,10 +29,9 @@ public static class ChunkCodec {
         s.WriteVarInt(names.Count);
         foreach (var name in names) s.WriteString(name);
 
-        // Dense cells as palette indices.
-        foreach (var id in raw) s.WriteVarInt(indexOf[id]);
+        foreach (var id in raw) s.WriteVarInt(indexOf[id]); // dense cells as palette indices
 
-        // Sparse per-cell block states (chest facing, wool colour, …), by cell index.
+        // Sparse per-cell block states (chest facing, wool colour, …).
         s.WriteVarInt(chunk.CellStates.Count);
         foreach (var (cell, state) in chunk.CellStates) {
             s.WriteVarInt(cell);

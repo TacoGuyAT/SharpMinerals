@@ -4,23 +4,17 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
-/// <summary>
-/// Entity-vs-entity overlap: each entity with a <see cref="CollisionFeedbackEntityComponent"/> box records the
-/// dropped items it overlaps (read by item pickup). Both boxes come from the <see cref="ColliderEntityComponent"/>.
-/// Candidates come from the world's <see cref="SpatialIndex"/> — only items in the few chunk-cubes
-/// around each collider are tested, instead of scanning every item in the world.
-/// </summary>
+/// <summary>Entity-vs-entity overlap: each entity with a <see cref="CollisionFeedbackEntityComponent"/> box
+/// records the dropped items it overlaps (read by item pickup). Candidates come from the
+/// <see cref="SpatialIndex"/>, so only nearby items are tested.</summary>
 public sealed class CollisionFeedbackSystem : ITickable {
     static readonly QueryDescription ColliderQuery = new QueryDescription().WithAll<TransformEntityComponent, CollisionFeedbackEntityComponent, ColliderEntityComponent>();
 
-    // Safe upper bound on pickup reach: a collider's box can extend ~1 block below and up to its
-    // height above, so this sphere comfortably contains every box-valid item. The exact box test below
-    // still decides membership — this only bounds which chunk-cubes the index scans.
+    // Upper bound on pickup reach; bounds which chunk-cubes the index scans (the box test below decides membership).
     const double QueryRadius = 3.0;
 
     readonly World world;
-    // Reused scratch buffer for the per-collider index query (cleared each use; no per-tick alloc).
-    readonly List<ArchEntity> candidates = new();
+    readonly List<ArchEntity> candidates = new(); // reused scratch buffer; no per-tick alloc
 
     public CollisionFeedbackSystem(World world) => this.world = world;
 
@@ -29,7 +23,7 @@ public sealed class CollisionFeedbackSystem : ITickable {
         var ecs = world.Ecs;
 
         world.Ecs.Query(in ColliderQuery, (ArchEntity self, ref TransformEntityComponent t, ref CollisionFeedbackEntityComponent c, ref ColliderEntityComponent box) => {
-            c.Touching.Clear(); // never null: Player.Spawn always constructs the list, on the (single) tick thread
+            c.Touching.Clear(); // never null: Player.Spawn always constructs the list
 
             candidates.Clear();
             index.Near(t.X, t.Y, t.Z, QueryRadius, candidates);
@@ -37,7 +31,7 @@ public sealed class CollisionFeedbackSystem : ITickable {
 
             double tx = t.X, ty = t.Y, tz = t.Z, hw = box.HalfWidth, h = box.Height;
             foreach (var other in candidates) {
-                if (other == self || !ecs.Has<PickupEntityComponent>(other)) continue; // only items, never self
+                if (other == self || !ecs.Has<PickupEntityComponent>(other)) continue; // only items
                 var it = ecs.Get<TransformEntityComponent>(other);
                 var ib = ecs.Get<ColliderEntityComponent>(other);
                 double reach = hw + ib.HalfWidth;

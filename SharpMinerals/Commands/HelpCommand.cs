@@ -3,8 +3,8 @@ using Brigadier.NET.Builder;
 
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/help [command]</c> — lists command usages, or one command's usage. Usage strings come from
-/// the Brigadier tree and are filtered to what the source is allowed to run (the <c>restricted</c> flag).</summary>
+/// <summary><c>/help [command]</c> — lists command usages (or one command's), filtered to what the source
+/// is allowed to run.</summary>
 public static class HelpCommand {
     public static CommandDispatcher RegisterHelp(this CommandDispatcher d) => d.Register(l => l
         .Literal("help")

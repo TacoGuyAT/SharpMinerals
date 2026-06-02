@@ -23,12 +23,6 @@ public enum NbtTagType : byte {
     LongArray = 12,
 }
 
-/// <summary>
-/// Base class for the NBT object model the server keeps in memory before it is
-/// flushed to the wire. Game data (chunks, registries, item components) lives as
-/// ECS components and is converted into these tags on the fly when a packet that
-/// carries NBT is encoded.
-/// </summary>
 public abstract class NbtTag {
     public abstract NbtTagType Type { get; }
 
@@ -36,9 +30,8 @@ public abstract class NbtTag {
     public abstract void WritePayload(NbtStream stream);
 
     /// <summary>
-    /// Writes a complete root tag: a 1-byte type id, the (optionally absent) name,
-    /// then the payload. Set <paramref name="network"/> for the 1.20.2+ nameless
-    /// network form; JE 1.20.1 (protocol 763) still expects the empty name.
+    /// Writes a complete root tag: type id, optional name, payload. Set <paramref name="network"/> for
+    /// the 1.20.2+ nameless form; 1.20.1 (763) still expects the empty name.
     /// </summary>
     public void WriteRoot(MinecraftStream stream, bool network = false) {
         var nbt = new NbtStream(stream);
@@ -183,10 +176,8 @@ public sealed class NbtCompound : NbtTag {
 }
 
 /// <summary>
-/// Big-endian byte sink for NBT payloads. NBT is always big-endian and uses
-/// 2-byte length-prefixed (modified) UTF-8 for names/strings, which differs from
-/// the VarInt-prefixed strings used elsewhere in the protocol — hence its own
-/// thin wrapper rather than reusing <see cref="MinecraftStream"/>'s string codec.
+/// Big-endian byte sink for NBT payloads. NBT uses 2-byte-length-prefixed UTF-8 names/strings,
+/// unlike the VarInt-prefixed strings elsewhere, hence its own wrapper over <see cref="MinecraftStream"/>.
 /// </summary>
 public sealed class NbtStream {
     readonly MinecraftStream stream;

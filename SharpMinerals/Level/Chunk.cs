@@ -3,37 +3,23 @@ using SharpMinerals.Math;
 
 namespace SharpMinerals.Level;
 
-/// <summary>
-/// A cuboid 16×16×16 section of the world. Unlike vanilla's tall 16×384×16 columns,
-/// SharpMinerals uses uniform cubes addressed by a 3D <see cref="Vector3i"/> chunk
-/// coordinate. Block states are stored densely as ids into the
-/// <see cref="BlockRegistry"/> (0 = air).
-/// </summary>
+/// <summary>A cuboid 16×16×16 section of the world, addressed by a 3D <see cref="Vector3i"/> chunk
+/// coordinate (uniform cubes, not vanilla's tall columns). Block states are stored densely as ids into
+/// the <see cref="BlockRegistry"/> (0 = air).</summary>
 public class Chunk : ITickable {
     public const Mint Mask = 0b1111;
     public const int Shifts = 4;
     public const Mint Size = 1 << Shifts;
     const Mint Volume = Size * Size * Size;
 
-    readonly ushort[] states = new ushort[Volume]; // defaults to all-air (id 0)
-
-    // Per-instance block data (chests, TNT fuses, …), keyed by world position. Only
-    // blocks that need state live here; plain blocks are just an id in `states`.
+    readonly ushort[] states = new ushort[Volume];
     readonly Dictionary<Vector3i, BlockEntity> blockEntities = new();
-
-    // The subset of block entities that tick (furnaces smelting, hoppers moving items, …). Kept as a
-    // separate list so Tick doesn't scan every block entity testing for ITickable each tick. Block
-    // entities are sparse and rarely added/removed, so maintaining this on set/remove is cheap.
     readonly List<ITickable> tickingBlockEntities = new();
-
-    // Sparse per-cell block state (chest facing, slab type, …), keyed by local cell index.
-    // Only stateful cells live here; a plain cell is just its type id in `states`.
-    readonly Dictionary<int, BlockState> blockStates = new();
+    readonly Dictionary<int, BlockState> blockStates = new(); // keyed by local cell index, not world position
 
     /// <summary>This chunk's coordinate in chunk space (world = chunk * 16 + local).</summary>
     public Vector3i Position { get; }
 
-    /// <summary>True once gameplay has modified this chunk since it was last saved/loaded.</summary>
     public bool Dirty { get; private set; }
 
     public Chunk(Vector3i position) => Position = position;
@@ -47,8 +33,8 @@ public class Chunk : ITickable {
     public void SetState(Mint x, Mint y, Mint z, ushort state) { states[Index(x, y, z)] = state; Dirty = true; }
 
     // ── Serialization access (same-assembly persistence codec) ───────────────
-    internal ushort[] RawStates => states;                                       // dense block ids
-    internal IReadOnlyDictionary<int, BlockState> CellStates => blockStates;     // sparse, by cell index
+    internal ushort[] RawStates => states;
+    internal IReadOnlyDictionary<int, BlockState> CellStates => blockStates;
     internal void PutCellState(int cellIndex, BlockState state) => blockStates[cellIndex] = state;
     internal IReadOnlyCollection<BlockEntity> Entities => blockEntities.Values;
 
@@ -70,7 +56,6 @@ public class Chunk : ITickable {
     public BlockEntity? GetBlockEntity(Vector3i worldPos) => blockEntities.GetValueOrDefault(worldPos);
 
     public void SetBlockEntity(BlockEntity entity) {
-        // Replacing one at this position drops the old from the ticking list first.
         if (blockEntities.TryGetValue(entity.Position, out var prev) && prev is ITickable oldTick)
             tickingBlockEntities.Remove(oldTick);
         blockEntities[entity.Position] = entity;
@@ -87,7 +72,6 @@ public class Chunk : ITickable {
     }
 
     public void Tick() {
-        // Only block entities that opted into ticking (implement ITickable) — e.g. furnaces, hoppers.
         foreach (var be in tickingBlockEntities)
             be.Tick();
     }

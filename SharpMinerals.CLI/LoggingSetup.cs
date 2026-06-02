@@ -9,9 +9,8 @@ using MsLogLevel = Microsoft.Extensions.Logging.LogLevel;
 namespace SharpMinerals.CLI;
 
 /// <summary>
-/// Host-side logging bootstrap. Builds the ZLogger backend (console plus an optional daily rolling
-/// file) and installs it as the core library's <see cref="Logging.Factory"/>. Keeping this in the
-/// executable is what lets the core library carry no logging-implementation dependency.
+/// Host-side logging bootstrap: builds the ZLogger backend (console plus an optional daily rolling file) and
+/// installs it as the core library's <see cref="Logging.Factory"/>, so core carries no logging-impl dependency.
 /// </summary>
 static class LoggingSetup {
     /// <summary>
@@ -26,21 +25,18 @@ static class LoggingSetup {
         Logging.Factory = LoggerFactory.Create(builder => {
             builder.SetMinimumLevel(ToMs(level));
 
-            // Console gets the colour-coded layout (Kokuban emits ANSI only on a colour-capable terminal,
-            // and yields plain text when stdout is redirected); the file always gets the plain layout.
+            // Console gets the coloured layout (plain when stdout is redirected); the file gets the plain one.
             builder.AddZLoggerConsole(options => options.UsePlainTextFormatter(FormatColoured));
 
             if (toFile) {
-                // Daily rolling file: sharpminerals-yyyy-MM-dd_000.log, with a sequence suffix if a single
-                // day's log exceeds the size cap. Mirrors the old Serilog RollingInterval.Day sink.
+                // Daily rolling file with a sequence suffix once a day's log exceeds the size cap.
                 builder.AddZLoggerRollingFile(options => {
                     options.FilePathSelector = (date, sequence) =>
                         Path.Combine(logsDir!, $"sharpminerals-{date.ToLocalTime():yyyy-MM-dd}_{sequence:000}.log");
                     options.RollingInterval = RollingInterval.Day;
                     options.RollingSizeKB = 1024;
-                    // The prefix is plain, but a coloured chat line (rendered by ChatAnsi on a terminal) carries
-                    // ANSI in the message body, and that body string is shared with the console sink. Strip any
-                    // escape codes here so the file is always clean, regardless of the console's colour state.
+                    // A coloured chat line shares its ANSI message body with the console sink; strip escape
+                    // codes here so the file is always clean regardless of the console's colour state.
                     options.UseFormatter(() => {
                         var inner = new PlainTextZLoggerFormatter();
                         FormatPlain(inner);
@@ -50,16 +46,14 @@ static class LoggingSetup {
             }
         });
 
-        // ZLogger writes on a background thread, so buffered entries are flushed only on dispose — unlike
-        // Serilog's synchronous sinks. Dispose the factory at process exit so the tail of the log (shutdown
-        // messages, a final exception) isn't lost. Idempotent, and keeps flush ownership here in the setup.
+        // ZLogger buffers on a background thread and flushes only on dispose, so dispose the factory at process
+        // exit or the tail of the log (shutdown messages, a final exception) is lost.
         var factory = Logging.Factory;
         AppDomain.CurrentDomain.ProcessExit += (_, _) => factory.Dispose();
     }
 
-    // [HH:mm:ss.fff LVL] Category: message{newline}{exception} — the layout the old Serilog template emitted.
-    // FormatPlain is the file/redirected form; FormatColoured (console) colours the level token by severity,
-    // the way Serilog's literate console theme did.
+    // [HH:mm:ss.fff LVL] Category: message prefix. FormatPlain is the file form; FormatColoured is the console
+    // form (Abbreviate colours the level token by severity).
     static void FormatPlain(PlainTextZLoggerFormatter formatter) =>
         formatter.SetPrefixFormatter(
             $"[{0:HH:mm:ss.fff} {1}] {2}: ",
@@ -72,7 +66,7 @@ static class LoggingSetup {
             (in MessageTemplate template, in LogInfo info) =>
                 template.Format(info.Timestamp, Abbreviate(info.LogLevel), info.Category));
 
-    // Serilog's "u3" three-letter, upper-case level abbreviation.
+    // Three-letter upper-case level token, coloured by severity.
     static string Abbreviate(MsLogLevel level) => level switch {
         MsLogLevel.Trace => Chalk.Gray["TRC"],
         MsLogLevel.Debug => Chalk.Cyan["DBG"],
@@ -93,9 +87,8 @@ static class LoggingSetup {
     };
 
     /// <summary>
-    /// Wraps another formatter and removes ANSI CSI escape sequences (e.g. SGR colour codes) from its output
-    /// before writing. Used for the file sink so a colour line that's fine on the console never lands as raw
-    /// escape codes on disk. A provider formats on a single background thread, so the scratch buffer is reused.
+    /// Wraps a formatter and strips ANSI CSI escape sequences from its output, so the file sink never lands
+    /// raw escape codes on disk. Formatting runs on a single background thread, so the scratch buffer is reused.
     /// </summary>
     sealed class AnsiStrippingFormatter(IZLoggerFormatter inner) : IZLoggerFormatter {
         readonly ArrayBufferWriter<byte> scratch = new();

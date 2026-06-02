@@ -4,11 +4,8 @@ using SharpMinerals.Items.Components;
 
 namespace SharpMinerals.Items;
 
-/// <summary>
-/// Registry of non-block items. Block-items live in <c>BlockRegistry</c> (every block
-/// is an item), so this currently holds nothing — it's the home for future pure items
-/// (tools, food, …). Ids are assigned in registration order.
-/// </summary>
+/// <summary>Registry of non-block items (tools, food, …). Block-items live in <c>BlockRegistry</c>. Ids are
+/// assigned in registration order.</summary>
 public static class ItemRegistry {
     static readonly List<ItemType> byId = new();
     static readonly Dictionary<string, ItemType> byName = new();

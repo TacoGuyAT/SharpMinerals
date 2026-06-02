@@ -2,12 +2,8 @@ using SharpMinerals.Blocks.Descriptors;
 
 namespace SharpMinerals.Blocks;
 
-/// <summary>
-/// A concrete block state: a <see cref="BlockType"/> plus a value for each of its
-/// <c>StateProperties</c> (chest facing, slab type, …). Plain (stateless) blocks have no
-/// <c>BlockState</c> stored — a cell is just the type id; only stateful blocks keep one in
-/// the chunk's sparse state table. Values are indices into each property's value list.
-/// </summary>
+/// <summary>A concrete block state: a <see cref="BlockType"/> plus a value (index into the property's value
+/// list) for each of its state properties. Stateless blocks store no <c>BlockState</c>, just the type id.</summary>
 public sealed class BlockState {
     public BlockType Type { get; }
     readonly int[] values; // one per property, in StateProperties order; default 0
@@ -38,18 +34,14 @@ public sealed class BlockState {
         return copy;
     }
 
-    /// <summary>
-    /// The state a DROPPED ITEM of this block should carry: item-identity properties
-    /// (<see cref="State.PreservedInItem"/>, e.g. colour) are kept; placement-only properties
-    /// (facing, axis, …) are reset to default — so a chest facing east drops as a plain chest, but
-    /// red wool stays red.
-    /// </summary>
+    /// <summary>The state a dropped item of this block carries: item-identity properties
+    /// (<see cref="State.PreservedInItem"/>) are kept, placement-only ones reset to default.</summary>
     public BlockState ForDrop() {
         var copy = Clone();
         if (Type.TryGet<StatesBlockDescriptor>(out var sp))
             for (int i = 0; i < sp.States.Count; i++)
                 if (!sp.States[i].PreservedInItem)
-                    copy.values[i] = 0; // reset placement-only property to its default
+                    copy.values[i] = 0;
         return copy;
     }
 

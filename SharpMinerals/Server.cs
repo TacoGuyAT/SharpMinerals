@@ -17,74 +17,58 @@ using SharpMinerals.Commands;
 
 namespace SharpMinerals;
 
-/// <summary>
-/// The top-level server. Drives a fixed-rate game loop on its own thread using
-/// <see cref="PrecisionClock"/> and ticks every world each tick. The transport
-/// (<see cref="NetServer"/>) runs its own threads and feeds decoded messages into
-/// server logic.
-/// </summary>
+/// <summary>The top-level server: drives a fixed-rate game loop on its own thread and ticks every world.
+/// The transport (<see cref="NetServer"/>) runs its own threads and feeds decoded messages into server logic.</summary>
 public class Server : ITickable {
     static readonly ILogger Log = Logging.For("Server");
 
-    /// <summary>True while the game loop is running.</summary>
     public bool IsRunning => running;
 
     ServerContext context;
     readonly IPlayerStore playerStore;
     volatile bool running;
-    int stopping; // 0/1 guard so Stop() runs its teardown exactly once
+    int stopping; // guard so Stop() tears down exactly once
     readonly ManualResetEventSlim stopped = new(false);
     Thread? loopThread;
     long currentTick;
     int nextEntityId;
     int nextTeleportId;
 
-    // Clients with an unconfirmed teleport — their position updates are ignored until they send
-    // Confirm Teleportation with the matching id (else a teleport-far player bounces back).
+    // Clients with an unconfirmed teleport: their position updates are ignored until they confirm the id.
     readonly ConcurrentDictionary<ulong, int> pendingTeleports = new();
 
-    /// <summary>Allocates a fresh network entity id for spawned entities.</summary>
     public int NextEntityId() => Interlocked.Increment(ref nextEntityId);
 
     /// <summary>Maps a connected client to the world + entity that represents its player.</summary>
     readonly ConcurrentDictionary<ulong, PlayerContext> players = new();
 
     /// <summary>Serializes ECS structural changes (player spawn/despawn on network threads) against the
-    /// tick's entity systems, so a join/leave can't race the simulation's queries. Held only briefly.</summary>
+    /// tick's entity systems, so a join/leave can't race the simulation's queries.</summary>
     readonly object ecsGate = new();
 
     public INetServer NetServer => context.NetServer;
 
-    /// <summary>
-    /// The general broadcast entry point: sends a message to an audience of clients — by default every
-    /// in-world client. Callers pass the message (and optionally narrow the audience) instead of
-    /// repeating the connection-state predicate; the transport encodes once per protocol version and
-    /// silently drops the message for any client whose protocol can't encode it.
-    /// </summary>
+    /// <summary>Sends a message to an audience of clients (default: every in-world client). The transport
+    /// encodes once per protocol version and drops the message for any client whose protocol can't encode it.</summary>
     public void BroadcastMessage(IMessage message, Func<NetClient, bool>? audience = null) =>
         NetServer.Broadcast(message, audience ?? (static c => c.InWorld));
 
-    /// <summary>Broadcasts a chat component as a system chat message to an audience (default: in-world).
-    /// The chat-flavoured wrapper over <see cref="BroadcastMessage"/> so callers don't build the packet.</summary>
+    /// <summary>Broadcasts a chat component as a system chat message to an audience (default: in-world).</summary>
     public void BroadcastChatMessage(ChatComponent message, bool overlay = false, Func<NetClient, bool>? audience = null) {
         Sender.ReceiveMessage(message);
         BroadcastMessage(new SystemChatMessageS2C(message, overlay), audience);
     }
 
-    /// <summary>Sets the player-list (tab) header and footer for an audience of clients (default: every
-    /// in-world client). The header and footer travel in one packet, so pass both — a null line is sent
-    /// empty. Narrow the audience with <paramref name="audience"/> (e.g. just the joining player).</summary>
+    /// <summary>Sets the player-list (tab) header and footer for an audience (default: every in-world client).
+    /// Pass both — they travel in one packet; a null line is sent empty.</summary>
     public void SetTabListHeaderFooter(ChatComponent? header, ChatComponent? footer, Func<NetClient, bool>? audience = null) =>
         BroadcastMessage(new PlayerListHeaderFooterS2C(header ?? new TextComponent(""), footer ?? new TextComponent("")), audience);
 
-    /// <summary>The command dispatcher, so any <see cref="Commands.ISender"/> can issue commands.
-    /// Assigning it injects this server into the dispatcher (so it and its commands need no static access).</summary>
     public CommandDispatcher CommandDispatcher { get => commandDispatcher; }
     readonly CommandDispatcher commandDispatcher;
 
     /// <summary>The server console as a command/chat sender, owned here so every host shares one console
-    /// identity: the CLI wires its stdin/stdout to it, and an in-process test drives commands as it and reads
-    /// the replies. Issue console commands with <c>Console.ExecuteAsync(Commands, "/…")</c>.</summary>
+    /// identity. Issue console commands with <c>Console.ExecuteAsync(Commands, "/…")</c>.</summary>
     public ServerSender Sender { get; }
 
     /// <summary>Open container windows (chests) and their multiplayer sync.</summary>
@@ -112,23 +96,18 @@ public class Server : ITickable {
             context.TicksPerSecond = 20.0;
         playerStore = ctx.PlayerStore ?? new InMemoryPlayerStore();
 
-        // Let each owned world publish its simulation events (entity moves, …) onto our bus.
         foreach (var world in Worlds.Values)
             world.Events = Events;
 
-        // Keep each world's spatial index current: any entity move (item OR player — PlayerMoved is an
-        // EntityMoved) re-files the entity, re-bucketing only when it crosses a chunk boundary.
+        // Keep each world's spatial index current on any entity move (player or item).
         Events.Subscribe<EntityMoved>(OnEntityMoved);
         Events.Subscribe<PlayerJoined>((e) => BroadcastChatMessage(new TextComponent($"{e.Context.Player.Name} joined the game").SetColor(TextColor.Yellow)));
         Events.Subscribe<PlayerLeft>((e) => BroadcastChatMessage(new TextComponent($"{e.Context.Player.Name} left the game").SetColor(TextColor.Yellow)));
-        // Free the disconnected player's command-parse cache state (their cached parses lapse via the TTL).
         Events.Subscribe<PlayerLeft>((e) => commandDispatcher.Forget(e.Context.Client.Id));
 
-        // Wire the built-in systems to the event bus. Chunk streaming before visibility so a
-        // joining client gets terrain before other players' spawns.
+        // Chunk streaming registered before visibility so a joining client gets terrain before other spawns.
         ChunkStreamer.Register(Events);
         PlayerVisibility.Register(Events);
-        // Broadcast the client effects of the world simulation's deferred pickup/landing events.
         Network.Handlers.EntityNetworking.RegisterHandlers(this);
     }
 
@@ -151,8 +130,8 @@ public class Server : ITickable {
 
         NetServer.Start();
 
-        // Background: the host owns the process lifetime by blocking on WaitForShutdown, so a
-        // stopped server never leaves a stray foreground thread keeping the app alive.
+        // Background thread: the host owns process lifetime via WaitForShutdown, so a stopped server
+        // never leaves a stray foreground thread alive.
         loopThread = new Thread(RunLoop) {
             Name = "SharpMinerals Tick Loop",
             IsBackground = true,
@@ -162,17 +141,14 @@ public class Server : ITickable {
         Log.LogInformation("Server started — {Tps} TPS, MOTD: \"{Motd}\"", TicksPerSecond, MOTD);
     }
 
-    /// <summary>
-    /// Signals the loop to stop, tears down the transport, flushes all saves, and releases
-    /// <see cref="WaitForShutdown"/>. Idempotent — safe to call from Ctrl+C and <c>/server stop</c>.
-    /// </summary>
+    /// <summary>Signals the loop to stop, tears down the transport, flushes all saves, and releases
+    /// <see cref="WaitForShutdown"/>. Idempotent — safe from Ctrl+C and <c>/server stop</c>.</summary>
     public void Stop() {
-        if (Interlocked.Exchange(ref stopping, 1) == 1) return; // already stopping
+        if (Interlocked.Exchange(ref stopping, 1) == 1) return;
         running = false;
         NetServer.Stop();
         loopThread?.Join(TimeSpan.FromSeconds(5));
-        // Transport + loop are down (single-threaded now): apply any work queued just before
-        // shutdown (e.g. a final /save or a last block edit), then flush everything.
+        // Transport + loop are down: apply any work queued just before shutdown, then flush everything.
         Events.DrainDeferred();
         SavePlayers();
         SaveWorlds();
@@ -180,10 +156,7 @@ public class Server : ITickable {
         Log.LogInformation("Server stopped");
     }
 
-    /// <summary>
-    /// Blocks until the server has fully stopped (via Ctrl+C, <c>/server stop</c>, or a direct
-    /// <see cref="Stop"/>). A host calls this to run for the server's lifetime, then clean up + exit.
-    /// </summary>
+    /// <summary>Blocks until the server has fully stopped. A host calls this to run for the server's lifetime.</summary>
     public void WaitForShutdown() => stopped.Wait();
 
     /// <summary>Persists every world's modified chunks to its store (if any). Returns chunks written.</summary>
@@ -218,10 +191,7 @@ public class Server : ITickable {
             ecs.Get<InventoryEntityComponent>(entity)));
     }
 
-    /// <summary>
-    /// The heart of the server. PrecisionTimer paces the loop to a steady rate
-    /// (50 ms at 20 TPS) without busy-waiting on platforms that support it.
-    /// </summary>
+    /// <summary>The game loop. PrecisionTimer paces it to a steady rate without busy-waiting.</summary>
     void RunLoop() {
         var timer = new PrecisionClock(1000.0 / TicksPerSecond);
         while (running) {
@@ -245,38 +215,31 @@ public class Server : ITickable {
     const int EvictMargin = 2;
 
     public void Tick() {
-        // Hold the ECS gate for the whole tick: the drain (block/drop creation), the parallel entity
-        // systems (which now own pickup despawns + falling-block landing), and the autosave (reads player
-        // entities) all touch the ECS, and a network-thread join/leave must not run concurrently with any.
+        // Hold the ECS gate for the whole tick so a network-thread join/leave can't race the drain,
+        // the parallel entity systems, or the autosave — all of which touch the ECS.
         lock (ecsGate) {
-            // Single-writer phase: apply queued mutations/events (block break/place, container edits)
-            // on THIS thread first, so the rest of the tick — and autosave — sees a consistent world
-            // with no concurrent chunk edits from the network threads.
+            // Single-writer phase: apply queued mutations on THIS thread first so the rest of the tick
+            // (and autosave) sees a consistent world with no concurrent chunk edits from network threads.
             Events.DrainDeferred();
 
-            // Announce newly-spawned entities (drops, falling blocks) BEFORE physics, so the client gets
-            // their un-decayed spawn position + velocity and mirrors the motion the server is about to run.
+            // Announce newly-spawned entities BEFORE physics, so the client gets their un-decayed spawn
+            // position + velocity and mirrors the motion the server is about to run.
             Network.Handlers.EntityNetworking.AnnounceNew(this);
 
-            // Worlds are independent, so they can tick in parallel. The per-world systems now own the
-            // simulation — gravity/collision, item pickup, and falling-block landing — and publish their
-            // client effects as DEFERRED events, broadcast on this thread when the bus next drains.
+            // Worlds are independent, so they tick in parallel; their systems publish client effects as
+            // deferred events, broadcast on this thread when the bus next drains.
             Worlds.Values.AsParallel().ForAll(w => w.Tick());
 
-            // Keep connections alive once a second: ONE generic KeepAliveS2C, mapped per protocol at encode
-            // (modern long id / legacy 0x00 int). Reaches modern Play clients + in-world legacy clients.
+            // Keepalive once a second; one generic packet mapped per protocol at encode.
             if (currentTick % (long)TicksPerSecond == 0)
                 NetServer.Broadcast(new KeepAliveS2C(currentTick), c => c.InWorld);
 
-            // Periodic autosave — safe now that all world + player mutations are confined to the drain
-            // phase above (this thread). Serializes on this thread; the async stores flush off-thread.
+            // Autosave/eviction — safe here because all mutations are confined to the drain phase above.
             if (currentTick > 0 && currentTick % AutosaveTicks == 0) {
                 SaveWorlds();
                 SavePlayers();
             }
 
-            // Periodic chunk eviction — drop chunks no player can see (saving dirty ones), bounding
-            // memory/disk. Safe on this thread for the same single-writer reason as autosave.
             if (currentTick > 0 && currentTick % EvictTicks == 0)
                 EvictChunks();
         }
@@ -284,7 +247,6 @@ public class Server : ITickable {
 
     /// <summary>Drops chunks no online player can see (saving dirty ones first) across every world.</summary>
     public void EvictChunks() {
-        // Gather each online player's view-centre column, grouped by world.
         var centersByWorld = new Dictionary<World, List<(long X, long Z)>>();
         foreach (var (_, context) in players) {
             if (!context.World.Ecs.IsAlive(context.Entity)) continue;
@@ -313,15 +275,14 @@ public class Server : ITickable {
     public int AddPlayer(NetClient client, string name, Guid uuid) {
         var world = DefaultWorld;
         int entityId = NextEntityId();
-        // Restore a previous session's entity state (position/rotation/health/inventory) if any.
+        // Restore a previous session's entity state if any.
         PlayerState? saved = playerStore.TryLoad(uuid, out var state) ? state : null;
         ArchEntity entity;
-        // The ECS entity creation is a structural change — serialize it with the tick (see Tick) so it
-        // can't run while a world-tick query is iterating archetypes on another thread.
+        // Entity creation is a structural change — serialize it with the tick so it can't run while a
+        // world-tick query iterates archetypes on another thread.
         lock (ecsGate) {
             entity = world.SpawnPlayer(client.Id, name, uuid, entityId, saved);
-            // Give the player's chat sender its backing connection (chat delivery + command-source identity)
-            // — the component reaches the client through this injected reference, no global static.
+            // Inject the player's chat sender connection (chat delivery + command-source identity).
             if (world.Ecs.Has<SenderEntityComponent>(entity))
                 world.Ecs.Get<SenderEntityComponent>(entity).Client = client;
         }
@@ -331,19 +292,17 @@ public class Server : ITickable {
         return entityId;
     }
 
-    /// <summary>Gets a world by name, creating a fresh in-memory superflat one (wired to the event bus and
-    /// ticked with the others) if it doesn't exist — the basis for per-test world isolation on a live
-    /// connection.</summary>
+    /// <summary>Gets a world by name, creating one via <paramref name="factory"/> (wired to the bus and
+    /// ticked with the others) if it doesn't exist.</summary>
     public World GetOrCreateWorld(string name, Func<string, Server, World> factory) =>
         Worlds.GetOrAdd(name, n => factory.Invoke(n, this));
 
-    /// <summary>Unloads <paramref name="target"/>: removes it from the world set (so the tick loop stops
-    /// ticking it) and frees its ECS + chunks. Refuses the default world or one that still has players.
-    /// Runs under the ECS gate, which the tick also holds — so the teardown can't race a tick mid-flight.
-    /// Returns whether it unloaded.</summary>
+    /// <summary>Unloads <paramref name="target"/>, freeing its ECS + chunks. Refuses the default world or
+    /// one that still has players. Runs under the ECS gate so teardown can't race a tick. Returns whether
+    /// it unloaded.</summary>
     public bool UnloadWorld(World target) {
         if (ReferenceEquals(target, DefaultWorld))
-            return false; // the lobby/default world stays loaded for the session
+            return false;
         lock (ecsGate) {
             if (target.PlayerCount > 0)
                 return false; // never pull a world out from under a player
@@ -357,17 +316,15 @@ public class Server : ITickable {
 
 #if TEST_HARNESS
     /// <summary>Raised when a test client replies on the <c>sharptester:cmd</c> control channel: (clientId,
-    /// reply text). The in-process harness subscribes here to read a command's result back over the channel —
-    /// it sends the command itself through the existing <c>/test</c> command. Fired on a network receive thread.</summary>
+    /// reply text). Fired on a network receive thread.</summary>
     public event Action<ulong, string>? TestClientReply;
     internal void RaiseTestClientReply(ulong clientId, string reply) => TestClientReply?.Invoke(clientId, reply);
 #endif
 
     /// <summary>Moves a connected player to <paramref name="target"/> WITHOUT a reconnect: carries the entity
-    /// (position, health, inventory; same network id) into it, Respawns the client, re-streams the new
-    /// world's chunks, and re-positions the player. The Respawn carries the target world's UNIQUE dimension key
-    /// (see <see cref="DimensionId"/>), which is what forces the client to drop the old world's entities/chunks
-    /// and fully reload — the dimension <em>type</em> stays <c>minecraft:overworld</c> (all worlds are flat).</summary>
+    /// (position, health, inventory; same network id), respawns the client, and re-streams chunks. The respawn
+    /// uses the target's unique world name as the dimension key, which forces the client to drop the old
+    /// world's entities/chunks; the dimension <em>type</em> stays <c>minecraft:overworld</c>.</summary>
     public void SwitchWorld(ulong clientId, World target) {
         if (!players.TryGetValue(clientId, out var ctx) || !ctx.World.Ecs.IsAlive(ctx.Entity))
             return;
@@ -377,7 +334,7 @@ public class Server : ITickable {
         var old = ctx.World;
         var info = old.Ecs.Get<NetPlayerEntityComponent>(ctx.Entity);
 
-        // Despawn the entity for anyone who could still see it (the player stays online — no tab-list change).
+        // Despawn the entity for anyone who could still see it (player stays online — no tab-list change).
         NetServer.Broadcast(new RemoveEntitiesS2C(new[] { info.EntityId }), c => c.InWorld && c.Id != clientId);
 
         PlayerContext moved;
@@ -396,22 +353,19 @@ public class Server : ITickable {
             players[clientId] = moved;
         }
 
-        // Reload the client into the target world. WorldName is the target's unique key (≠ the old world's),
-        // which is what makes the client tear down the old entities/chunks; the type stays overworld.
+        // Reload the client into the target world (WorldName = target's unique key forces the teardown).
         client.Send(new RespawnS2C("minecraft:overworld", target.Name, HashedSeed: 0, GameMode: 1, IsFlat: true));
         client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
         ChunkStreamer.StreamInitial(moved); // fresh ChunkView ⇒ streams the new world's columns
         var t = target.Ecs.Get<TransformEntityComponent>(moved.Entity);
         client.Send(new SynchronizePlayerPositionS2C(t.X, t.Y, t.Z, t.Yaw, t.Pitch, BeginTeleport(clientId)));
         client.Send(new SetHealthS2C(target.Ecs.Get<HealthEntityComponent>(moved.Entity).Current, 20, 5f));
-        // The player's world changed — invalidate their cached parses so any world/dimension-gated .Requires
-        // re-evaluates against the new world on next command.
+        // World changed — invalidate cached parses so world/dimension-gated .Requires re-evaluate.
         commandDispatcher.Invalidate(clientId);
         Log.LogInformation("{Name} switched to world '{World}'", info.Name, target.Name);
     }
 
-    // Re-files a moved entity in its world's spatial index. Runs for items on the tick thread
-    // (deferred drain) and for players on the network thread; the index is concurrent.
+    // Re-files a moved entity in its world's spatial index (concurrent: runs on tick + network threads).
     static void OnEntityMoved(EntityMoved e) {
         if (!e.World.Ecs.IsAlive(e.Entity)) return; // despawned between move and (deferred) handling
         var t = e.World.Ecs.Get<TransformEntityComponent>(e.Entity);
@@ -419,10 +373,8 @@ public class Server : ITickable {
     }
 
     // ── Teleports ────────────────────────────────────────────────────────────
-    /// <summary>
-    /// Registers a teleport (a fresh id, marked pending): the client's position updates are ignored
-    /// until it confirms this id. Returns the id to send in the SynchronizePlayerPosition packet.
-    /// </summary>
+    /// <summary>Registers a pending teleport: the client's position updates are ignored until it confirms
+    /// this id. Returns the id to send in the SynchronizePlayerPosition packet.</summary>
     public int BeginTeleport(ulong clientId) {
         int id = Interlocked.Increment(ref nextTeleportId);
         pendingTeleports[clientId] = id;
@@ -438,11 +390,8 @@ public class Server : ITickable {
             pendingTeleports.TryRemove(new KeyValuePair<ulong, int>(clientId, teleportId));
     }
 
-    /// <summary>
-    /// Teleports a player to a position: streams terrain around the destination and shows the move
-    /// to other players, then sends the position sync and ignores the client's stale positions
-    /// until it confirms.
-    /// </summary>
+    /// <summary>Teleports a player to a position: streams terrain around the destination, shows the move to
+    /// others, sends the position sync, and ignores the client's stale positions until it confirms.</summary>
     public void TeleportPlayer(ulong clientId, double x, double y, double z, float yaw, float pitch) {
         if (!players.TryGetValue(clientId, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
@@ -465,11 +414,10 @@ public class Server : ITickable {
         pendingTeleports.TryRemove(clientId, out _);
         if (!players.TryRemove(clientId, out var context))
             return;
-        // Despawn under the same gate as the tick — destroying the entity (and reading it to persist)
-        // must not race the world-tick queries.
+        // Despawn under the tick gate: destroying + reading the entity must not race the world-tick queries.
         lock (ecsGate) {
             if (context.World.Ecs.IsAlive(context.Entity)) {
-                // Persist the entity's state so a reconnect (same UUID) restores it.
+                // Persist so a reconnect (same UUID) restores it.
                 PersistPlayer(context.World, context.Entity);
                 Events.Publish(new PlayerLeft(context));
                 context.World.DestroyEntity(context.Entity);
@@ -477,7 +425,6 @@ public class Server : ITickable {
         }
     }
 
-    /// <summary>Looks up the world + entity backing a connected client.</summary>
     public bool TryGetPlayer(ulong clientId, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out PlayerContext context) =>
         players.TryGetValue(clientId, out context);
 }

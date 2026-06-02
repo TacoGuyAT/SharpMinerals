@@ -4,12 +4,9 @@ using Microsoft.Extensions.Logging;
 
 namespace SharpMinerals.Persistence;
 
-/// <summary>
-/// A write-behind queue: callers hand off <c>(key, value)</c> snapshots and a single background
-/// worker drains them to the underlying synchronous write, off the hot path. Same-key writes
-/// <b>coalesce</b> to the latest value (fewer disk writes), and a pending map provides
-/// <b>read-after-write</b> consistency before the worker has flushed. <see cref="Dispose"/> drains.
-/// </summary>
+/// <summary>A write-behind queue: callers hand off <c>(key, value)</c> snapshots and a single background
+/// worker drains them to the synchronous write, off the hot path. Same-key writes coalesce to the latest
+/// value, and a pending map gives read-after-write consistency. <see cref="Dispose"/> drains.</summary>
 internal sealed class WriteBehind<TKey, TValue> : IDisposable where TKey : notnull {
     static readonly ILogger Log = Logging.For("Persistence");
 

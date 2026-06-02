@@ -1,12 +1,8 @@
 ﻿namespace SharpMinerals.Network.Nbt;
 
 /// <summary>
-/// Builds the "registry codec" NBT sent inside the Join Game packet. A 1.20.1
-/// client refuses to join unless this compound describes the dimension type it
-/// spawns into plus the biome, chat-type and damage-type registries. This is a
-/// minimal-but-valid subset of vanilla's data — enough for the client to load the
-/// world without a "Loading NBT data" decoder error.
-/// See https://minecraft.wiki/w/Java_Edition_protocol#Login_(play) (registry codec).
+/// Builds the registry-codec NBT sent in the Join Game packet. A 1.20.1 client refuses to join unless
+/// this describes the dimension type, biome, chat-type and damage-type registries; a minimal-but-valid subset.
 /// </summary>
 public static class RegistryCodec {
     /// <summary>The registry codec compound, built programmatically (no external data).</summary>
@@ -47,8 +43,7 @@ public static class RegistryCodec {
     static NbtCompound Overworld() => new NbtCompound()
         .Put("piglin_safe", false)
         .Put("has_raids", true)
-        // monster_spawn_light_level is an IntProvider — it must be the type-dispatch
-        // compound form, NOT a bare int (a bare int fails to decode and stalls the join).
+        // monster_spawn_light_level is an IntProvider: must be the type-dispatch compound, not a bare int (stalls the join).
         .Put("monster_spawn_light_level", new NbtCompound()
             .Put("type", "minecraft:uniform")
             .Put("value", new NbtCompound().Put("min_inclusive", 0).Put("max_inclusive", 7)))
@@ -68,9 +63,8 @@ public static class RegistryCodec {
         .Put("has_ceiling", false);
 
     // ── minecraft:worldgen/biome ────────────────────────────────────────────
-    // Badlands at id 0 (ChunkSerializer.BiomeId references it for the reddish tint);
-    // minecraft:plains MUST also exist — the client's ClientChunkManager uses it as
-    // the empty-chunk default biome (getOrThrow, or world construction fails).
+    // Badlands at id 0 (ChunkSerializer.BiomeId); plains MUST also exist — the client uses it as the
+    // empty-chunk default biome (getOrThrow, or world construction fails).
     static NbtCompound BiomeRegistry() {
         var value = new NbtList(NbtTagType.Compound);
         value.Add(Entry("minecraft:badlands", 0, Biome(7254527, 2.0f, 0.0f, hasPrecipitation: false)));
@@ -109,12 +103,10 @@ public static class RegistryCodec {
             .Put("parameters", StringList("sender", "content")));
 
     // ── minecraft:damage_type ───────────────────────────────────────────────
-    // The client's DamageSources builds a source for EVERY vanilla damage type with
-    // getOrThrow(), so all must be present or world construction throws. A generic
-    // element is fine — only the keys need to exist.
+    // The client builds a source for EVERY vanilla damage type with getOrThrow(), so all keys must exist
+    // (a generic element suffices).
     static NbtCompound DamageTypeRegistry() {
-        // Local (not a static field) to avoid a static-initialisation-order trap: the
-        // Default builder runs before static fields declared below it would init.
+        // Local, not a static field, to avoid a static-init-order trap (Default builds before fields below init).
         string[] names = {
             "arrow", "bad_respawn_point", "cactus", "cramming", "dragon_breath", "drown", "dry_out",
             "explosion", "fall", "falling_anvil", "falling_block", "falling_stalactite", "fireball",

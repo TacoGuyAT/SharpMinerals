@@ -1,6 +1,5 @@
 namespace SharpMinerals.Entities.Components;
 
-/// <summary>Hit points. Entities at zero health are dead.</summary>
 public struct HealthEntityComponent {
     public float Current;
     public float Max;

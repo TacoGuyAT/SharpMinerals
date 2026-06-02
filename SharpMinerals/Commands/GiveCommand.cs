@@ -11,19 +11,17 @@ using SharpMinerals.Network.Messages;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// <c>/give &lt;item&gt; [count]</c> — adds an item to the issuing player's inventory by registry name
-/// (blocks and items, tab-completed), then resyncs the window. Player-only (the console has no inventory).
-/// <paramref name="count"/> defaults to 1 and merges into / fills slots; whatever doesn't fit is dropped.
+/// <c>/give &lt;item&gt; [count]</c> — adds an item (by registry name, tab-completed) to the issuing player's
+/// inventory and resyncs the window; whatever doesn't fit is reported as not given. Player-only.
 /// </summary>
 public static class GiveCommand {
-    const int MaxCount = 6400; // generous cap — the inventory keeps only what fits, the rest is reported as not given
+    const int MaxCount = 6400;
 
     public static CommandDispatcher RegisterGive(this CommandDispatcher d) => d.Register(l => l
         .Literal("give")
         .Requires(x => x.IsPlayer)
         .Then(x => x.Argument("item", Arguments.Word())
             .Suggests((ctx, builder) => {
-                // Suggest every giveable registry name (blocks except air, plus non-block items).
                 foreach (var block in BlockRegistry.All)
                     if (!block.IsAir && block.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase))
                         builder.Suggest(block.Name);
@@ -56,7 +54,7 @@ public static class GiveCommand {
         int given = count - leftover.Count;
         if (given <= 0) { ctx.Source.Reply("Your inventory is full."); return 0; }
 
-        // Push the updated window (cursor cleared) and refresh the equipment others see (held/armour).
+        // Resync the window; the event refreshes equipment others see.
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
         server.Events.Publish(new PlayerInventoryChanged(context));
 

@@ -3,11 +3,8 @@ using SharpMinerals.Entities.Descriptors;
 
 namespace SharpMinerals.Entities;
 
-/// <summary>
-/// The entity registry — flyweight <see cref="EntityType"/> definitions assembled from components,
-/// mirroring <c>BlockRegistry</c>/<c>ItemRegistry</c>. Ids are assigned in registration order; the
-/// wire id for each kind is a per-version concern in the type mapper, not here.
-/// </summary>
+/// <summary>The entity registry — flyweight <see cref="EntityType"/> definitions assembled from components,
+/// mirroring <c>BlockRegistry</c>/<c>ItemRegistry</c>. Ids are assigned in registration order.</summary>
 public static class EntityRegistry {
     static readonly List<EntityType> byId = new();
     static readonly Dictionary<string, EntityType> byName = new();

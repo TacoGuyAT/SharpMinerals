@@ -2,11 +2,8 @@ using SharpMinerals.Math;
 
 namespace SharpMinerals.Persistence;
 
-/// <summary>
-/// Wraps any <see cref="IWorldStore"/> with write-behind: chunk saves (already immutable
-/// <c>byte[]</c> blobs) are queued and flushed by a background worker, so <c>/save</c> and
-/// shutdown don't block on disk. Reads see not-yet-flushed writes; <see cref="Dispose"/> drains.
-/// </summary>
+/// <summary>Wraps any <see cref="IWorldStore"/> with write-behind: chunk saves are queued and flushed by a
+/// background worker, so <c>/save</c> and shutdown don't block on disk. Reads see not-yet-flushed writes.</summary>
 public sealed class AsyncWorldStore : IWorldStore, IDisposable {
     readonly IWorldStore inner;
     readonly WriteBehind<(string World, Vector3i Chunk), byte[]> writes;

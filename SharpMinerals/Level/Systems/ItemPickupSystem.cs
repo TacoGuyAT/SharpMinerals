@@ -5,20 +5,15 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
-/// <summary>
-/// Item pickup as world-based entity collision: each player whose <see cref="CollisionFeedbackEntityComponent"/>
-/// box overlaps a pickable dropped item collects it into their inventory and the item entity despawns. Runs
-/// after <see cref="CollisionFeedbackSystem"/> (which fills the overlap set). The client effects — collect
-/// animation, entity removal/metadata, window resync — are emitted as deferred <see cref="ItemPickedUp"/>
-/// events so the networking runs on the server thread, off the parallel world tick.
-/// </summary>
+/// <summary>Item pickup: each player whose collision-feedback box overlaps a pickable drop collects it and the
+/// item despawns. Runs after <see cref="CollisionFeedbackSystem"/>. Client effects go out as deferred
+/// <see cref="ItemPickedUp"/> events so networking runs on the server thread.</summary>
 public sealed class ItemPickupSystem : ITickable {
     static readonly QueryDescription CollectorQuery =
         new QueryDescription().WithAll<NetPlayerEntityComponent, CollisionFeedbackEntityComponent, InventoryEntityComponent>();
 
     readonly World world;
-    // Collected during the query, processed after — we mutate inventories and despawn entities, which
-    // must not happen during iteration.
+    // Collected during the query, processed after (mutating inventories/despawning mid-iteration is unsafe).
     readonly List<(ArchEntity Collector, ArchEntity Drop)> pending = new();
 
     public ItemPickupSystem(World world) => this.world = world;

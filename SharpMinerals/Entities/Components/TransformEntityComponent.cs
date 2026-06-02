@@ -1,13 +1,7 @@
 namespace SharpMinerals.Entities.Components;
 
-// Entities are pure ECS: their data lives in these component structs inside an
-// Arch world, not in an object graph. Systems (see World.Tick) operate over them
-// in bulk, and the network layer reads them on demand when encoding packets.
-
-/// <summary>
-/// World-space placement: position (Minecraft uses doubles for entity coordinates)
-/// plus look direction in degrees. The "transform" every visible entity carries.
-/// </summary>
+/// <summary>World-space placement: position (doubles) plus look direction in degrees. The transform every
+/// visible entity carries.</summary>
 public struct TransformEntityComponent {
     public Mfloat X, Y, Z;
     public float Yaw, Pitch;

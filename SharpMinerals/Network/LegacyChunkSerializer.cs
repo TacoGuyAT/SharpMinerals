@@ -6,12 +6,9 @@ using World = SharpMinerals.Level.World;
 namespace SharpMinerals.Network;
 
 /// <summary>
-/// Builds a 1.5.2 (protocol 61) Chunk Data (0x33) column — the pre-Anvil "SMP map" format, nothing
-/// like the modern paletted sections. A 256-tall column is up to sixteen 16×16×16 sections selected
-/// by a bitmask; for each PRESENT section the decompressed payload carries, back-to-back across all
-/// present sections in this fixed order: block ids (1 byte/block), block metadata (nibble), block
-/// light (nibble), sky light (nibble), then a 256-byte biome array for the column. The whole payload
-/// is zlib-compressed. (Light is shipped full-bright here; metadata/add are not modeled yet.)
+/// Builds a 1.5.2 (protocol 61) Chunk Data (0x33) column, the pre-Anvil "SMP map" format: up to sixteen
+/// 16³ sections by bitmask. Payload order across all present sections: block ids, metadata, block light,
+/// sky light, then a 256-byte biome array; whole payload zlib-compressed. Light is full-bright; metadata/add unmodeled.
 /// </summary>
 public static class LegacyChunkSerializer {
     const int Sections = 16;                    // 256-tall column

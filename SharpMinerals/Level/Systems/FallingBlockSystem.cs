@@ -8,14 +8,10 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
-/// <summary>
-/// Lands falling blocks (sand/gravel) using world block-collision feedback: when a falling-block entity
-/// is resting on the ground (<see cref="BlockCollisionFeedbackEntityComponent.OnGround"/>, set by
-/// <see cref="EntityPhysicsSystem"/>), its carried block is placed back into the world — or popped as an
-/// item if the resting cell is occupied — and the entity despawns. The fall itself is generic gravity +
-/// collision; the client mirrors it. The client effects (block update, entity removal) are emitted as a
-/// deferred <see cref="FallingBlockLanded"/> event so networking runs on the server thread.
-/// </summary>
+/// <summary>Lands falling blocks (sand/gravel): when a falling-block entity rests on the ground (per
+/// <see cref="EntityPhysicsSystem"/>), its carried block is placed back into the world — or popped as an item
+/// if the cell is occupied — and the entity despawns. Client effects go out as a deferred
+/// <see cref="FallingBlockLanded"/> so networking runs on the server thread.</summary>
 public sealed class FallingBlockSystem : ITickable {
     static readonly QueryDescription FallingQuery =
         new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent, BlockCollisionFeedbackEntityComponent>();
@@ -30,7 +26,7 @@ public sealed class FallingBlockSystem : ITickable {
         var ecs = world.Ecs;
         landed.Clear();
         ecs.Query(in FallingQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t, ref BlockCollisionFeedbackEntityComponent fb) => {
-            // Announced (so the client tracks it) and resting on the ground → it has landed.
+            // Announced (EntityId set, so the client tracks it) and on the ground → landed.
             if (f.EntityId == 0 || !fb.OnGround) return;
             var cell = new Vector3i((int)System.Math.Floor(t.X), (int)System.Math.Floor(t.Y), (int)System.Math.Floor(t.Z));
             landed.Add((e, f.EntityId, f.Block, cell));
@@ -43,7 +39,7 @@ public sealed class FallingBlockSystem : ITickable {
                 world.SetBlock(cell, block);
                 placed = block;
             } else {
-                world.SpawnDroppedItem(cell, new ItemStack(block)); // resting cell occupied — pop as an item
+                world.SpawnDroppedItem(cell, new ItemStack(block)); // cell occupied — pop as an item
             }
             world.DestroyEntity(entity);
             world.Events?.PublishDeferred(new FallingBlockLanded(world, netId, cell, placed));

@@ -4,12 +4,8 @@ using SharpMinerals.Items;
 
 namespace SharpMinerals.Blocks;
 
-/// <summary>
-/// The block registry. Air is id 0; every block is also an item. A block <b>places and
-/// drops itself by default</b>, so only the exceptions need spelling out — each block's
-/// whole definition is one line. Drop overrides use a lazy <c>() =&gt;</c> lambda so a block
-/// can reference a kind that's registered later.
-/// </summary>
+/// <summary>The block registry. Air is id 0; every block is also an item, and places/drops itself by
+/// default. Drop overrides use a lazy <c>() =&gt;</c> lambda so a block can reference a kind registered later.</summary>
 public static class BlockRegistry {
     static readonly List<BlockType> byId = new();
     static readonly Dictionary<string, BlockType> byName = [];
@@ -27,13 +23,12 @@ public static class BlockRegistry {
         return block;
     }
 
-    /// <summary>Registers a new block, returning it for fluent composition (<c>.DropSelf().Add(...)</c>).
-    /// For mods — call from <c>Mod.OnInitialize</c>; throws once the registry is <see cref="Freeze">frozen</see>.
-    /// The wire id of a modded block falls back to stone until a type-mapping component is added.</summary>
+    /// <summary>Registers a new block, returning it for fluent composition. For mods — call from
+    /// <c>Mod.OnInitialize</c>; throws once <see cref="Freeze">frozen</see>. A modded block's wire id falls
+    /// back to stone until a type-mapping component is added.</summary>
     public static BlockType Register(string name) => Define(name);
 
-    /// <summary>Seals the registry so no further blocks can be added — the host calls this after mods
-    /// have initialised and before the protocols/type-mappers snapshot the palette.</summary>
+    /// <summary>Seals the registry — the host calls this after mods init, before the palette is built.</summary>
     public static void Freeze() => frozen = true;
 
     public static readonly BlockType Air         = Define("air", isAir: true);

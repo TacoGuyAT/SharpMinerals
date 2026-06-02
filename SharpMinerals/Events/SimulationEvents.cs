@@ -6,16 +6,13 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Events;
 
-// Events the world-based simulation systems publish DEFERRED for the networking layer to act on. The
-// systems run on the parallel world-tick threads and only mutate world state; the matching client
-// packets are sent by server-thread subscribers when the bus drains (same pattern as EntityMoved).
+// Events the simulation systems publish DEFERRED for the networking layer. Systems run on parallel
+// world-tick threads and only mutate world state; server-thread subscribers send the client packets on drain.
 
-/// <summary>Raised after an <c>ItemPickupSystem</c> moved a dropped item into a collector's inventory. The
-/// item entity has already been despawned (or its remaining stack reduced); the subscriber broadcasts the
-/// collect animation + entity removal/metadata and resyncs the collector's window.</summary>
+/// <summary>Raised after <c>ItemPickupSystem</c> moved a dropped item into a collector's inventory (the item
+/// entity is already despawned or reduced). The subscriber broadcasts the collect + resyncs the window.</summary>
 public record ItemPickedUp(World World, ArchEntity Collector, int PickupNetId, int Count, ItemStack Leftover);
 
-/// <summary>Raised after a <c>FallingBlockSystem</c> landed a falling block: the entity is despawned and,
-/// when the resting cell was free, <see cref="PlacedBlock"/> was set into the world (null if it instead
-/// popped as an item). The subscriber broadcasts the block change (if any) and removes the entity.</summary>
+/// <summary>Raised after <c>FallingBlockSystem</c> landed a falling block. <see cref="PlacedBlock"/> is the
+/// re-placed block, or null if it popped as an item. The subscriber broadcasts the change and removes the entity.</summary>
 public record FallingBlockLanded(World World, int NetId, Vector3i Cell, BlockType? PlacedBlock);

@@ -7,19 +7,16 @@ using ArchEntity = Arch.Core.Entity;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// The command source — Brigadier's <c>TSource</c>, the analogue of Minecraft's <c>CommandSourceStack</c>.
-/// Wraps the <see cref="ISender"/> that receives output, the <see cref="CommandDispatcher"/> (for server
-/// access and sub-dispatch), and the issuing player's connection (<see cref="Client"/>, null for the console
-/// or a non-player sender).
+/// The command source (Brigadier's <c>TSource</c>, like Minecraft's <c>CommandSourceStack</c>). Wraps the
+/// <see cref="ISender"/> that receives output, the <see cref="CommandDispatcher"/>, and the issuing player's
+/// connection (<see cref="Client"/>, null for a non-player sender).
 /// <para/>
-/// The player's world+entity are resolved LIVE from the connection on demand (<see cref="TryGetEntity"/>),
-/// never snapshotted — so a cached, re-executed parse always acts on the player's current entity, surviving
-/// respawns and world switches. <c>.Requires(s =&gt; s.IsPlayer)</c> gates player-perspective commands.
+/// The player's world+entity are resolved live via <see cref="TryGetEntity"/>, never snapshotted, so a cached
+/// re-executed parse always acts on the current entity (surviving respawns/world switches).
 /// </summary>
 public sealed class SenderContext {
     public ISender Sender { get; }
     public CommandDispatcher Dispatcher { get; }
-    /// <summary>The issuing player's connection, or null for the non-player sender.</summary>
     public NetClient? Client { get; }
 
     public Server Server => Dispatcher.Server;
@@ -35,8 +32,8 @@ public sealed class SenderContext {
     public void Reply(string text) => Sender.ReceiveMessage(new TextComponent(text));
     public void Reply(ChatComponent message) => Sender.ReceiveMessage(message);
 
-    /// <summary>Resolves the issuing player's current world and entity — false for the console, or if the
-    /// player has since dropped/despawned. Looked up live by connection id on every call (never cached).</summary>
+    /// <summary>Resolves the issuing player's current world and entity (false for the console, or a
+    /// dropped/despawned player). Looked up live on every call.</summary>
     public bool TryGetEntity([MaybeNullWhen(false)] out World world, out ArchEntity entity) {
         world = null;
         entity = default;

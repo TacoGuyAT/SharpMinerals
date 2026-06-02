@@ -4,23 +4,18 @@ using System.Text.Json.Serialization;
 namespace SharpMinerals.Chat;
 
 /// <summary>
-/// A Minecraft text component (the JSON chat format). The concrete kind — text, translatable, score,
-/// selector, keybind — is determined by which content field is present, not by a type discriminator, so
-/// (de)serialization is driven by <see cref="ChatComponentConverter"/> rather than STJ's built-in
-/// polymorphism. This non-generic base holds the shared style/structure data and the serialization glue;
-/// the fluent setters live on <see cref="ChatComponent{TSelf}"/> so they can return the concrete type.
-///
-/// The converter is registered only in <see cref="SerializerOptions"/> (not via a type attribute): its
-/// default <c>CanConvert</c> matches the base type exactly, so once it has dispatched to a concrete type
-/// that type (de)serializes on STJ's default path — which is what stops the dispatch from recursing.
+/// A Minecraft text component (JSON chat format). The concrete kind (text, translatable, score, selector,
+/// keybind) is identified by which content field is present, so (de)serialization goes through
+/// <see cref="ChatComponentConverter"/> rather than STJ polymorphism. This non-generic base holds the shared
+/// style/structure data; the fluent setters live on <see cref="ChatComponent{TSelf}"/> to return the concrete
+/// type.
 /// </summary>
 public abstract class ChatComponent {
     internal static readonly JsonSerializerOptions SerializerOptions = new() {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        // Components model their data as public fields, which STJ skips unless told.
+        // Component data is public fields, which STJ skips unless told.
         IncludeFields = true,
-        // Omit default/empty fields (null color, false styles) so a component
-        // serializes to the minimal JSON the client expects.
+        // Omit default/empty fields so a component serializes to the minimal JSON the client expects.
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
         Converters = { new ChatComponentConverter() }
     };
@@ -28,12 +23,8 @@ public abstract class ChatComponent {
     public static ChatComponent FromJson(string json) =>
         JsonSerializer.Deserialize<ChatComponent>(json, SerializerOptions) ?? throw new JsonException();
 
-    // Fluent construction entry points, e.g.
-    //   ChatComponent.Text("<").AddExtra(ChatComponent.Text("Server").SetColor(TextColor.DarkPurple), $"> {msg}")
-    // Each returns the concrete type so its type-specific setters (and the inherited style setters, which
-    // preserve the concrete type) chain naturally. They live here — on the one uniquely-named chat type —
-    // rather than in a `Component(s)` helper, which would clash with Arch's Component and the
-    // SharpMinerals.Components namespace that most server code imports.
+    // Fluent construction entry points; each returns the concrete type so its setters chain. They live on this
+    // type rather than a `Component(s)` helper to avoid clashing with Arch's Component / the Components namespace.
     public static TextComponent Empty() => new("");
     public static TextComponent Text(string text) => new(text);
     public static TranslatableComponent Translate(string key) => new(key);
@@ -42,8 +33,7 @@ public abstract class ChatComponent {
     public static SelectorComponent Selector(string selector) => new(selector);
     public static ScoreComponent Score(string name, string objective) => new(new Score(name, objective));
 
-    // The converter dispatches on the runtime type, so a base-typed component (or one nested in Extra)
-    // still serializes its subclass fields.
+    // Serialized via the runtime type, so a base-typed value still emits its subclass fields.
     public override string ToString() => JsonSerializer.Serialize<ChatComponent>(this, SerializerOptions);
 
     public List<ChatComponent>? Extra;
@@ -57,9 +47,8 @@ public abstract class ChatComponent {
 }
 
 /// <summary>
-/// Fluent style/structure setters that return the concrete component type, so chains like
-/// <c>Component.Text("hi").SetColor(TextColor.Red).SetBold()</c> keep their type-specific methods
-/// available. Each concrete component closes the generic over itself (CRTP).
+/// Fluent style/structure setters returning the concrete component type (CRTP), so chains like
+/// <c>Component.Text("hi").SetColor(TextColor.Red).SetBold()</c> keep their type-specific methods.
 /// </summary>
 public abstract class ChatComponent<TSelf> : ChatComponent where TSelf : ChatComponent<TSelf> {
     private TSelf Self => (TSelf)this;

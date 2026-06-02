@@ -1,20 +1,14 @@
 namespace SharpMinerals.Blocks;
 
-/// <summary>
-/// A block-state property — a named axis with an ordered set of possible values (e.g.
-/// <c>facing = north|south|west|east</c>). Values are addressed by index; the order
-/// matches vanilla so the network layer can map a state to its vanilla id later. A
-/// block declares which properties it has via a <c>StateProperties</c> component.
-/// </summary>
+/// <summary>A block-state property — a named axis with an ordered set of values (e.g.
+/// <c>facing = north|south|west|east</c>). Addressed by index; order matches vanilla so the network layer
+/// can map a state to its vanilla id.</summary>
 public sealed class State {
     public string Name { get; }
     public IReadOnlyList<string> Values { get; }
 
-    /// <summary>
-    /// Whether this property is part of the block's ITEM IDENTITY (kept on a dropped item) rather than
-    /// PLACEMENT state (reset when the block drops). Most properties are placement (facing, axis, slab
-    /// type, …); colour is the exception — each colour is effectively a distinct item.
-    /// </summary>
+    /// <summary>Whether this property is item-identity (kept on a dropped item) rather than placement state
+    /// (reset when the block drops). Most are placement; colour is the exception.</summary>
     public bool PreservedInItem { get; }
 
     public State(string name, params string[] values) : this(name, false, values) { }
@@ -25,7 +19,6 @@ public sealed class State {
         PreservedInItem = preservedInItem;
     }
 
-    /// <summary>Number of possible values.</summary>
     public int Count => Values.Count;
 
     /// <summary>The index of a value name, or -1 if not one of this property's values.</summary>
@@ -43,9 +36,8 @@ public sealed class State {
     public static readonly State Axis = new("axis", "x", "y", "z");
     public static readonly State Waterlogged = new("waterlogged", "true", "false");
 
-    // Our own axis (vanilla has no "color" property — each colour is a separate block);
-    // ordered to match the vanilla dye/wool order so the network layer can map by index.
-    // Colour is ITEM identity — it's kept when the block drops (red wool drops red wool).
+    // Our own axis (vanilla has no "color" property), ordered to match vanilla dye/wool order so the
+    // network layer can map by index. Item-identity: kept when the block drops.
     public static readonly State Color = new("color", preservedInItem: true,
         "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
         "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black");

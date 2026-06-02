@@ -20,13 +20,8 @@ using SharpMinerals.Network.Buffers;
 namespace SharpMinerals.Network.Handlers;
 
 /// <summary>
-/// Handles Play-state serverbound packets: digging, placement, movement and keep
-/// alive. This is where wire messages drive the ECS world — breaking a block edits
-/// the chunk and spawns a drop entity; placing reads the player's held item. Block
-/// changes are broadcast to all in-game clients.
-/// <para/>
-/// An instance bound to its <see cref="Server"/> (injected once), so the handlers read it from a
-/// field rather than receiving it on every call.
+/// Handles Play-state serverbound packets (digging, placement, movement, keep-alive, chat, containers):
+/// the seam where wire messages drive the ECS world. Block changes are broadcast to all in-game clients.
 /// </summary>
 public sealed class PlayPacketHandler {
     static readonly ILogger Log = Logging.For("Play");
@@ -44,8 +39,8 @@ public sealed class PlayPacketHandler {
 
     public void Handle(NetClient client, IMessage message) {
         switch (message) {
-            // World-mutating packets are deferred to the tick loop's single-writer drain phase, so
-            // chunk edits never race the simulation or autosave (adds ≤1 tick of latency).
+            // World-mutating packets are deferred to the tick's single-writer drain phase so chunk edits
+            // never race the simulation or autosave (≤1 tick of latency).
             case PlayerActionC2S action:
                 server.Events.Defer(() => HandleDigging(client, action));
                 break;
@@ -125,9 +120,8 @@ public sealed class PlayPacketHandler {
                 HandleSuggestions(client, suggest);
                 break;
 
-            // Legacy (JE61) movement/digging decode into the GENERIC messages above (SetPlayerPosition*,
-            // PlayerAction) — handled by the same cases, no legacy path. Only placement differs (a
-            // creative legacy client carries the held item in the packet, not the server inventory).
+            // Legacy (JE61) movement/digging decode into the generic messages above and share their cases.
+            // Only placement differs: a creative legacy client carries the held item in the packet.
             case LegacyBlockPlacementC2S lplace:
                 server.Events.Defer(() => HandleLegacyPlacement(client, lplace));
                 break;
@@ -140,8 +134,8 @@ public sealed class PlayPacketHandler {
         }
     }
 
-    // Answer a tab-complete request: ask Brigadier for completions of the partial text (the source is built
-    // for this player so .Requires and ask_server providers see the right state) and send back the matches.
+    // Answer a tab-complete request: ask Brigadier for completions (source built for this player so
+    // .Requires and ask_server providers see the right state) and send back the matches.
     void HandleSuggestions(NetClient client, CommandSuggestionsRequestC2S req) {
         if (!server.TryGetPlayer(client.Id, out var pc) || !pc.World.Ecs.IsAlive(pc.Entity)) {
             Log.LogDebug("suggest #{Tx}: no live player for client #{Client}", req.TransactionId, client.Id);
@@ -149,12 +143,11 @@ public sealed class PlayPacketHandler {
         }
         try {
             var sender = pc.World.Ecs.Get<SenderEntityComponent>(pc.Entity);
-            // The dispatcher strips the leading '/' the client sends and keeps the range in the client's
-            // coordinates (our providers complete inline, so this is synchronous).
+            // Dispatcher strips the leading '/' and keeps the range in client coordinates (providers complete inline).
             var (start, length, matches) = server.CommandDispatcher.Suggest(sender, req.Text, client);
             Log.LogDebug("suggest #{Tx} '{Text}' -> {Count} match(es) [{Start}+{Length}]: {Matches}",
                 req.TransactionId, req.Text, matches.Count, start, length, string.Join(", ", matches));
-            // Always reply (even with zero matches) so the client gets a definitive answer for this transaction.
+            // Always reply (even with zero matches) so the client gets a definitive answer.
             client.Send(new CommandSuggestionsResponseS2C(req.TransactionId, start, length, matches));
         } catch (Exception ex) {
             Log.LogWarning(ex, "suggest #{Tx} '{Text}' failed", req.TransactionId, req.Text);
@@ -167,8 +160,7 @@ public sealed class PlayPacketHandler {
             return;
         }
         if (action.Status is not (DiggingStarted or DiggingFinished)) {
-            // Cancelled or other stages — just acknowledge.
-            client.Send(new AckBlockChangeS2C(action.Sequence));
+            client.Send(new AckBlockChangeS2C(action.Sequence)); // cancelled/other stage: just ack
             return;
         }
 
@@ -184,14 +176,11 @@ public sealed class PlayPacketHandler {
             server.Containers.ForceCloseChest(server, action.Position);
 
         BroadcastBlockChange(new BlockUpdateS2C(action.Position, BlockRegistry.Air));
-        // The dropped ECS entity spawned by BreakBlock is announced by EntityNetworking and collected by ItemPickupSystem.
-
-        // The block above the one just removed may have lost its support (sand/gravel) — let it fall.
+        // The block above may have lost its support (sand/gravel); let it fall.
         EntityNetworking.TryStartFalling(server, world, action.Position + new Vector3i(0, 1, 0));
     }
 
-    /// <summary>The player pressed Q (drop): toss the held item — the whole stack (Ctrl+Q) or one (Q) — out
-    /// in front of them as a world item, then resync the window and update the hand others see.</summary>
+    /// <summary>Drop key (Q): toss the held item (whole stack on Ctrl+Q, else one), resync the window, update the visible hand.</summary>
     void HandleDropHeld(NetClient client, bool wholeStack) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
@@ -201,9 +190,9 @@ public sealed class PlayPacketHandler {
 
         var tossed = held;
         if (wholeStack || held.Count <= 1) {
-            held = default; // dropped the whole stack
+            held = default;
         } else {
-            tossed.Count = 1; // a single item leaves the hand
+            tossed.Count = 1;
             held.Count -= 1;
         }
 
@@ -212,10 +201,7 @@ public sealed class PlayPacketHandler {
         server.Events.Publish(new PlayerInventoryChanged(context));
     }
 
-    /// <summary>
-    /// Legacy (1.5.2) block placement. A creative client sends the held item in the packet, so we place
-    /// that block directly (no server-side inventory needed). Deferred to the tick (chunk mutation).
-    /// </summary>
+    /// <summary>Legacy (1.5.2) block placement: a creative client sends the held item in the packet, placed directly.</summary>
     void HandleLegacyPlacement(NetClient client, LegacyBlockPlacementC2S place) {
         if (place.Direction > 5 || place.ItemId == -1)
             return; // "use item" / empty hand
@@ -234,7 +220,7 @@ public sealed class PlayPacketHandler {
         if (!server.TryGetPlayer(client.Id, out var context))
             return;
 
-        // Right-clicking a container block (chest) opens it instead of placing.
+        // Right-clicking a container block opens it instead of placing.
         var clicked = context.World.GetBlock(use.Position);
         if (clicked.Has<ContainerBlockDescriptor>()) {
             var entity = context.World.GetBlockEntity(use.Position) ?? CreateBlockEntity(context.World, use.Position, clicked);
@@ -242,7 +228,6 @@ public sealed class PlayPacketHandler {
             return;
         }
 
-        // Resolve the block to place from the player's held item (selected hotbar slot).
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         var held = inventory.Held;
         var block = held.Type?.PlacedBlock;
@@ -253,8 +238,7 @@ public sealed class PlayPacketHandler {
         if (!context.World.PlaceBlock(target, block))
             return;
 
-        // The placed block's state: prefer the variant carried by the held item (e.g. wool
-        // colour); otherwise orient a facing block (chest, …) toward the player.
+        // Prefer the variant carried by the held item (e.g. wool colour); else orient a facing block toward the player.
         BlockState? state = held.State?.Clone();
         if (state is null && block.TryGet<StatesBlockDescriptor>(out var props) && props.IndexOf(State.Facing) >= 0) {
             var yaw = context.World.Ecs.Get<TransformEntityComponent>(context.Entity).Yaw;
@@ -262,8 +246,8 @@ public sealed class PlayPacketHandler {
         }
         if (state is not null)
             context.World.SetBlockState(target, state);
-        // Codec maps to this client's wire id; null state ⇒ the block's default.
-        BroadcastBlockChange(new BlockUpdateS2C(target, block, state));
+        BroadcastBlockChange(new BlockUpdateS2C(target, block, state)); // null state ⇒ block default
+
         EntityNetworking.TryStartFalling(server, context.World, target); // sand/gravel placed over air falls
     }
 
@@ -271,8 +255,7 @@ public sealed class PlayPacketHandler {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
 
-        // Until the client confirms a pending teleport, its position is stale (pre-teleport) —
-        // accepting it would bounce a teleported/restored player back. Ignore it.
+        // Ignore positions until a pending teleport is confirmed: they're stale and would bounce the player back.
         if (server.IsTeleportPending(client.Id))
             return;
 
@@ -283,8 +266,7 @@ public sealed class PlayPacketHandler {
         if (yaw is not null) transform.Yaw = yaw.Value;
         if (pitch is not null) transform.Pitch = pitch.Value;
 
-        // Player moved: subscribers mirror it to other players (visibility) and stream new
-        // chunks as the player crosses into new columns.
+        // Subscribers mirror it to other players and stream new chunks as the player crosses columns.
         server.Events.Publish(new PlayerMoved(context));
     }
 
@@ -292,7 +274,7 @@ public sealed class PlayPacketHandler {
         const int Attack = 1;
         string verb = interact.Type == Attack ? "attacked" : "interacted with";
 
-        // Resolve who got hit, for a readable log (this is the player-visibility test signal).
+        // Resolve who got hit, for a readable log.
         string target = $"entity {interact.TargetId}";
         foreach (var (_, context) in server.Players) {
             if (!context.World.Ecs.IsAlive(context.Entity)) continue;
@@ -303,8 +285,7 @@ public sealed class PlayPacketHandler {
         Log.LogInformation("#{Client} {Verb} {Target}", client.Id, verb, target);
     }
 
-    /// <summary>The player swung their arm (a punch/attack) — animate it on every OTHER in-world client
-    /// (each gets it in its own wire form via the generic <see cref="EntityAnimationS2C"/>).</summary>
+    /// <summary>Player swung their arm: animate it on every other in-world client.</summary>
     void HandleSwing(NetClient client, SwingArmC2S swing) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
@@ -313,9 +294,8 @@ public sealed class PlayPacketHandler {
         server.NetServer.Broadcast(new EntityAnimationS2C(eid, animation), c => c.InWorld && c.Id != client.Id);
     }
 
-    /// <summary>The player toggled a shared-flags state (sneak/sprint) — we update the persisted flag set
-    /// (so a joiner can be told the current state) and broadcast it to every OTHER in-world client as
-    /// entity metadata. Each protocol maps the flags to its own wire form (modern flags+Pose; legacy flags).</summary>
+    /// <summary>Player toggled a shared-flags state (sneak/sprint): update the persisted flags (so joiners
+    /// learn the state) and broadcast them as entity metadata to every other in-world client.</summary>
     void HandleEntityAction(NetClient client, EntityActionC2S action) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
@@ -355,41 +335,35 @@ public sealed class PlayPacketHandler {
             return;
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         inventory.SelectedSlot = System.Math.Clamp(held.Slot, 0, InventoryEntityComponent.HotbarSize - 1);
-        // The selected slot moved, so the main-hand item others see changes (handled by the subscriber).
-        server.Events.Publish(new PlayerInventoryChanged(context));
+        server.Events.Publish(new PlayerInventoryChanged(context)); // main-hand item others see may have changed
     }
 
     void HandleCreativeSlot(NetClient client, SetCreativeModeSlotC2S creative) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
-        // A null stack = the client placed an item this server has no type for. We keep no such item, so the
-        // client's predicted view is wrong; correct it, honouring the cursor where the player legitimately
-        // grabbed an item in the same action. Warn as an OVERLAY so the creative client re-sending the
-        // action doesn't spam chat.
+        // A null stack = the client placed an item this server has no type for; the client's predicted view
+        // is wrong, so correct it (honouring the cursor where the player legitimately grabbed an item).
+        // Warned as an OVERLAY so a re-sending creative client doesn't spam chat.
         if (creative.Stack is not { } stack) {
             var current = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
             if (creative.Slot == CreativeDropSlot) {
-                // Thrown from the cursor — the bad item never existed here; just clear the cursor.
+                // Thrown from the cursor: the bad item never existed here; just clear the cursor.
                 client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(current), default));
             } else if (ContainerManager.TryPlayerWindowToStorage(creative.Slot, out int swapIndex) && !current.Storage[swapIndex].IsEmpty) {
-                // Swap onto a filled slot: the player grabbed the slot's item onto the cursor. Honour that —
-                // empty the slot and resync with the grabbed item as the cursor — and drop only the bad item.
+                // Swap onto a filled slot: the player grabbed its item onto the cursor; empty the slot, resync, drop the bad item.
                 var grabbed = current.Storage[swapIndex];
                 current.Storage[swapIndex] = default;
-                server.Events.Publish(new PlayerInventoryChanged(context)); // the (maybe-visible) slot changed
+                server.Events.Publish(new PlayerInventoryChanged(context));
                 client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(current), grabbed));
             } else {
-                // Empty/unsupported slot: revert just that slot, leaving the cursor as the client has it (so a
-                // duplicate of a preceding swap-reject can't wipe the grabbed item off the cursor).
+                // Empty/unsupported slot: revert just that slot, leaving the cursor as the client has it.
                 client.Send(new SetContainerSlotS2C(0, 0, creative.Slot, default));
             }
             client.Send(new SystemChatMessageS2C(
                 new TextComponent("That item isn't available on this server.").SetColor(TextColor.Red), Overlay: true));
             return;
         }
-        // Slot -1 is the creative "throw" (dropping out of the inventory): toss the carried item into the
-        // world rather than storing it. The client only carries the item in the packet, not a real slot.
-        // The codec already resolved the wire Slot into our ItemStack (including custom mod types).
+        // Slot -1 is the creative "throw": toss the carried item into the world rather than storing it.
         if (creative.Slot == CreativeDropSlot) {
             if (!stack.IsEmpty)
                 context.World.TossItem(context.World.Ecs.Get<TransformEntityComponent>(context.Entity), stack);
@@ -399,33 +373,25 @@ public sealed class PlayPacketHandler {
             return; // crafting slot — ignored
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         inventory.Storage[index] = stack; // an empty (non-null) stack here is a deliberate clear
-        // If the edited slot is visible equipment (held/off-hand/armour), the subscriber updates others.
         server.Events.Publish(new PlayerInventoryChanged(context));
     }
 
-    /// <summary>Creates and registers a block entity at a position (e.g. a chest's storage).</summary>
     static BlockEntity CreateBlockEntity(World world, Vector3i pos, BlockType type) {
         var entity = new BlockEntity(pos, type);
         world.SetBlockEntity(entity);
         return entity;
     }
 
-    /// <summary>
-    /// Broadcasts a block change to every IN-WORLD client — modern Play clients AND in-world legacy
-    /// clients (which never enter the Play state). <see cref="BlockUpdateS2C"/> is generic, so each
-    /// client's protocol encodes it in its own format (modern Block Update / legacy 0x35 Block Change).
-    /// </summary>
+    /// <summary>Broadcasts a block change to every in-world client (modern and legacy); each protocol encodes it in its own format.</summary>
     void BroadcastBlockChange(BlockUpdateS2C message) =>
         server.NetServer.Broadcast(message, c => c.InWorld);
 
-    /// <summary>The cardinal a player-facing block (chest, …) should point — toward the player.</summary>
     static string FacingTowardPlayer(float yaw) {
         // Player yaw 0=south, 90=west, 180=north, 270=east; the block faces the player (opposite).
         int dir = (int)System.Math.Floor((yaw + 45f) / 90f) & 3;
         return dir switch { 0 => "north", 1 => "east", 2 => "south", _ => "west" };
     }
 
-    /// <summary>The block adjacent to <paramref name="pos"/> across the given face.</summary>
     static Vector3i Offset(Vector3i pos, BlockFace face) => face switch {
         BlockFace.Bottom => pos + new Vector3i(0, -1, 0),
         BlockFace.Top => pos + new Vector3i(0, 1, 0),

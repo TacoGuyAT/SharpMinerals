@@ -15,7 +15,6 @@ public interface INetServer {
     Protocol Protocol { get; }
     void Start();
     void Stop();
-    /// <summary>The connected client with this id; false if not connected.</summary>
     bool TryGetClient(ulong id, [MaybeNullWhen(false)] out NetClient client);
     void Send(ulong client, IMessage message);
     /// <summary>Sends to every client matching <paramref name="predicate"/> (or all if null).</summary>
@@ -61,8 +60,7 @@ public abstract class NetServer<T> : INetServer
     }
 
     public virtual void Broadcast(IMessage message, Func<NetClient, bool>? predicate = null) {
-        // Wrap once: the message is encoded a single time per protocol version (cached on the
-        // packet) and the framed bytes are reused for every client on that version.
+        // Wrap once: encoded a single time per protocol version, framed bytes reused per client.
         var packet = new CachedPacket(message);
         foreach (var c in Clients.Values)
             if (predicate is null || predicate(c))

@@ -66,11 +66,9 @@ static class LegacyText {
         return null;
     }
 
-    // The 16 § colours are a structured cube: index = (bright<<3) | (R<<2) | (G<<1) | B, where each
-    // channel is a bit and "bright" lifts the floor (dark channels are {0,170}, bright are {85,255}).
-    // So a hex colour quantizes directly — each channel to a bit (≥128), bright when the strongest
-    // channel is near-max — no palette / nearest-search needed. Approximate (e.g. gold/grey edges), but
-    // it's only the rare custom-colour case; our own chat uses named colours.
+    // The 16 § colours form a cube: index = (bright<<3) | (R<<2) | (G<<1) | B, each channel a bit (≥128),
+    // bright when the strongest channel is near-max. So a hex colour quantizes directly (approximate, but
+    // only the rare custom-colour case; our own chat uses named colours).
     static char Quantize(int rgb) {
         int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
         int idx = (r >> 7 << 2) | (g >> 7 << 1) | (b >> 7);

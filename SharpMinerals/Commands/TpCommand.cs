@@ -6,12 +6,11 @@ using SharpMinerals.Entities.Components;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// Teleports a player: <c>/tp &lt;x&gt; &lt;y&gt; &lt;z&gt;</c> (the issuing player — players only) or
-/// <c>/tp &lt;player&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt;</c> (a named player, e.g. from the console). The two
-/// forms are sibling branches off <c>tp</c>; the self-form is gated to player sources with <c>.Requires</c>.
+/// Teleports a player: <c>/tp &lt;x&gt; &lt;y&gt; &lt;z&gt;</c> (the issuing player, players only) or
+/// <c>/tp &lt;player&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt;</c> (a named player, e.g. from the console).
 /// </summary>
 public static class TpCommand {
-    const double Limit = 3e7; // ~world border, and the bound Brigadier validates coordinates against
+    const double Limit = 3e7; // ~world border; the coordinate bound Brigadier validates against
 
     public static CommandDispatcher RegisterTp(this CommandDispatcher d) => d.Register(l => l
         .Literal("tp")

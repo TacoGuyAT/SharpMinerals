@@ -8,17 +8,14 @@ namespace SharpMinerals.Network;
 
 /// <summary>
 /// Streams chunk columns to each player: an initial view on join, then new columns as they cross
-/// chunk boundaries (forgetting out-of-range ones so they re-send on return). A subscriber to the
-/// player lifecycle events — handlers just raise <see cref="PlayerMoved"/>, not this directly.
+/// chunk boundaries (forgetting out-of-range ones so they re-send on return). Driven by lifecycle events.
 /// </summary>
 public static class ChunkStreamer {
     static readonly ILogger Log = Logging.For("Net.Chunks");
 
-    /// <summary>Max column radius (the eviction keep-set reference); the per-client streaming radius is
-    /// <see cref="Protocol.ChunkViewRadius"/>.</summary>
+    /// <summary>Max column radius (eviction keep-set reference); per-client radius is <see cref="Protocol.ChunkViewRadius"/>.</summary>
     public const int ViewRadius = 5;
 
-    /// <summary>Wires chunk streaming to player join/move events on a bus.</summary>
     public static void Register(EventBus events) {
         events.Subscribe<PlayerJoined>(OnJoin);
         events.Subscribe<PlayerMoved>(OnMove);
@@ -27,14 +24,11 @@ public static class ChunkStreamer {
     static void OnJoin(PlayerJoined e) => Stream(e.Context, initial: true);
     static void OnMove(PlayerMoved e) => Stream(e.Context, initial: false);
 
-    /// <summary>Streams a player's initial chunk view on demand (e.g. after a world switch's Respawn, where
-    /// the entity is fresh so its <c>ChunkView</c> is empty and everything re-streams).</summary>
+    /// <summary>Streams a player's initial chunk view on demand (e.g. after a world switch's Respawn).</summary>
     public static void StreamInitial(PlayerContext context) => Stream(context, initial: true);
 
     /// <summary>
-    /// Streams the columns around a player. The wire format is PROTOCOL-AWARE but resolved by the
-    /// protocol, not here: legacy (JE61) clients get pre-Anvil 1.5.2 columns at a smaller radius with no
-    /// Set-Center-Chunk; modern clients get paletted columns. Driven by the join/move events for both.
+    /// Streams the columns around a player. The wire format is resolved by the protocol, not here.
     /// </summary>
     static void Stream(PlayerContext context, bool initial) {
         var ecs = context.World.Ecs;
@@ -47,14 +41,12 @@ public static class ChunkStreamer {
         long cx = (long)System.Math.Floor(transform.X / Chunk.Size);
         long cz = (long)System.Math.Floor(transform.Z / Chunk.Size);
         if (!initial && view.Initialized && cx == view.CenterX && cz == view.CenterZ)
-            return; // still in the same column — nothing to stream
+            return; // still in the same column
 
         view.CenterX = cx;
         view.CenterZ = cz;
         view.Initialized = true;
 
-        // The protocol owns the chunk wire format (modern paletted / legacy 1.5.2), the view radius, and
-        // whether a "set centre" precedes the columns. ChunkStreamer just picks WHICH columns to send.
         var protocol = client.Protocol;
         int radius = protocol.ChunkViewRadius;
         if (protocol.ChunkViewCenter((int)cx, (int)cz) is IMessage center)
@@ -70,8 +62,7 @@ public static class ChunkStreamer {
                 }
             }
 
-        // Forget columns now outside the view so they re-send if the player returns (the client
-        // drops off-grid columns on its own as the centre moves).
+        // Forget columns now outside the view so they re-send if the player returns.
         view.Loaded.RemoveWhere(c =>
             System.Math.Abs(c.X - cx) > radius || System.Math.Abs(c.Z - cz) > radius);
 

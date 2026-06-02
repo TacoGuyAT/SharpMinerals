@@ -3,15 +3,14 @@ using System.Text.Json.Serialization;
 
 namespace SharpMinerals.CLI;
 
-/// <summary>The minimum level the host logger emits — serialized as a friendly lowercase string in
-/// <c>server.json</c>. An enum (not a string) so it's non-nullable and always a known value.</summary>
+/// <summary>The minimum level the host logger emits, serialized as a lowercase string in
+/// <c>server.json</c>.</summary>
 enum LogLevel { Trace, Debug, Info, Warn, Error }
 
 /// <summary>
-/// Host configuration, loaded from <c>server.json</c> (written with defaults on first run). Selects
-/// the listen endpoint, MOTD, player/tick limits, the main world and its on-disk data directory, and
-/// the log directory. Paths are relative to the working directory unless absolute — keep them outside
-/// <c>bin/</c> so the world survives rebuilds.
+/// Host configuration, loaded from <c>server.json</c> (defaults written on first run): listen endpoint, MOTD,
+/// player/tick limits, the main world and its data directory, and the log directory. Relative paths resolve
+/// against the working directory — keep them outside <c>bin/</c> so the world survives rebuilds.
 /// </summary>
 sealed record ServerConfig {
     public string Host { get; init; } = "0.0.0.0";
@@ -31,11 +30,8 @@ sealed record ServerConfig {
         Converters = { new LogLevelJsonConverter() },
     };
 
-    /// <summary>
-    /// A loaded config plus an optional startup <see cref="Notice"/> (e.g. "wrote default …"). Loading
-    /// happens BEFORE logging is configured (logging is built from this config), so the notice is
-    /// returned to be logged once the logger exists — rather than printed raw to the console.
-    /// </summary>
+    /// <summary>A loaded config plus an optional startup notice. Loading happens before logging is configured
+    /// (logging is built from this config), so the notice is returned to be logged once the logger exists.</summary>
     public readonly record struct LoadResult(ServerConfig Config, string? Notice, bool NoticeIsWarning);
 
     /// <summary>Loads the config from <paramref name="path"/>, or writes a default template and returns defaults.</summary>
@@ -59,11 +55,10 @@ sealed record ServerConfig {
     }
 }
 
-/// <summary>Reads <see cref="LogLevel"/> from its friendly config string (case-insensitive, a couple of
-/// aliases); a missing/null/unrecognized value resolves to <see cref="LogLevel.Info"/> rather than
-/// failing the load. Writes it back as the lowercase enum name.</summary>
+/// <summary>Reads <see cref="LogLevel"/> from its config string (case-insensitive, a few aliases);
+/// missing/null/unrecognized resolves to <see cref="LogLevel.Info"/>. Writes the lowercase enum name.</summary>
 sealed class LogLevelJsonConverter : JsonConverter<LogLevel> {
-    public override bool HandleNull => true; // null/missing → the default, not a deserialization error
+    public override bool HandleNull => true; // null/missing → the default, not an error
 
     public override LogLevel Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
         (reader.TokenType == JsonTokenType.String ? reader.GetString() : null)?.Trim().ToLowerInvariant() switch {

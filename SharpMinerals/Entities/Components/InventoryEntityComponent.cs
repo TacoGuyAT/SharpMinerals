@@ -3,12 +3,8 @@ using SharpMinerals.Items;
 
 namespace SharpMinerals.Entities.Components;
 
-/// <summary>
-/// An entity's inventory layout over a backing <see cref="InventoryComponent"/>: 36 main slots
-/// (hotbar 0-8 + storage 9-35), 4 armor slots, and an off-hand ("second hand"). The
-/// held item is the selected hotbar slot. This is the ECS component an entity carries;
-/// it references its backing storage rather than owning raw slot arrays.
-/// </summary>
+/// <summary>An entity's inventory layout over a backing <see cref="InventoryComponent"/>: 36 main slots
+/// (hotbar 0-8 + storage 9-35), 4 armor slots, and an off-hand. The held item is the selected hotbar slot.</summary>
 public sealed class InventoryEntityComponent {
     public const int MainSize = 36;
     public const int HotbarSize = 9;
@@ -36,21 +32,17 @@ public sealed class InventoryEntityComponent {
         Storage = storage;
     }
 
-    /// <summary>The currently held stack — the selected hotbar slot.</summary>
     public ref ItemStack Held => ref Storage[SelectedSlot];
 
     /// <summary>A main slot (0-8 hotbar, 9-35 storage).</summary>
     public ref ItemStack Main(int index) => ref Storage[index];
 
-    /// <summary>An armor slot.</summary>
     public ref ItemStack Armor(ArmorSlot slot) => ref Storage[ArmorStart + (int)slot];
 
-    /// <summary>The off-hand ("second hand") slot.</summary>
     public ref ItemStack Offhand => ref Storage[OffhandStart];
 
-    /// <summary>Adds a stack to the MAIN inventory (hotbar + storage, slots 0–35) — merging into matching
-    /// stacks then filling empties, capped per slot at the item's max stack size — and returns whatever
-    /// didn't fit. Armor and the off-hand are never auto-filled. Delegates to <see cref="InventoryComponent.Add"/>.</summary>
+    /// <summary>Adds a stack to the main inventory (slots 0–35; armor and off-hand are never auto-filled)
+    /// and returns whatever didn't fit.</summary>
     public ItemStack Add(ItemStack stack) => Storage.Add(stack, 0, MainSize);
 }
 

@@ -10,10 +10,8 @@ using SharpMinerals.Network.Messages;
 namespace SharpMinerals.Network.Containers;
 
 /// <summary>
-/// Server-authoritative container windows: opening a chest, applying clicks against the
-/// shared chest storage + the clicker's inventory, and keeping every viewer of the same
-/// chest in sync. Protocol-agnostic — it speaks our <see cref="ItemStack"/>/<see
-/// cref="InventoryComponent"/> and emits version-neutral container messages; the protocol's codecs
+/// Server-authoritative container windows: opening a chest, applying clicks against the shared chest
+/// storage + the clicker's inventory, and keeping every viewer in sync. Protocol-agnostic; the codecs
 /// handle the wire (incl. mapping our per-window <c>Revision</c> to the State ID).
 /// </summary>
 public sealed class ContainerManager {
@@ -47,7 +45,7 @@ public sealed class ContainerManager {
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /// <summary>Opens a chest container for a player and registers them as a viewer.</summary>
+    /// <summary>Registers the player as a viewer of the chest.</summary>
     public void Open(Server server, ulong clientId, BlockEntity chest) {
         lock (gate) {
             var pinv = PlayerInv(server, clientId);
@@ -139,8 +137,7 @@ public sealed class ContainerManager {
             return;
         }
         if (msg.Slot == OutsideSlot) {                 // a click outside the window
-            // Mode 0 with a held cursor drops it (whole on left, one on right); an empty cursor is a no-op,
-            // which is the "only plays an animation" case. Mode 4 -999 is "clicked outside holding nothing".
+            // Mode 0 with a held cursor drops it (whole on left, one on right); empty cursor is a no-op.
             if (msg.Mode == 0) DropStack(server, w.ClientId, ref w.Cursor, whole: msg.Button == 0);
             return;
         }
@@ -149,9 +146,8 @@ public sealed class ContainerManager {
         Dispatch(server, w.ClientId, pinv, ref inv[idx], ref w.Cursor, msg);
     }
 
-    /// <summary>A click on the player's own inventory window (id 0). Mirrors the chest path but against the
-    /// player-window slot layout (<see cref="TryPlayerWindowToStorage"/>) and a per-client cursor — so items
-    /// move between hotbar/main/armour/off-hand, plus the drop-key and drop-outside tosses.</summary>
+    /// <summary>A click on the player's own inventory window (id 0); mirrors the chest path but against the
+    /// player-window slot layout (<see cref="TryPlayerWindowToStorage"/>) and a per-client cursor.</summary>
     void OnPlayerInventoryClick(Server server, ulong clientId, ClickContainerC2S msg) {
         var pinv = PlayerInv(server, clientId);
         if (pinv is null) return;
@@ -391,7 +387,7 @@ public sealed class ContainerManager {
     // ── Player inventory window (id 0): 0-4 crafting, 5-8 armor, 9-35 main, 36-44 hotbar, 45 offhand ──
     public const int PlayerWindowSlots = 46;
 
-    /// <summary>Builds the 46-slot player window (id 0) from an inventory.</summary>
+    /// <summary>Window id 0.</summary>
     public static ItemStack[] PlayerWindow(InventoryEntityComponent inv) {
         var slots = new ItemStack[PlayerWindowSlots];
         slots[5] = inv.Armor(ArmorSlot.Head);
@@ -404,7 +400,7 @@ public sealed class ContainerManager {
         return slots;
     }
 
-    /// <summary>Maps a player-window (id 0) slot to its backing storage index, if it has one.</summary>
+    /// <summary>Window id 0.</summary>
     public static bool TryPlayerWindowToStorage(int windowSlot, out int storageIndex) {
         switch (windowSlot) {
             case >= 5 and <= 8: storageIndex = 44 - windowSlot; return true;   // 5(Head)->39 .. 8(Feet)->36

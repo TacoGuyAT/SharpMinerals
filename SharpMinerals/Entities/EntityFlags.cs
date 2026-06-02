@@ -1,10 +1,7 @@
 namespace SharpMinerals.Entities;
 
-/// <summary>
-/// An entity's "shared flags" state. The bit values match the vanilla entity-metadata flags byte
-/// (index 0) exactly, so it serializes as <c>(byte)Flags</c>. Sneaking and swimming additionally
-/// drive the modern Pose (index 6); legacy clients only understand the flags byte.
-/// </summary>
+/// <summary>An entity's "shared flags" state. Bit values match the vanilla entity-metadata flags byte
+/// (index 0), so it serializes as <c>(byte)Flags</c>. Sneaking/swimming also drive the modern Pose.</summary>
 [Flags]
 public enum EntityFlags : byte {
     None         = 0x00,

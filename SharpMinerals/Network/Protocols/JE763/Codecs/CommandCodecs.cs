@@ -45,12 +45,9 @@ internal sealed class CommandSuggestionsResponseS2CCodec : ICodec<CommandSuggest
 }
 
 /// <summary>
-/// Writes a Brigadier command tree as the 1.20.1 "Commands" node graph: a flattened node array (each node a
-/// flags byte, child indices, optional redirect, and type-specific data) plus the root's index. Nodes the
-/// source can't use (failed <c>.Requires</c>) are pruned, so the client only sees its own commands. Argument
-/// nodes map their Brigadier <see cref="ArgumentType{T}"/> to the protocol parser id + properties; an argument
-/// with custom suggestions is flagged and tagged <c>minecraft:ask_server</c> so the client asks us (a Command
-/// Suggestions Request) instead of completing locally.
+/// Writes a Brigadier command tree as the 1.20.1 "Commands" node graph: a flattened node array plus the root
+/// index. Nodes failing <c>.Requires</c> are pruned. Arguments with custom suggestions are tagged
+/// <c>minecraft:ask_server</c> so the client asks us instead of completing locally.
 /// </summary>
 static class CommandTreeSerializer {
     public static void Write(MinecraftStream s, CommandNode<SenderContext> root, SenderContext source) {

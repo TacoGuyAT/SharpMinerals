@@ -4,11 +4,8 @@ using System.Text;
 namespace SharpMinerals.Network.Buffers;
 
 /// <summary>
-/// A <see cref="Stream"/> decorator that knows how to read and write the data
-/// types defined by the Java Edition protocol (VarInt, length-prefixed strings,
-/// big-endian numerics, UUIDs, ...). It is the single funnel through which every
-/// message is turned into wire bytes and back, so codecs never touch raw sockets.
-/// See https://minecraft.wiki/w/Java_Edition_protocol#Data_types.
+/// A <see cref="Stream"/> decorator that reads/writes Java Edition protocol data types (VarInt,
+/// length-prefixed strings, big-endian numerics, UUIDs). The single funnel for message wire bytes.
 /// </summary>
 public sealed class MinecraftStream : Stream {
     public const int VarIntMaxBytes = 5;
@@ -18,10 +15,7 @@ public sealed class MinecraftStream : Stream {
     readonly bool leaveOpen;
     int pushback = -1; // a single peeked byte, re-served on the next read (used to sniff a new connection's framing)
 
-    /// <summary>
-    /// The protocol's type mapper for the current encode, set by <see cref="Protocol.EncodePayload"/>
-    /// so codecs can map block/item ids to this connection's protocol version. Null outside encoding.
-    /// </summary>
+    /// <summary>The type mapper for the current encode (set by <see cref="Protocol.EncodePayload"/>); null outside encoding.</summary>
     public ITypeMapper? Types { get; set; }
 
     public MinecraftStream(Stream inner, bool leaveOpen = false) {
@@ -31,7 +25,7 @@ public sealed class MinecraftStream : Stream {
 
     public MinecraftStream() : this(new MemoryStream(), false) { }
 
-    // ── Stream plumbing (delegated to the wrapped stream) ───────────────────
+    // Stream plumbing delegated to the wrapped stream.
     public override bool CanRead => inner.CanRead;
     public override bool CanSeek => inner.CanSeek;
     public override bool CanWrite => inner.CanWrite;
@@ -60,9 +54,8 @@ public sealed class MinecraftStream : Stream {
     }
 
     /// <summary>
-    /// Switches the underlying stream to AES/CFB8 encryption (legacy 1.5.2 login). Everything read or
-    /// written after this is encrypted with the shared secret (key and IV). Must be called when no byte
-    /// is peeked (the handshake is plaintext and fully consumed by this point).
+    /// Switches the underlying stream to AES/CFB8 encryption (legacy 1.5.2 login); shared secret is key and IV.
+    /// Must be called with no byte peeked (the plaintext handshake is fully consumed by now).
     /// </summary>
     public void EnableEncryption(byte[] sharedSecret) {
         if (pushback >= 0) throw new InvalidOperationException("Cannot enable encryption with a peeked byte pending.");
@@ -179,17 +172,10 @@ public sealed class MinecraftStream : Stream {
         return ReadBytes(length);
     }
 
-    /// <summary>
-    /// Consumes a 1.5.2 Slot: short item id (-1 = empty → stop); else byte count, short damage, short
-    /// NBT length (-1 = none, else that many gzip-NBT bytes). We don't model items here yet — this just
-    /// advances past the slot so a length-prefix-free legacy packet stays in sync.
-    /// </summary>
+    /// <summary>Advances past a 1.5.2 Slot to keep a length-prefix-free legacy packet in sync.</summary>
     public void SkipLegacySlot() => ReadLegacySlot();
 
-    /// <summary>
-    /// Reads a 1.5.2 Slot, returning the item id (-1 = empty) and damage/metadata; NBT is consumed and
-    /// discarded. Used to resolve a creative client's held item on block placement.
-    /// </summary>
+    /// <summary>Reads a 1.5.2 Slot: item id (-1 = empty), count, damage; trailing NBT consumed and discarded.</summary>
     public (short Id, byte Count, short Damage) ReadLegacySlot() {
         short id = ReadShort();
         if (id == -1) return (-1, 0, 0);
@@ -201,7 +187,7 @@ public sealed class MinecraftStream : Stream {
     }
 
     public Guid ReadUuid() {
-        // Two big-endian longs (most-significant first), as MC encodes UUIDs.
+        // Two big-endian longs (msb first), as MC encodes UUIDs.
         Span<byte> b = stackalloc byte[16];
         ReadExactly(b);
         long msb = BinaryPrimitives.ReadInt64BigEndian(b[..8]);
@@ -315,11 +301,7 @@ public sealed class MinecraftStream : Stream {
         WriteShort(-1); // no NBT
     }
 
-    /// <summary>
-    /// Reads a Slot's presence + item id + count, leaving any trailing NBT unread.
-    /// Safe because each packet decodes from its own buffer, so unread bytes are
-    /// discarded with it — we don't yet need item NBT.
-    /// </summary>
+    /// <summary>Reads a Slot's presence + item id + count, leaving trailing NBT unread (discarded with the per-packet buffer).</summary>
     public (int ItemId, int Count)? ReadSlotLite() {
         if (!ReadBool()) return null;
         int id = ReadVarInt();
@@ -350,10 +332,7 @@ public sealed class MinecraftStream : Stream {
         return size;
     }
 
-    /// <summary>
-    /// Builds a Guid from 16 big-endian bytes (Java's UUID byte order). Round-trips
-    /// with <see cref="WriteUuid"/>; used for deriving offline-mode player UUIDs.
-    /// </summary>
+    /// <summary>Builds a Guid from 16 big-endian bytes (Java's UUID byte order); used for offline-mode UUIDs.</summary>
     public static Guid GuidFromBigEndianBytes(ReadOnlySpan<byte> b) {
         if (b.Length != 16) throw new ArgumentException("UUID requires 16 bytes.", nameof(b));
         long msb = BinaryPrimitives.ReadInt64BigEndian(b[..8]);

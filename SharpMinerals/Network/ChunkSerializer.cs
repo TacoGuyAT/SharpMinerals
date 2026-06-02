@@ -8,18 +8,14 @@ using SharpMinerals.Network.Nbt;
 namespace SharpMinerals.Network;
 
 /// <summary>
-/// Serializes one world column into the "Chunk Data and Update Light" packet a
-/// 1.20.1 client expects. A vanilla column is 16×384×16 — 24 sections from y=-64 —
-/// each holding a block-state and a biome paletted-container. SharpMinerals stores
-/// blocks in cuboid 16³ chunks, so this assembles a vanilla column on the fly by
-/// reading <see cref="World.GetBlock"/> and mapping to vanilla state ids.
-/// See https://minecraft.wiki/w/Java_Edition_protocol#Chunk_Data_and_Update_Light.
+/// Serializes one world column into the 1.20.1 "Chunk Data and Update Light" packet (16×384×16,
+/// 24 sections from y=-64), assembled on the fly from <see cref="World.GetBlock"/> and vanilla state ids.
 /// </summary>
 public static class ChunkSerializer {
     const int MinY = -64;
     const int SectionCount = 24;          // 384 / 16
     const int LightSectionCount = SectionCount + 2; // one padding section above and below
-    const int BiomeId = 0;                // single biome: minecraft:badlands (1.20.1 registry id 0) — its reddish tint makes the flat world distinctive
+    const int BiomeId = 0;                // minecraft:badlands (1.20.1 registry id 0)
 
     /// <summary>Builds the Chunk Data packet for the column at (chunkX, chunkZ), mapping ids via <paramref name="types"/>.</summary>
     public static ChunkDataS2C Build(ITypeMapper types, World world, int chunkX, int chunkZ) {
@@ -30,24 +26,20 @@ public static class ChunkSerializer {
         s.WriteInt(chunkZ);
         WriteHeightmaps(s);
 
-        // Block entities are derived from the block STATES (every chest block), not from the sparse
-        // server-side BlockEntity instances — those are created lazily (a chest only gets one when first
-        // opened), so a placed-but-unopened chest would otherwise be omitted and render invisibly.
+        // Block entities derived from block states, not the lazily-created server-side BlockEntity instances,
+        // so a placed-but-unopened chest still renders.
         var blockEntities = new List<(byte Packed, int Y, int TypeId)>();
         byte[] sections = BuildSections(types, world, chunkX, chunkZ, blockEntities);
         s.WriteVarInt(sections.Length);
         s.Write(sections, 0, sections.Length);
 
-        // A block-entity-rendered block (a 1.20.1 chest has no normal model) needs its block entity in the
-        // chunk packet or it stays invisible until a later update. Each: packed local XZ byte, world-Y short,
-        // the version's block-entity-type id, then the data NBT (empty — the type renders it; a chest's
-        // contents stream via its window on open).
+        // Each block entity: packed local XZ byte, world-Y short, block-entity-type id, then data NBT (empty).
         s.WriteVarInt(blockEntities.Count);
         foreach (var (packed, y, typeId) in blockEntities) {
             s.WriteUByte(packed);
             s.WriteShort((short)y);
             s.WriteVarInt(typeId);
-            new NbtCompound().WriteRoot(s); // empty data (1.20.1 named root)
+            new NbtCompound().WriteRoot(s); // 1.20.1 named root
         }
 
         WriteLight(s);
@@ -86,7 +78,6 @@ public static class ChunkSerializer {
                                 : types.StateId(block);
                         if (block.IsAir) continue;
                         nonAir++;
-                        // A block that carries a block entity (chest) → emit it for the chunk packet so it renders.
                         if (types.TryBlockEntityTypeId(block, out int beId))
                             blockEntities.Add(((byte)((x << 4) | z), (int)worldY, beId));
                     }
@@ -134,10 +125,8 @@ public static class ChunkSerializer {
     }
 
     /// <summary>
-    /// Full sky light, no block light. Light masks carry one bit per light section
-    /// (sections plus a padding section at each end); a set bit means an array follows.
-    /// Note: the combined Chunk Data and Update Light packet has NO "Trust Edges"
-    /// field — that exists only in the standalone Update Light packet.
+    /// Full sky light, no block light; masks carry one bit per light section, set bit = array follows.
+    /// The combined Chunk Data + Update Light packet has NO "Trust Edges" field (only the standalone one does).
     /// </summary>
     static void WriteLight(MinecraftStream s) {
         long allSections = (1L << LightSectionCount) - 1;

@@ -6,7 +6,6 @@ public sealed class TextComponent : ChatComponent<TextComponent> {
     }
     public TextComponent SetText(string text) { Text = text; return this; }
 
-    // A plain string is the most common component, so let one stand in wherever a component is expected
-    // (e.g. AddExtra("..."), Component arguments). Mirrors vanilla's bare-string shorthand.
+    // Let a plain string stand in wherever a component is expected; mirrors vanilla's bare-string shorthand.
     public static implicit operator TextComponent(string text) => new(text);
 }

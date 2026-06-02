@@ -5,10 +5,8 @@ using SharpMinerals.Items;
 namespace SharpMinerals.Network.Protocols.JE61;
 
 /// <summary>
-/// <see cref="ITypeMapper"/> for Java Edition 1.5.2 (protocol 61). 1.5.2 is pre-1.13: blocks are flat
-/// numeric byte ids (with a separate nibble of metadata, not modeled here yet). Block ids are sourced
-/// by NAME from the legacy numeric registry (same scheme as minecraft-data 1.7). Item/entity mapping
-/// and per-block metadata (e.g. wool colour) are future work; those members throw until needed.
+/// <see cref="ITypeMapper"/> for Java Edition 1.5.2 (protocol 61). Pre-1.13: blocks are flat numeric ids
+/// (metadata nibble not modeled). Entity mapping and per-block metadata are future work and throw until needed.
 /// </summary>
 public sealed class TypeMapperJE61 : ITypeMapper {
     const int FallbackId = 1; // stone

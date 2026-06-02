@@ -8,14 +8,12 @@ using SharpMinerals.Network.Messages;
 namespace SharpMinerals.Network;
 
 /// <summary>
-/// Keeps every client's view of the other players in sync: profiles (tab list +
-/// skins), entity spawns, movement, and removal. Sends are targeted per-client so a
-/// player never receives its own spawn.
+/// Keeps every client's view of the other players in sync: profiles, entity spawns, movement, removal.
+/// Sends are targeted per-client so a player never receives its own spawn.
 /// </summary>
 public static class PlayerVisibility {
     const int CreativeMode = 1;
 
-    /// <summary>Wires player visibility to the join/move/leave/inventory events on a bus.</summary>
     public static void Register(EventBus events) {
         events.Subscribe<PlayerJoined>(e => OnJoin(e.Context.Server, e.Context.Client));
         events.Subscribe<PlayerMoved>(e => OnMove(e.Context.Server, e.Context.Client));
@@ -25,8 +23,7 @@ public static class PlayerVisibility {
 
     static PlayerListEntry Entry(in NetPlayerEntityComponent p) => new(p.Uuid, p.Name, CreativeMode, Listed: true, Latency: 0);
 
-    /// <summary>The non-empty equipment a player renders — held item, off-hand, and the four armour pieces
-    /// — as generic Set Equipment messages.</summary>
+    /// <summary>The non-empty equipment a player renders (held, off-hand, four armour pieces) as Set Equipment messages.</summary>
     public static IEnumerable<SetEquipmentS2C> Equipment(int entityId, InventoryEntityComponent inv) {
         if (!inv.Held.IsEmpty)    yield return new(entityId, EquipmentSlot.MainHand, inv.Held);
         if (!inv.Offhand.IsEmpty) yield return new(entityId, EquipmentSlot.OffHand, inv.Offhand);
@@ -36,25 +33,19 @@ public static class PlayerVisibility {
         var head = inv.Armor(ArmorSlot.Head);   if (!head.IsEmpty)  yield return new(entityId, EquipmentSlot.Helmet, head);
     }
 
-    // The off-hand slot was added in 1.9 (protocol 107). Older protocols (e.g. 1.5.2 = 61) have no
-    // off-hand and can't encode one — their equipment codec would crash mid-encode if handed one.
+    // Off-hand slot added in 1.9 (protocol 107); older protocols can't encode one and would throw mid-encode.
     const int OffHandMinProtocol = 107;
 
-    /// <summary>Whether a client's protocol can render an off-hand item. A legacy in-world client is still
-    /// in the Play state, so we gate on protocol VERSION, not connection state. This is the single
-    /// chokepoint that keeps off-hand equipment off the legacy wire (where its encoder has no off-hand slot
-    /// and would throw mid-encode); every off-hand send must be guarded by it.</summary>
+    /// <summary>Whether a client's protocol can render an off-hand item. Gated on protocol version, not
+    /// connection state (legacy in-world clients are still in Play); every off-hand send must be guarded by it.</summary>
     public static bool CanSeeOffhand(NetClient c) => c.Protocol.Version >= OffHandMinProtocol;
 
-    // Broadcasts one equipment slot of a player to every OTHER in-world client that may see it. Off-hand
-    // goes only to protocols that have one (never the legacy wire, whose encoder would throw). The single
-    // send point for equipment, so the off-hand gate can't be bypassed.
+    // Single send point for equipment, so the off-hand gate can't be bypassed.
     static void BroadcastEquipment(Server server, ulong selfClientId, int entityId, EquipmentSlot slot, ItemStack item) =>
         server.NetServer.Broadcast(new SetEquipmentS2C(entityId, slot, item),
             c => c.Id != selfClientId && c.InWorld && (slot != EquipmentSlot.OffHand || CanSeeOffhand(c)));
 
-    // A player's six equipment stacks indexed by EquipmentSlot ordinal — what others should see them
-    // wearing/holding, derived from the live inventory. Compared against SyncedEquipment to find changes.
+    // A player's six equipment stacks indexed by EquipmentSlot ordinal; compared against SyncedEquipment to find changes.
     static ItemStack[] EquipmentSnapshot(InventoryEntityComponent inv) => new[] {
         inv.Held,                      // 0 MainHand
         inv.Offhand,                   // 1 OffHand
@@ -64,10 +55,8 @@ public static class PlayerVisibility {
         inv.Armor(ArmorSlot.Head),     // 5 Helmet
     };
 
-    /// <summary>A player's inventory changed (pickup, container click, creative set, toss, or join):
-    /// broadcast every equipment slot whose rendered item differs from what other clients were last shown,
-    /// and record the new state in <see cref="EquipmentEntityComponent"/>. Count-only changes (placing from the held
-    /// stack) are ignored — the held model looks the same.</summary>
+    /// <summary>A player's inventory changed: broadcast every equipment slot whose rendered item differs
+    /// from what other clients were last shown, and record the new state. Count-only changes are ignored.</summary>
     public static void OnInventoryChanged(PlayerContext context) {
         var ecs = context.World.Ecs;
         if (!ecs.IsAlive(context.Entity)) return;
@@ -82,12 +71,10 @@ public static class PlayerVisibility {
             }
     }
 
-    // Equipment renders the item model (and carried state, e.g. wool colour), not the count — so two
-    // non-empty stacks of the same item+state look identical. Only type/state/empty transitions matter.
+    // Equipment renders the item model + carried state, not the count; only type/state/empty transitions matter.
     static bool LooksSame(ItemStack a, ItemStack b) =>
         a.IsEmpty || b.IsEmpty ? a.IsEmpty && b.IsEmpty : a.StacksWith(b);
 
-    /// <summary>A player just joined: introduce it to others and others to it.</summary>
     public static void OnJoin(Server server, NetClient client) {
         if (!server.TryGetPlayer(client.Id, out var self) || !self.World.Ecs.IsAlive(self.Entity))
             return;
@@ -95,9 +82,7 @@ public static class PlayerVisibility {
         var selfInfo = self.World.Ecs.Get<NetPlayerEntityComponent>(self.Entity);
         var selfPos = self.World.Ecs.Get<TransformEntityComponent>(self.Entity);
 
-        // Everyone (including the newcomer, for its own tab list) learns the new
-        // profile. Existing clients already have the newcomer's profile before we
-        // spawn its entity to them below.
+        // Everyone (incl. the newcomer, for its tab list) learns the new profile before its entity is spawned below.
         server.NetServer.Broadcast(new PlayerInfoUpdateS2C(new[] { Entry(selfInfo) }),
             c => c.State == ConnectionState.Play);
 
@@ -111,13 +96,11 @@ public static class PlayerVisibility {
         }
 
         if (others.Count > 0) {
-            // The newcomer must learn the existing profiles BEFORE their entities are
-            // spawned, or it can't render them.
+            // The newcomer must learn existing profiles before their entities are spawned, or it can't render them.
             client.Send(new PlayerInfoUpdateS2C(others.Select(o => Entry(o.Info)).ToList()));
             foreach (var o in others) {
                 client.Send(Spawn(o.Info, o.Pos));
-                // A spawn renders a default standing entity; replay any active flags (sneaking, …)
-                // and whatever they're holding/wearing.
+                // A spawn renders a default standing entity; replay active flags and equipment.
                 if (o.Info.Flags != EntityFlags.None)
                     client.Send(new EntityFlagsS2C(o.Info.EntityId, o.Info.Flags));
                 foreach (var eq in Equipment(o.Info.EntityId, o.Inv))
@@ -125,16 +108,14 @@ public static class PlayerVisibility {
             }
         }
 
-        // Spawn the newcomer's entity for each existing client.
         foreach (var o in others)
             o.Client.Send(Spawn(selfInfo, selfPos));
 
-        // Now show the newcomer's equipment to everyone else and seed its SyncedEquipment — a restored
-        // player may already hold an item / wear armour. Same path as any later inventory change.
+        // Show the newcomer's equipment to everyone else and seed its SyncedEquipment (a restored player
+        // may already hold/wear items). Same path as any later inventory change.
         OnInventoryChanged(self);
     }
 
-    /// <summary>A player moved: push its new transform to everyone else.</summary>
     public static void OnMove(Server server, NetClient client) {
         if (!server.TryGetPlayer(client.Id, out var self) || !self.World.Ecs.IsAlive(self.Entity))
             return;
@@ -142,14 +123,12 @@ public static class PlayerVisibility {
         var info = self.World.Ecs.Get<NetPlayerEntityComponent>(self.Entity);
         var pos = self.World.Ecs.Get<TransformEntityComponent>(self.Entity);
 
-        // In-world recipients include legacy clients (which are never in the Play state); each gets the
-        // movement in its own format (modern Teleport Entity / legacy 0x22). Never to the mover itself.
+        // In-world recipients include legacy clients; each gets the movement in its own format. Never the mover itself.
         bool ToOthers(NetClient c) => c.InWorld && c.Id != client.Id;
         server.NetServer.Broadcast(new TeleportEntityS2C(info.EntityId, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch, true), ToOthers);
         server.NetServer.Broadcast(new EntityHeadRotationS2C(info.EntityId, pos.Yaw), ToOthers);
     }
 
-    /// <summary>A player left: despawn its entity and drop it from the tab list everywhere.</summary>
     public static void OnLeave(Server server, NetPlayerEntityComponent info) {
         server.NetServer.Broadcast(new RemoveEntitiesS2C(new[] { info.EntityId }), c => c.InWorld);
         server.NetServer.Broadcast(new PlayerInfoRemoveS2C(new[] { info.Uuid }), c => c.State == ConnectionState.Play);

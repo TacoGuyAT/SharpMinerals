@@ -4,7 +4,6 @@ namespace SharpMinerals.Entities.Components;
 
 /// <summary>A dropped item-stack entity: the stack it represents plus its lifetime.</summary>
 public struct PickupEntityComponent {
-    /// <summary>The stack this entity represents on the ground.</summary>
     public ItemStack Stack;
     /// <summary>Ticks since the item was dropped.</summary>
     public int Age;

@@ -7,9 +7,8 @@ using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/clear</c> — empties the issuing player's whole inventory (main, armor, and off-hand), then
-/// resyncs the window so the client's view clears and any visible equipment update reaches other players.
-/// Player-only (the console has no inventory).</summary>
+/// <summary><c>/clear</c> — empties the issuing player's whole inventory (main, armor, off-hand) and resyncs
+/// the window. Player-only.</summary>
 public static class ClearCommand {
     public static CommandDispatcher RegisterClear(this CommandDispatcher d) => d.Register(l => l
         .Literal("clear")
@@ -30,8 +29,7 @@ public static class ClearCommand {
                 if (!inventory.Storage[i].IsEmpty) cleared++;
             inventory.Storage.Clear();
 
-            // Push the emptied window to the client (cursor cleared too) and let the equipment-visibility
-            // subscriber refresh what others see now that held/armor are gone.
+            // Resync the window; the event refreshes equipment others see.
             client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
             server.Events.Publish(new PlayerInventoryChanged(context));
 

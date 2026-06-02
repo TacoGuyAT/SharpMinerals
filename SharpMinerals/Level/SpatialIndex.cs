@@ -6,19 +6,11 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level;
 
-/// <summary>
-/// A per-<see cref="World"/> spatial index of entities, bucketed by chunk-cube (the world's native
-/// 16³ unit). It turns "what's near here?" from an O(all-entities) scan into gathering only the few
-/// buckets overlapping the query region — the basis for ranged entity lookups, ranged broadcasts
-/// (players are indexed too), and per-chunk processing.
-/// <para/>
-/// Maintained INCREMENTALLY: <see cref="Add"/> on spawn, <see cref="Remove"/> on despawn, and
-/// <see cref="Update"/> on move (driven by the <c>EntityMoved</c> event) — only an entity that
-/// crosses a chunk boundary re-buckets. Concurrent because the lifecycle spans threads (items
-/// spawn/move on the tick thread, players on the network thread), like the world's other indices.
-/// </summary>
+/// <summary>A per-<see cref="World"/> spatial index of entities, bucketed by chunk-cube, so "what's near
+/// here?" scans only the buckets overlapping the query region. Maintained incrementally via <see cref="Add"/>/
+/// <see cref="Remove"/>/<see cref="Update"/>. Concurrent: the lifecycle spans the tick and network threads.</summary>
 public sealed class SpatialIndex {
-    // chunk-cube coord → set of entities whose position falls in that cube (a concurrent set).
+    // chunk-cube coord → set of entities whose position falls in that cube.
     readonly ConcurrentDictionary<Vector3i, ConcurrentDictionary<ArchEntity, byte>> buckets = new();
     // entity → the cube it's currently filed under, so Remove/Update need no caller-supplied old position.
     readonly ConcurrentDictionary<ArchEntity, Vector3i> cellOf = new();
@@ -28,9 +20,8 @@ public sealed class SpatialIndex {
     public SpatialIndex(World world) => this.world = world;
 
     /// <summary>The chunk-cube coordinate that contains a world position. Must be the GLOBAL chunk coord
-    /// (<see cref="Vector3i.ToChunk"/>, an arithmetic shift) — monotonic so the range walk in
-    /// <see cref="ForEachCandidate"/> works. <c>ToLocal()</c> (the within-chunk 0–15 offset) wraps at
-    /// every chunk boundary, which made <c>lo &gt; hi</c> and silently skipped cells (unpickable items).</summary>
+    /// (monotonic, so the range walk in <see cref="ForEachCandidate"/> works); ToLocal would wrap at chunk
+    /// boundaries and silently skip cells.</summary>
     public static Vector3i CellOf(double x, double y, double z) => new Vector3i(
         (Mint)System.Math.Floor(x),
         (Mint)System.Math.Floor(y),
@@ -38,14 +29,12 @@ public sealed class SpatialIndex {
     ).ToChunk();
 
     // ── Maintenance ───────────────────────────────────────────────────────────
-    /// <summary>Files a newly-spawned entity at its position.</summary>
     public void Add(ArchEntity entity, double x, double y, double z) {
         var cell = CellOf(x, y, z);
         Bucket(cell)[entity] = 0;
         cellOf[entity] = cell;
     }
 
-    /// <summary>Drops a despawned entity from the index.</summary>
     public void Remove(ArchEntity entity) {
         if (cellOf.TryRemove(entity, out var cell) && buckets.TryGetValue(cell, out var set))
             set.TryRemove(entity, out _);
@@ -73,11 +62,8 @@ public sealed class SpatialIndex {
     /// <summary>The chunk-cubes that currently hold at least one entity (for sweeping per-chunk work).</summary>
     public IEnumerable<Vector3i> OccupiedChunks => buckets.Keys;
 
-    /// <summary>
-    /// Appends every live entity within <paramref name="radius"/> blocks of the point to
-    /// <paramref name="results"/> (Euclidean, fine-filtered against each entity's Transform). Scans
-    /// only the chunk-cubes overlapping the query sphere.
-    /// </summary>
+    /// <summary>Appends every live entity within <paramref name="radius"/> blocks of the point to
+    /// <paramref name="results"/> (Euclidean).</summary>
     public void Near(double x, double y, double z, double radius, ICollection<ArchEntity> results) {
         double r2 = radius * radius;
         ForEachCandidate(x - radius, y - radius, z - radius, x + radius, y + radius, z + radius, entity => {
@@ -87,10 +73,7 @@ public sealed class SpatialIndex {
         });
     }
 
-    /// <summary>
-    /// Appends every live entity whose position lies inside the axis-aligned box [min,max] to
-    /// <paramref name="results"/>. Scans only the chunk-cubes overlapping the box.
-    /// </summary>
+    /// <summary>Appends every live entity whose position lies inside the box [min,max] to <paramref name="results"/>.</summary>
     public void InAabb(double minX, double minY, double minZ, double maxX, double maxY, double maxZ, ICollection<ArchEntity> results) {
         ForEachCandidate(minX, minY, minZ, maxX, maxY, maxZ, entity => {
             var t = world.Ecs.Get<TransformEntityComponent>(entity);
@@ -99,8 +82,8 @@ public sealed class SpatialIndex {
         });
     }
 
-    // Walks the chunk-cubes overlapping a world-space box and invokes the action for each LIVE entity
-    // filed in them (dead entries — a destroy that raced an in-flight query — are skipped).
+    // Walks the chunk-cubes overlapping a box and invokes the action for each live entity (dead entries,
+    // from a destroy that raced an in-flight query, are skipped).
     void ForEachCandidate(double minX, double minY, double minZ, double maxX, double maxY, double maxZ,
                           System.Action<ArchEntity> action) {
         var lo = CellOf(minX, minY, minZ);
@@ -109,7 +92,7 @@ public sealed class SpatialIndex {
             for (Mint cy = lo.Y; cy <= hi.Y; cy++)
                 for (Mint cz = lo.Z; cz <= hi.Z; cz++)
                     if (buckets.TryGetValue(new Vector3i(cx, cy, cz), out var set))
-                        foreach (var kv in set) // enumerates lock-free, no Keys snapshot allocation
+                        foreach (var kv in set) // lock-free, no Keys snapshot allocation
                             if (world.Ecs.IsAlive(kv.Key)) action(kv.Key);
     }
 }

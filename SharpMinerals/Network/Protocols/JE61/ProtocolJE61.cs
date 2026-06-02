@@ -4,12 +4,8 @@ using SharpMinerals.Network.Protocols.JE61.Codecs;
 namespace SharpMinerals.Network.Protocols.JE61;
 
 /// <summary>
-/// Java Edition protocol 61 (Minecraft 1.5.2) — the legacy, pre-Netty protocol. Chosen as a
-/// deliberate stress test for the network abstraction: no VarInt length framing, single-byte global
-/// ids, UTF-16BE strings, zlib chunk columns. Framing lives in <see cref="LegacyJavaProtocol"/>.
-/// <para/>
-/// MILESTONE 1: server-list ping only (0xFE → 0xFF). Handshake/login (M2) and the 1.5.2 chunk
-/// format (M3) follow. Ids below are the authoritative 1.5.2 single-byte values.
+/// Java Edition protocol 61 (Minecraft 1.5.2), the legacy pre-Netty protocol: no length framing,
+/// single-byte global ids, UTF-16BE strings, zlib chunk columns. Framing lives in <see cref="LegacyJavaProtocol"/>.
 /// </summary>
 public sealed class ProtocolJE61 : LegacyJavaProtocol {
     public override int Version => 61;
@@ -18,8 +14,7 @@ public sealed class ProtocolJE61 : LegacyJavaProtocol {
     readonly TypeMapperJE61 types = new();
     public override ITypeMapper Types => types;
 
-    // The server's RSA keypair for the login encryption handshake (1024-bit, per the protocol).
-    // One keypair per protocol instance (= per server), generated at startup.
+    // RSA keypair for the login encryption handshake (1024-bit per the protocol); one per server.
     readonly RSA rsa = RSA.Create(1024);
 
     /// <summary>The server's RSA public key as X.509 SubjectPublicKeyInfo (the wire form in 0xFD).</summary>

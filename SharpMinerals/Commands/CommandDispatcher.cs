@@ -10,70 +10,61 @@ using SharpMinerals.Network;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// Owns command parsing and dispatch, wrapping a Brigadier.NET dispatcher over <see cref="SenderContext"/>
-/// as the command source. <see cref="ExecuteAsync"/> is the single entry point for a submitted command line
-/// (no leading slash); <see cref="Register"/> adds commands via Brigadier builder lambdas.
+/// Owns command parsing and dispatch over a Brigadier.NET dispatcher with <see cref="SenderContext"/> as the
+/// source. <see cref="ExecuteAsync"/> is the entry point for a submitted line; <see cref="Register"/> adds
+/// commands via Brigadier builder lambdas.
 /// </summary>
 public sealed class CommandDispatcher {
     static readonly ILogger Log = Logging.For("CommandDispatcher");
 
     readonly CommandDispatcher<SenderContext> brig = new();
 
-    // The parse step is the costly one, and a ParseResults can be re-executed (per the Brigadier docs), so we
-    // cache it. A parse binds its source and its .Requires pruning, so the cache must be invalidated when that
-    // pruning could change. Rather than enumerate-and-evict (FastCache has no prefix scan), the key embeds a
-    // global generation plus a per-player epoch; bumping either orphans the affected entries, which then lapse
-    // via the TTL. So a re-register (tree changed) and a player's permission/world change can't be bypassed.
-    // (The entity itself is resolved live at execute time, see CommandContext, so the cache is already correct
-    // across respawns/world switches even before any world-gated .Requires exists.)
+    // Parsing is the costly step and a ParseResults can be re-executed, so we cache it. A parse binds its
+    // source's .Requires pruning, so the key embeds a global generation + per-player epoch; bumping either
+    // orphans affected entries, which lapse via the TTL (FastCache has no prefix scan to evict directly).
     readonly FastCache<string, ParseResults<SenderContext>> parseCache = new();
     static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
-    // FastCache has no built-in capacity, so we bound it ourselves AND scale the bound with the player count:
-    // each connected player has their own key namespace (id + epoch), so the working set grows with players.
-    // The base allowance covers the console plus headroom. (The Phase 3 suggestion cache will size itself the
-    // same way via CacheCapacity.)
+    // FastCache is unbounded, so we cap it ourselves and scale the cap with player count (each player has its
+    // own id+epoch key namespace). The base allowance covers the console plus headroom.
     const int BaseCacheEntries = 256;
     const int CacheEntriesPerPlayer = 64;
     int CacheCapacity => BaseCacheEntries + CacheEntriesPerPlayer * Server.PlayerCount;
 
-    // Bumped when the command tree changes (a Register) - invalidates every cached parse, console included.
+    // Bumped on a Register (tree change); invalidates every cached parse.
     int generation;
-    // Per-player parse generation, bumped by Invalidate; absent (== 0) for a player never invalidated.
+    // Per-player parse generation, bumped by Invalidate; absent (== 0) for a never-invalidated player.
     readonly ConcurrentDictionary<ulong, int> playerEpoch = new();
 
-    /// <summary>The server this dispatcher drives, injected by <see cref="Server"/>. Commands reach it through
-    /// <see cref="SenderContext.Server"/> instead of a global static.</summary>
     public Server Server { get; set; }
 
-    /// <summary>The underlying Brigadier dispatcher, exposed so a later phase can serialize the command tree
-    /// (the Declare Commands packet) and answer completion suggestions.</summary>
+    /// <summary>The underlying Brigadier dispatcher (for serializing the command tree and answering
+    /// suggestions).</summary>
     public CommandDispatcher<SenderContext> Brigadier => brig;
 
     public CommandDispatcher(Server server) {
         Server = server;
     }
 
-    /// <summary>Registers a command from a Brigadier builder lambda; chainable. Changing the tree invalidates
-    /// every cached parse (their <c>.Requires</c> pruning may no longer hold).</summary>
+    /// <summary>Registers a command from a Brigadier builder lambda; chainable. Invalidates every cached
+    /// parse.</summary>
     public CommandDispatcher Register(Func<IArgumentContext<SenderContext>, LiteralArgumentBuilder<SenderContext>> command) {
         brig.Register(command);
         Interlocked.Increment(ref generation);
         return this;
     }
 
-    /// <summary>Invalidates a player's cached parses, for when anything their <c>.Requires</c> predicates depend
-    /// on changes (permissions, the world/dimension they are in). The next run re-parses against current state.</summary>
+    /// <summary>Invalidates a player's cached parses when their <c>.Requires</c> inputs change (permissions,
+    /// world). The next run re-parses against current state.</summary>
     public void Invalidate(ulong clientId) => playerEpoch.AddOrUpdate(clientId, 1, static (_, epoch) => epoch + 1);
 
-    /// <summary>Drops a disconnected player's epoch entry (their cached parses lapse via the TTL). Client ids
-    /// are monotonic, so the entry cannot be wrongly reused by a later connection.</summary>
+    /// <summary>Drops a disconnected player's epoch entry; their cached parses lapse via the TTL. Client ids
+    /// are monotonic, so the entry can't be reused by a later connection.</summary>
     public void Forget(ulong clientId) => playerEpoch.TryRemove(clientId, out _);
 
     /// <summary>Runs a command line (no leading slash) as <paramref name="sender"/>. <paramref name="client"/>
-    /// is the issuing player's connection (null for the console), which gives player-perspective commands their
-    /// entity. The returned task completes synchronously: Brigadier executes synchronously, and the few commands
-    /// that need concurrency arrange it themselves.</summary>
+    /// is the issuing player's connection (null for the console), giving player-perspective commands their
+    /// entity. The returned task completes synchronously.</summary>
     public Task ExecuteAsync(ISender sender, string text, NetClient? client = null) {
         text = text.Trim();
         if (text.Length == 0)
@@ -82,8 +73,7 @@ public sealed class CommandDispatcher {
         string key = CacheKey(client, text);
         if (!parseCache.TryGet(key, out var parse)) {
             parse = brig.Parse(text, new SenderContext(sender, this, client));
-            // Reclaim lapsed/orphaned entries when at the cap; past it, run the parse but don't memoize it
-            // (parse is cheap, so an over-cap miss just costs a re-parse — memory stays bounded).
+            // At the cap, reclaim lapsed entries; still over it, skip memoizing (a re-parse is cheap).
             int cap = CacheCapacity;
             if (parseCache.Count >= cap)
                 parseCache.EvictExpired();
@@ -105,14 +95,13 @@ public sealed class CommandDispatcher {
     }
 
     /// <summary>
-    /// Computes tab-completion suggestions for a partial command line as <paramref name="sender"/>
-    /// (<paramref name="client"/> gives player-perspective commands their entity / passes <c>.Requires</c>).
-    /// The vanilla client sends the WHOLE chat input INCLUDING the leading <c>/</c>, so we skip it for parsing
-    /// but keep the returned <c>Start</c> in the client's full-input coordinates (shifted back by the skipped
-    /// slash) — otherwise the client replaces the wrong span and the suggestion popup shows nothing. Returns
-    /// the replace range and the matches. Synchronous: our suggestion providers complete inline.
+    /// Tab-completion suggestions for a partial command line as <paramref name="sender"/>, returned as the
+    /// replace range plus the matches. <paramref name="client"/> gives player-perspective commands their
+    /// entity. Synchronous.
     /// </summary>
     public (int Start, int Length, IReadOnlyList<string> Matches) Suggest(ISender sender, string text, NetClient? client = null) {
+        // The vanilla client sends the whole input including the leading '/', so skip it for parsing but keep
+        // the returned Start in the client's full-input coordinates — else it replaces the wrong span.
         int offset = 0;
         if (text.StartsWith('/')) { text = text[1..]; offset = 1; }
         var suggestions = brig
@@ -123,9 +112,8 @@ public sealed class CommandDispatcher {
         return (suggestions.Range.Start + offset, suggestions.Range.Length, matches);
     }
 
-    // generation + source identity (+ per-player epoch) + text. Bumping generation or the player's epoch changes
-    // the key, so stale parses are never hit again and lapse via the TTL. Unambiguous despite spaces in the text:
-    // the leading fields are spaceless integers (or the literal "console"), so two distinct tuples never collide.
+    // generation + source identity (+ per-player epoch) + text. The leading fields are spaceless, so spaces in
+    // the text can't make two distinct tuples collide.
     string CacheKey(NetClient? client, string text) {
         int gen = Volatile.Read(ref generation);
         return client is null

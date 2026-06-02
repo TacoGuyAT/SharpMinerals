@@ -8,12 +8,8 @@ using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Persistence;
 
-/// <summary>
-/// Serializes a <see cref="PlayerState"/> to a self-describing <c>byte[]</c> for disk-backed
-/// stores (RocksDB). Items are written by registry NAME — not flyweight identity — and block
-/// states by their property values, so a stack resolves back to the same definition on load
-/// even as internal ids shift. Uses the project's <see cref="MinecraftStream"/> primitives.
-/// </summary>
+/// <summary>Serializes a <see cref="PlayerState"/> to a self-describing <c>byte[]</c> for disk-backed stores.
+/// Items are written by registry NAME (see <see cref="StackCodec"/>), so they resolve back even as ids shift.</summary>
 public static class PlayerStateCodec {
     const byte Version = 1;
 

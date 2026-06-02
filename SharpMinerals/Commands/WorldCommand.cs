@@ -5,8 +5,7 @@ using SharpMinerals.Level;
 namespace SharpMinerals.Commands;
 
 /// <summary><c>/world &lt;name&gt;</c> — switches the issuing player to a world, creating it fresh (in-memory
-/// superflat) if it doesn't exist. Player-only (the console has no world to switch). The basis for per-test
-/// world isolation: each test names its own throwaway world.</summary>
+/// superflat) if absent. Player-only. Also the basis for per-test world isolation.</summary>
 public static class WorldCommand {
     public static CommandDispatcher RegisterWorld(this CommandDispatcher d) => d.Register(l => l
         .Literal("world")

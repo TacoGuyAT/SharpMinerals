@@ -14,17 +14,8 @@ using World = SharpMinerals.Level.World;
 namespace SharpMinerals.Network.Handlers;
 
 /// <summary>
-/// The networking edge for simulated entities (dropped items, falling blocks). The SIMULATION lives in
-/// world systems (<c>EntityPhysicsSystem</c>, <c>ItemPickupSystem</c>, <c>FallingBlockSystem</c>); this
-/// class is the server-thread half that the world can't do itself:
-/// <list type="bullet">
-/// <item><see cref="AnnounceNew"/> — broadcasts the Spawn Entity for freshly-spawned entities, BEFORE the
-/// physics tick so the client predicts the same motion (it needs a fresh, un-decayed velocity).</item>
-/// <item><see cref="TryStartFalling"/> — the block-fall trigger: detaches an unsupported gravity block
-/// into a falling entity and broadcasts the cleared cell (called from block break/place).</item>
-/// <item><see cref="RegisterHandlers"/> — subscribes to the simulation's deferred pickup/landing events
-/// and broadcasts their client effects when the bus drains on the tick thread.</item>
-/// </list>
+/// The networking edge for simulated entities (dropped items, falling blocks); the simulation itself lives
+/// in world systems. Announces spawns, triggers block falls, and broadcasts deferred pickup/landing effects.
 /// </summary>
 public static class EntityNetworking {
     static readonly QueryDescription DropQuery =
@@ -40,7 +31,7 @@ public static class EntityNetworking {
     static short ToWire(Mfloat blocksPerTick) =>
         (short)System.Math.Clamp(blocksPerTick * VelocityUnit, short.MinValue, short.MaxValue);
 
-    /// <summary>Subscribes the pickup/landing networking to the server's event bus (called once at startup).</summary>
+    /// <summary>Called once at startup.</summary>
     public static void RegisterHandlers(Server server) {
         server.Events.Subscribe<ItemPickedUp>(e => OnItemPickedUp(server, e));
         server.Events.Subscribe<FallingBlockLanded>(e => OnFallingBlockLanded(server, e));

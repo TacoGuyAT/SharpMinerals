@@ -7,12 +7,10 @@ using NuGet.Versioning;
 namespace SharpMinerals.Modding;
 
 /// <summary>
-/// Discovers and drives mods. A host (e.g. SharpMinerals.CLI) creates one, feeds it mods — either as
-/// already-loaded assemblies (<see cref="LoadFrom"/>, for compiled-in / consuming-assembly mods) or by
-/// scanning a directory of <c>*.dll</c> files (<see cref="LoadDirectory"/>) — then runs the lifecycle:
-/// loading calls each mod's <see cref="Mod.OnInitialize"/> (content registration), after which the host
-/// freezes the registries (<see cref="ModContent.Freeze"/>) and builds the protocols + server, then calls
-/// <see cref="StartAll"/> / <see cref="StopAll"/>. Modelled after HarmonyMine's <c>Mod.TryRegister</c> flow.
+/// Discovers and drives mods. A host feeds it mods — already-loaded assemblies (<see cref="LoadFrom"/>) or a
+/// directory of <c>*.dll</c> files (<see cref="LoadDirectory"/>) — which calls each mod's
+/// <see cref="Mod.OnInitialize"/>; the host then freezes the registries and builds the server, and later calls
+/// <see cref="StartAll"/> / <see cref="StopAll"/>.
 /// </summary>
 public sealed partial class ModLoader {
     [GeneratedRegex(@"^[A-Za-z0-9_]+$", RegexOptions.Compiled)]
@@ -26,9 +24,8 @@ public sealed partial class ModLoader {
     /// <summary>The mods loaded so far, in load order.</summary>
     public IReadOnlyList<Mod> Mods => mods;
 
-    /// <summary>The running server's version, used to gate mods by their declared <see
-    /// cref="ModInfoAttribute.TargetServerVersion"/>. Defaults to the SharpMinerals assembly version; a
-    /// host or test may override it.</summary>
+    /// <summary>The running server's version, used to gate mods by their declared
+    /// <see cref="ModInfoAttribute.TargetServerVersion"/>. Defaults to the core assembly version; overridable.</summary>
     public SemanticVersion ServerVersion { get; set; } = CoreVersion();
 
     static SemanticVersion CoreVersion() {
@@ -51,8 +48,7 @@ public sealed partial class ModLoader {
             log.LogError("Mod \"{Id}\" has an invalid semantic version \"{Version}\".", info.ModId, info.Version);
             return false;
         }
-        // Gate on the declared target server version: same major (no breaking API change) and the running
-        // server at least as new (so the mod's expected APIs exist). No target = no check.
+        // Gate on the declared target server version (see ModVersioning.Supports). No target = no check.
         if(info.TargetServerVersion is { } targetText) {
             if(!SemanticVersion.TryParse(targetText, out var target)) {
                 log.LogError("Mod \"{Id}\" declares an invalid target server version \"{Target}\".", info.ModId, targetText);
@@ -78,8 +74,7 @@ public sealed partial class ModLoader {
             mod.OnInitialize();
         } catch(Exception ex) {
             log.LogError(ex, "Mod \"{Id}\" OnInitialize threw — the mod may be partially loaded.", info.ModId);
-            // It's already past content registration; keep it so OnServerStarted still runs, matching
-            // a "best effort" load. A throwing mod logs loudly rather than aborting the whole server.
+            // Best-effort: keep the mod so OnServerStarted still runs, rather than aborting the whole server.
         }
 
         mods.Add(mod);
@@ -134,10 +129,8 @@ public sealed partial class ModLoader {
         return true;
     }
 
-    /// <summary>Calls <see cref="Mod.OnServerStarted"/> on every loaded mod (after the server has started).</summary>
     public void StartAll(Server server) => ForEach(server, (m, s) => m.OnServerStarted(s), "OnServerStarted");
 
-    /// <summary>Calls <see cref="Mod.OnServerStopping"/> on every loaded mod (during shutdown).</summary>
     public void StopAll(Server server) => ForEach(server, (m, s) => m.OnServerStopping(s), "OnServerStopping");
 
     void ForEach(Server server, Action<Mod, Server> action, string phase) {

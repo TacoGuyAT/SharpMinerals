@@ -4,16 +4,13 @@ using SharpMinerals.Network.Buffers;
 namespace SharpMinerals.Network.Nbt;
 
 /// <summary>
-/// Minimal NBT parser — the read counterpart to <see cref="NbtTag.WritePayload"/>. Currently used to
-/// recover custom item data the client echoes back (a creative-mode slot edit), so we only need to parse
-/// an item Slot's NBT into the in-memory <see cref="NbtTag"/> model. Big-endian, with 2-byte
-/// length-prefixed UTF-8 names/strings (NBT's own framing, not the protocol's VarInt strings).
+/// Minimal NBT parser (read counterpart to <see cref="NbtTag.WritePayload"/>), used to recover custom
+/// item data the client echoes back. Parses an item Slot's NBT into the in-memory <see cref="NbtTag"/> model.
 /// </summary>
 public static class NbtReader {
     /// <summary>
-    /// Reads an item Slot's NBT, positioned right after the slot's item id + count. A single
-    /// <see cref="NbtTagType.End"/> byte means "no NBT" (returns null); otherwise a 1.20.1 named root
-    /// compound (type, empty name, body) is parsed and returned.
+    /// Reads an item Slot's NBT (positioned after the slot's id + count). A lone <see cref="NbtTagType.End"/>
+    /// byte means no NBT (returns null); otherwise parses the 1.20.1 named root compound.
     /// </summary>
     public static NbtCompound? ReadItemNbt(MinecraftStream s) {
         byte type = s.ReadUByte();

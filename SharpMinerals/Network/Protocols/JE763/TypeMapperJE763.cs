@@ -5,17 +5,14 @@ using SharpMinerals.Items;
 namespace SharpMinerals.Network.Protocols.JE763;
 
 /// <summary>
-/// <see cref="ITypeMapper"/> for Java Edition 1.20.1 (protocol 763): maps SharpMinerals block/item
-/// definitions to vanilla wire ids, keyed by the definition's internal name. Game-side types carry
-/// no vanilla ids — the mapping is protocol-version data and lives here. Unmapped kinds fall back to
-/// a placeholder so a stock client still renders something.
+/// <see cref="ITypeMapper"/> for Java Edition 1.20.1 (protocol 763): maps block/item definitions to
+/// vanilla wire ids by internal name. Unmapped kinds fall back to a placeholder.
 /// </summary>
 public sealed class TypeMapperJE763 : ITypeMapper {
     const int FallbackStateId = 1; // minecraft:stone
     const int FallbackItemId = 1;  // minecraft:stone
 
-    // 1.20.1 global-palette block-state ids (bedrock/cobblestone fall back to stone until the
-    // palette is fleshed out).
+    // 1.20.1 global-palette block-state ids.
     readonly Dictionary<string, int> stateByName = new() {
         ["air"] = 0,
         ["bedrock"] = 79,
@@ -29,8 +26,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         ["gravel"] = 118,
     };
 
-    // 1.20.1 block-entity-type registry ids (furnace 0, chest 1, …) — for the chunk packet's block-entity
-    // list, so a chest renders its (block-entity-rendered) model on chunk load, not only after an update.
+    // 1.20.1 block-entity-type registry ids, for the chunk packet's block-entity list (so a chest renders on chunk load).
     readonly Dictionary<string, int> blockEntityIdByName = new() {
         ["chest"] = 1, // minecraft:chest
     };
@@ -48,20 +44,18 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         ["gravel"] = 48,
     };
 
-    // Reverse map (vanilla item id → our definition) and block-state ids by BlockType.Id (O(1) on
-    // the per-cell serializer hot path) — both built in the constructor.
+    // Reverse map (vanilla item id → our definition) and state ids by BlockType.Id (O(1) on the serializer hot path).
     readonly Dictionary<int, ItemType> itemById;
     readonly int[] stateByBlockId;
 
-    // Per-stateful-block vanilla layout: default id + a stride per modeled property (stride =
-    // product of the value-counts of the vanilla properties AFTER it). modeled id = default +
-    // Σ valueIndex * stride.
+    // Per-stateful-block layout: default id + a stride per modeled property (= product of value-counts of
+    // vanilla properties after it). modeled id = default + Σ valueIndex * stride.
     readonly Dictionary<string, StateLayout> stateLayouts = new() {
-        ["chest"] = new StateLayout(2955, (State.Facing, 6)), // facing(4) × type(3) × waterlogged(2); we model facing ⇒ stride 6
+        ["chest"] = new StateLayout(2955, (State.Facing, 6)), // facing(4) × type(3) × waterlogged(2); model facing ⇒ stride 6
     };
 
-    // Overrides the linear formula can't express (a property whose values map to DIFFERENT vanilla
-    // blocks/items — dye colour → 16 wools). Block side returns null to fall through to the formula.
+    // Overrides the linear formula can't express (values mapping to DIFFERENT vanilla blocks/items, e.g.
+    // dye colour → 16 wools). Block side returns null to fall through to the formula.
     readonly Dictionary<string, Func<BlockState, int?>> stateOverrides;
     readonly Dictionary<string, Func<BlockState, int>> itemOverrides;
 
@@ -117,8 +111,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
     public int EntityTypeId(EntityType type) => type.Name switch {
         "item" => 54, // minecraft:item
         "falling_block" => 36, // minecraft:falling_block
-        // 1.20.1 spawns players via the dedicated Spawn Player packet, not Spawn Entity; players
-        // only carry an entity type in Spawn Entity from 1.20.2+ (a future protocol's mapper).
+        // 1.20.1 spawns players via Spawn Player, not Spawn Entity (players carry an entity type only from 1.20.2+).
         "player" => throw new NotSupportedException(
             "JE763 spawns players via the dedicated Spawn Player packet, not Spawn Entity."),
         _ => throw new ArgumentOutOfRangeException(nameof(type), type.Name, "No JE763 wire id for this entity type."),
@@ -128,7 +121,6 @@ public sealed class TypeMapperJE763 : ITypeMapper {
 
     public int ItemId(ItemType item) => itemIdByName.GetValueOrDefault(item.Name, FallbackItemId);
 
-    // A type we have no vanilla item id for (e.g. a mod-added block) renders as the fallback item.
     public bool IsCustom(ItemType item) => !itemIdByName.ContainsKey(item.Name);
 
     public int ItemId(ItemStack stack) {
@@ -142,8 +134,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
     public ItemType? FromItemId(int vanillaId) => itemById.GetValueOrDefault(vanillaId);
 
     public ItemStack FromVanillaItem(int vanillaId) {
-        // Wool colours occupy a contiguous vanilla item range → our one wool block with the Color
-        // state set (the inverse of itemOverrides["wool"]).
+        // Wool colours are a contiguous vanilla range → our one wool block with Color set (inverse of itemOverrides["wool"]).
         if (vanillaId is >= 180 and <= 195)
             return new ItemStack(BlockRegistry.Wool)
                 .WithState(new BlockState(BlockRegistry.Wool).Set(State.Color, vanillaId - 180));

@@ -7,11 +7,7 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Entities;
 
-/// <summary>
-/// Prefab/factory for the set of components that make up a player. Keeping the
-/// "what is a player" knowledge here (rather than in a subclass) is what lets the
-/// rest of the engine stay component-oriented.
-/// </summary>
+/// <summary>Prefab/factory for the components that make up a player, keeping the engine component-oriented.</summary>
 public static class Player {
     /// <summary>The player kind's max health (from its <c>Living</c> definition component).</summary>
     public static float MaxHealth => EntityRegistry.Player.MaxHealth;
@@ -28,18 +24,14 @@ public static class Player {
             new VelocityEntityComponent(0, 0, 0),
             health,
             inventory,
-            // Players are excluded from the physics step (their position is client-driven), so this
-            // box currently serves only as the item-pickup reach for CollisionFeedback. Real player
-            // terrain-collision dimensions come with the deferred player-physics work.
+            // Players are physics-excluded (client-driven); this box only serves item-pickup reach.
             new ColliderEntityComponent(1.5, 2.0),
-            // Object initializer (a plain field assignment), NOT a parameterless ctor — the latter is
-            // bypassed on default-init paths (Arch arrays / Release JIT), which left Touching null.
+            // Object initializer, NOT a parameterless ctor — that's bypassed on Arch default-init paths.
             new CollisionFeedbackEntityComponent { Touching = new List<ArchEntity>() },
             new ChunkViewEntityComponent(),
             new TypeEntityDescriptor { Type = EntityRegistry.Player },
             SenderEntityComponent.ForPlayer(name),
             new NetPlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, EntityId = entityId },
-            // Tracks the equipment others have been shown; the first InventoryChanged at join fills it.
             new EquipmentEntityComponent());
     }
 

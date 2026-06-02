@@ -1,11 +1,8 @@
 namespace SharpMinerals.Entities.Components;
 
-/// <summary>
-/// An entity's axis-aligned collision box: centred on its <see cref="TransformEntityComponent"/> in X/Z and
-/// rising <see cref="Height"/> from its feet. Shared by two systems — the physics step (sweeping
-/// the box against solid blocks for terrain collision) and <see cref="CollisionFeedbackEntityComponent"/> (testing
-/// box overlap against other entities). One box definition, read by both.
-/// </summary>
+/// <summary>An entity's axis-aligned collision box: centred on its transform in X/Z, rising <see cref="Height"/>
+/// from its feet. Read by both the physics step (terrain collision) and <see cref="CollisionFeedbackEntityComponent"/>
+/// (entity overlap).</summary>
 public struct ColliderEntityComponent {
     public double Width;
     public double Height;
