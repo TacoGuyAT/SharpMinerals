@@ -23,7 +23,7 @@ public sealed class ChatComponentConverter : JsonConverter<ChatComponent> {
         if (root.ValueKind == JsonValueKind.Array) {
             ChatComponent? head = null;
             foreach (var element in root.EnumerateArray()) {
-                var child = element.Deserialize<ChatComponent>(options)!;
+                var child = (ChatComponent)JsonSerializer.Deserialize(element, options.GetTypeInfo(typeof(ChatComponent)))!;
                 if (head is null) head = child;
                 else (head.Extra ??= new()).Add(child);
             }
@@ -39,10 +39,12 @@ public sealed class ChatComponentConverter : JsonConverter<ChatComponent> {
             // No content field (a style-only object, e.g. a parent carrying just Extra): treat as empty text.
             typeof(TextComponent);
 
-        // Deserializing the concrete type re-enters STJ's default path; nested components route back here.
-        return (ChatComponent?)root.Deserialize(concrete, options);
+        // Resolve the concrete type's source-generated metadata from the live options. Its converter selection
+        // no longer matches this (base-only) converter, so it serializes fields directly; nested components route
+        // back here because their static type is still ChatComponent.
+        return (ChatComponent?)JsonSerializer.Deserialize(root, options.GetTypeInfo(concrete));
     }
 
     public override void Write(Utf8JsonWriter writer, ChatComponent value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, value, value.GetType(), options);
+        JsonSerializer.Serialize(writer, value, options.GetTypeInfo(value.GetType()));
 }

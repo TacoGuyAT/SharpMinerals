@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace SharpMinerals.Chat;
 
@@ -11,17 +11,19 @@ namespace SharpMinerals.Chat;
 /// type.
 /// </summary>
 public abstract class ChatComponent {
-    internal static readonly JsonSerializerOptions SerializerOptions = new() {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        // Component data is public fields, which STJ skips unless told.
-        IncludeFields = true,
-        // Omit default/empty fields so a component serializes to the minimal JSON the client expects.
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+    // Copied FROM the source-generated context's options, so it inherits the resolver AND its settings
+    // (snake_case names, public fields, omit defaults) with no reflection. The polymorphic converter is layered
+    // on top; it applies only to the base type (its CanConvert matches ChatComponent exactly), so a concrete
+    // component still serializes its own fields.
+    internal static readonly JsonSerializerOptions SerializerOptions = new(ChatJsonContext.Default.Options) {
         Converters = { new ChatComponentConverter() }
     };
 
+    static readonly JsonTypeInfo<ChatComponent> ComponentTypeInfo =
+        (JsonTypeInfo<ChatComponent>)SerializerOptions.GetTypeInfo(typeof(ChatComponent));
+
     public static ChatComponent FromJson(string json) =>
-        JsonSerializer.Deserialize<ChatComponent>(json, SerializerOptions) ?? throw new JsonException();
+        JsonSerializer.Deserialize(json, ComponentTypeInfo) ?? throw new JsonException();
 
     // Fluent construction entry points; each returns the concrete type so its setters chain. They live on this
     // type rather than a `Component(s)` helper to avoid clashing with Arch's Component / the Components namespace.
@@ -33,8 +35,8 @@ public abstract class ChatComponent {
     public static SelectorComponent Selector(string selector) => new(selector);
     public static ScoreComponent Score(string name, string objective) => new(new Score(name, objective));
 
-    // Serialized via the runtime type, so a base-typed value still emits its subclass fields.
-    public override string ToString() => JsonSerializer.Serialize<ChatComponent>(this, SerializerOptions);
+    // Serialized via the runtime type's metadata, so a base-typed value still emits its subclass fields.
+    public override string ToString() => JsonSerializer.Serialize(this, SerializerOptions.GetTypeInfo(GetType()));
 
     public List<ChatComponent>? Extra;
     public string? Color;

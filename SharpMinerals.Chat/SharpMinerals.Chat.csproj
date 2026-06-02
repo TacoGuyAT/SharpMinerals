@@ -4,6 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- AOT migration: turn on the trim/AOT/single-file analyzers so reflection-based APIs (here, STJ) surface
+         as IL2026/IL3050 warnings at build time. The chat component (de)serialization is source-generated below. -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
 </Project>
