@@ -615,6 +615,28 @@ public class PlayStateTests {
         Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
     }
 
+    // ── InventoryComponent.Add splits a large count across slots, capped at the item's max stack size ──
+    [Fact]
+    public void InventoryAddRespectsMaxStackSize() {
+        var inv = new InventoryComponent(InventoryEntityComponent.MainSize);
+
+        // 100 stone (max 64) → 64 + 36 across two slots, nothing left over (the old Add over-stuffed one slot).
+        Assert.True(inv.Add(new ItemStack(BlockRegistry.Stone, 100)).IsEmpty);
+        Assert.Equal(64, inv[0].Count);
+        Assert.Equal(36, inv[1].Count);
+
+        // Adding more tops up the partial slot first, then spills into a fresh one.
+        Assert.True(inv.Add(new ItemStack(BlockRegistry.Stone, 30)).IsEmpty);
+        Assert.Equal(64, inv[1].Count); // 36 → 64
+        Assert.Equal(2, inv[2].Count);  // the remaining 2
+
+        // When the range is full, the overflow is returned rather than over-stacked.
+        var small = new InventoryComponent(1);
+        var leftover = small.Add(new ItemStack(BlockRegistry.Stone, 100));
+        Assert.Equal(64, small[0].Count);
+        Assert.Equal(36, leftover.Count);
+    }
+
     // ── Equipment: held item syncs as Set Equipment; off-hand never reaches a legacy client ─────────
     [Fact]
     public void EquipmentSyncsAndOffhandSkipsLegacy() {
