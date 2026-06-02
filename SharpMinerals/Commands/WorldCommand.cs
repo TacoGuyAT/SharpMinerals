@@ -12,19 +12,17 @@ public static class WorldCommand {
         .Literal("world")
         .Then(a => a.Argument("name", Arguments.Word()).Requires(s => s.IsPlayer)
             .Suggests((ctx, builder) => {
-                if (ctx.Source.Server is { } srv)
-                    foreach (var wname in srv.Worlds.Keys)
-                        if (wname.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)) builder.Suggest(wname);
+                foreach (var wname in ctx.Source.Server.Worlds.Keys)
+                    if (wname.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)) builder.Suggest(wname);
                 return builder.BuildFuture();
             })
-            .Executes(c => {
-            var server = c.Source.Server;
-            if (server is null) { c.Source.Reply("Server is not running."); return 0; }
-            if (c.Source.Client is not { } client) { c.Source.Reply("Only a player can switch worlds."); return 0; }
-            var world = server.GetOrCreateWorld(Arguments.GetString(c, "name"),
+            .Executes(ctx => {
+            var server = ctx.Source.Server;
+            if (ctx.Source.Client is not { } client) { ctx.Source.Reply("Only a player can switch worlds."); return 0; }
+            var world = server.GetOrCreateWorld(Arguments.GetString(ctx, "name"),
                 static (name, srv) => new World(name) { Events = srv.Events });
             server.SwitchWorld(client.Id, world);
-            c.Source.Reply($"Switched to world '{world.Name}'.");
+            ctx.Source.Reply($"Switched to world '{world.Name}'.");
             return 1;
         })));
 }

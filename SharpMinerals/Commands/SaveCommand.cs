@@ -8,13 +8,12 @@ namespace SharpMinerals.Commands;
 /// comes back on the next tick.</summary>
 public static class SaveCommand {
     public static CommandDispatcher RegisterSave(this CommandDispatcher d) => d.Register(l => l
-        .Literal("save").Executes(c => {
-            var server = c.Source.Server;
-            if (server is null) { c.Source.Reply("Server is not running."); return 0; }
+        .Literal("save").Executes(ctx => {
+            var server = ctx.Source.Server;
             server.Events.Defer(() => {
                 int chunks = server.SaveWorlds();
                 int players = server.SavePlayers();
-                c.Source.Reply($"Saved {chunks} chunk(s) and {players} player(s).");
+                ctx.Source.Reply($"Saved {chunks} chunk(s) and {players} player(s).");
             });
             return 1;
         }));

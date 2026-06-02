@@ -20,8 +20,8 @@ public static class GiveCommand {
 
     public static CommandDispatcher RegisterGive(this CommandDispatcher d) => d.Register(l => l
         .Literal("give")
-        .Requires(s => s.IsPlayer)
-        .Then(a => a.Argument("item", Arguments.Word())
+        .Requires(x => x.IsPlayer)
+        .Then(x => x.Argument("item", Arguments.Word())
             .Suggests((ctx, builder) => {
                 // Suggest every giveable registry name (blocks except air, plus non-block items).
                 foreach (var block in BlockRegistry.All)
@@ -36,32 +36,31 @@ public static class GiveCommand {
             .Then(b => b.Argument("count", Arguments.Integer(1, MaxCount))
                 .Executes(c => Give(c, Arguments.GetInteger(c, "count"))))));
 
-    static int Give(BrigContext c, int count) {
-        var server = c.Source.Server;
-        if (server is null) { c.Source.Reply("Server is not running."); return 0; }
-        if (c.Source.Client is not { } client
+    static int Give(BrigContext ctx, int count) {
+        var server = ctx.Source.Server;
+        if (ctx.Source.Client is not { } client
             || !server.TryGetPlayer(client.Id, out var context)
             || !context.World.Ecs.IsAlive(context.Entity)) {
-            c.Source.Reply("Only an online player can be given items.");
+            ctx.Source.Reply("Only an online player can be given items.");
             return 0;
         }
 
-        var name = Arguments.GetString(c, "item");
+        var name = Arguments.GetString(ctx, "item");
         if (ItemRegistry.Resolve(name) is not { } type || type is BlockType { IsAir: true }) {
-            c.Source.Reply($"Unknown item '{name}'.");
+            ctx.Source.Reply($"Unknown item '{name}'.");
             return 0;
         }
 
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         var leftover = inventory.Add(new ItemStack(type, count));
         int given = count - leftover.Count;
-        if (given <= 0) { c.Source.Reply("Your inventory is full."); return 0; }
+        if (given <= 0) { ctx.Source.Reply("Your inventory is full."); return 0; }
 
         // Push the updated window (cursor cleared) and refresh the equipment others see (held/armour).
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
         server.Events.Publish(new PlayerInventoryChanged(context));
 
-        c.Source.Reply($"Gave x{given} {type.Name}.");
+        ctx.Source.Reply($"Gave x{given} {type.Name}.");
         return given;
     }
 }

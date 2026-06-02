@@ -19,10 +19,10 @@ namespace SharpMinerals.Commands;
 public sealed class CommandContext {
     public ISender Sender { get; }
     public CommandDispatcher Dispatcher { get; }
-    /// <summary>The issuing player's connection, or null for the console / a non-player sender.</summary>
+    /// <summary>The issuing player's connection, or null for the non-player sender.</summary>
     public NetClient? Client { get; }
 
-    public Server? Server => Dispatcher.Server;
+    public Server Server => Dispatcher.Server;
     /// <summary>Whether a player issued this command (i.e. it has an in-world entity).</summary>
     public bool IsPlayer => Client is not null;
 
@@ -40,8 +40,7 @@ public sealed class CommandContext {
     public bool TryGetEntity([MaybeNullWhen(false)] out World world, out ArchEntity entity) {
         world = null;
         entity = default;
-        if (Client is null || Server is not { } server
-            || !server.TryGetPlayer(Client.Id, out var player) || !player.World.Ecs.IsAlive(player.Entity))
+        if (Client is null || !Server.TryGetPlayer(Client.Id, out var player) || !player.World.Ecs.IsAlive(player.Entity))
             return false;
         world = player.World;
         entity = player.Entity;

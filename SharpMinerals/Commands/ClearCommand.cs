@@ -13,14 +13,14 @@ namespace SharpMinerals.Commands;
 public static class ClearCommand {
     public static CommandDispatcher RegisterClear(this CommandDispatcher d) => d.Register(l => l
         .Literal("clear")
-        .Requires(s => s.IsPlayer)
-        .Executes(c => {
-            var server = c.Source.Server;
-            if (server is null) { c.Source.Reply("Server is not running."); return 0; }
-            if (c.Source.Client is not { } client
-                || !server.TryGetPlayer(client.Id, out var context)
-                || !context.World.Ecs.IsAlive(context.Entity)) {
-                c.Source.Reply("Only an online player can clear their inventory.");
+        .Requires(x => x.IsPlayer)
+        .Executes(ctx => {
+            var server = ctx.Source.Server;
+            if (ctx.Source.Client is not { } client || 
+                !server.TryGetPlayer(client.Id, out var context) ||
+                !context.World.Ecs.IsAlive(context.Entity)
+            ) {
+                ctx.Source.Reply("Only an online player can clear their inventory.");
                 return 0;
             }
 
@@ -35,7 +35,7 @@ public static class ClearCommand {
             client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
             server.Events.Publish(new PlayerInventoryChanged(context));
 
-            c.Source.Reply(cleared > 0 ? $"Cleared {cleared} item stack(s)." : "Inventory already empty.");
+            ctx.Source.Reply(cleared > 0 ? $"Cleared {cleared} item stack(s)." : "Inventory already empty.");
             return 1;
         }));
 }

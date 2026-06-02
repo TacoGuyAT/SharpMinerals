@@ -19,10 +19,10 @@ public sealed class TestMod : Mod {
     public override void OnServerStarted(Server server) {
         server.CommandDispatcher.Register(l => l
             .Literal("test")
-            .Then(a => a.Argument("args", Arguments.GreedyString()).Executes(c => {
-                if (c.Source.Server is not { } srv) return 0;
+            .Then(x => x.Argument("args", Arguments.GreedyString()).Executes(ctx => {
+                var srv = ctx.Source.Server;
 
-                string rest = Arguments.GetString(c, "args");
+                string rest = Arguments.GetString(ctx, "args");
                 ulong? target = null;
                 if (rest.StartsWith('@')) {
                     int space = rest.IndexOf(' ');
@@ -32,15 +32,15 @@ public sealed class TestMod : Mod {
                     }
                 }
 
-                if (rest.Length == 0) { c.Source.Reply("usage: /test [@clientId] <command>"); return 0; }
+                if (rest.Length == 0) { ctx.Source.Reply("usage: /test [@clientId] <command>"); return 0; }
 
                 var message = new TestCommandS2C(rest);
                 if (target is ulong clientId) {
                     srv.NetServer.Send(clientId, message);
-                    c.Source.Reply($"-> #{clientId}: {rest}");
+                    ctx.Source.Reply($"-> #{clientId}: {rest}");
                 } else {
                     srv.NetServer.Broadcast(message, conn => conn.State == ConnectionState.Play);
-                    c.Source.Reply($"-> all: {rest}");
+                    ctx.Source.Reply($"-> all: {rest}");
                 }
                 return 1;
             })));
