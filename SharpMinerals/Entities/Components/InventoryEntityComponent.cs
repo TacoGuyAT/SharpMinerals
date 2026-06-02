@@ -48,24 +48,10 @@ public sealed class InventoryEntityComponent {
     /// <summary>The off-hand ("second hand") slot.</summary>
     public ref ItemStack Offhand => ref Storage[OffhandStart];
 
-    /// <summary>
-    /// Adds a stack to the main inventory (merging into matching stacks, then filling
-    /// empty slots) and returns whatever did not fit.
-    /// </summary>
-    public ItemStack Add(ItemStack stack) {
-        for (int i = 0; i < MainSize && !stack.IsEmpty; i++) {
-            ref var dst = ref Storage[i];
-            if (!dst.IsEmpty && dst.StacksWith(stack) && dst.Count < dst.Type!.MaxStackSize) {
-                int move = System.Math.Min(stack.Count, dst.Type.MaxStackSize - dst.Count);
-                dst.Count += move; stack.Count -= move; if (stack.Count <= 0) stack = default;
-            }
-        }
-        for (int i = 0; i < MainSize && !stack.IsEmpty; i++) {
-            ref var dst = ref Storage[i];
-            if (dst.IsEmpty) { dst = stack; stack = default; }
-        }
-        return stack;
-    }
+    /// <summary>Adds a stack to the MAIN inventory (hotbar + storage, slots 0–35) — merging into matching
+    /// stacks then filling empties, capped per slot at the item's max stack size — and returns whatever
+    /// didn't fit. Armor and the off-hand are never auto-filled. Delegates to <see cref="InventoryComponent.Add"/>.</summary>
+    public ItemStack Add(ItemStack stack) => Storage.Add(stack, 0, MainSize);
 }
 
 /// <summary>The four armor slots, ordered foot-to-head as in the vanilla equipment array.</summary>
