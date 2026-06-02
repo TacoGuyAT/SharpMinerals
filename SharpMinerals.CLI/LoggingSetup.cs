@@ -29,10 +29,12 @@ static class LoggingSetup {
             builder.AddZLoggerConsole(options => options.UsePlainTextFormatter(FormatColoured));
 
             if (toFile) {
-                // Daily rolling file with a sequence suffix once a day's log exceeds the size cap.
+                // One file per run: the start time is stamped into the name once, so a restart never appends to
+                // a prior run's log. A long run still rolls to a _NNN sequence suffix past the size cap.
+                string runStamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
                 builder.AddZLoggerRollingFile(options => {
-                    options.FilePathSelector = (date, sequence) =>
-                        Path.Combine(logsDir!, $"sharpminerals-{date.ToLocalTime():yyyy-MM-dd}_{sequence:000}.log");
+                    options.FilePathSelector = (_, sequence) =>
+                        Path.Combine(logsDir!, $"sharpminerals-{runStamp}_{sequence:000}.log");
                     options.RollingInterval = RollingInterval.Day;
                     options.RollingSizeKB = 1024;
                     // A coloured chat line shares its ANSI message body with the console sink; strip escape
@@ -107,7 +109,11 @@ static class LoggingSetup {
         public void FormatLogEntry(IBufferWriter<byte> writer, IZLoggerEntry entry) {
             scratch.Clear();
             inner.FormatLogEntry(scratch, entry);
-            StripCsi(scratch.WrittenSpan, writer);
+            var span = scratch.WrittenSpan;
+            // Most lines carry no colour; the vectorized ESC scan is far cheaper than the byte-wise CSI walk,
+            // so skip the latter entirely (and copy in one shot) unless an escape is actually present.
+            if (span.IndexOf((byte)0x1b) < 0) writer.Write(span);
+            else StripCsi(span, writer);
         }
 
         // Copy src to dst, dropping CSI sequences: ESC '[' , parameter/intermediate bytes (0x20–0x3F),
