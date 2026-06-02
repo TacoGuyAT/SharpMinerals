@@ -337,7 +337,7 @@ public class PlayStateTests {
         // Discover the test-harness mod from its (compiled-in) assembly — the same LoadFrom path the CLI
         // and the real-client fixture use.
         var loader = new ModLoader();
-        loader.LoadFrom(typeof(SharpMinerals.TestMod.TestHarnessMod).Assembly);
+        loader.LoadFrom(typeof(SharpMinerals.TestMod.TestMod).Assembly);
         Assert.Single(loader.Mods);
         Assert.Equal("sharpminerals_test", loader.Mods[0].Info.ModId);
 

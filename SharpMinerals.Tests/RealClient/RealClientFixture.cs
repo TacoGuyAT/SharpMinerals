@@ -68,7 +68,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
         dispatcher.RegisterHelp().RegisterRun().RegisterTimeout().RegisterServer()
                   .RegisterSave().RegisterTp().RegisterWorld().RegisterClear();
         var mods = new ModLoader();
-        mods.LoadFrom(typeof(SharpMinerals.TestMod.TestHarnessMod).Assembly);
+        mods.LoadFrom(typeof(SharpMinerals.TestMod.TestMod).Assembly);
         mods.StartAll(server);
 
         // A client's control-channel reply completes the matching pending request (one outstanding per client).

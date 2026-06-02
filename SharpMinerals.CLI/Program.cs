@@ -32,7 +32,7 @@ if (loaded.Notice is { } notice) {
 // test-harness mod (/test) is compiled in and loaded only on Debug builds (TEST_HARNESS).
 var modLoader = new ModLoader();
 #if TEST_HARNESS
-modLoader.TryLoad(new TestHarnessMod());
+modLoader.TryLoad(new TestMod());
 #endif
 #if DEBUG
 modLoader.TryLoad(new SampleMod());

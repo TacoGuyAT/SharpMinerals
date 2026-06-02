@@ -15,7 +15,7 @@ namespace SharpMinerals.TestMod;
 /// also doubles as a worked example of a command-adding mod built against the public API.
 /// </summary>
 [ModInfo("sharpminerals_test", "1.0.0", ["__tacoguy"], TargetServerVersion = "0.1.0")]
-public sealed class TestHarnessMod : Mod {
+public sealed class TestMod : Mod {
     public override void OnServerStarted(Server server) {
         server.CommandDispatcher.Register(l => l
             .Literal("test")
