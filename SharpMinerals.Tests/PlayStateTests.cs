@@ -12,6 +12,7 @@ using SharpMinerals.Level;
 using SharpMinerals.Math;
 using SharpMinerals.Modding;
 using SharpMinerals.Network;
+using NuGet.Versioning;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Handlers;
 using SharpMinerals.Events;
@@ -344,6 +345,23 @@ public class PlayStateTests {
         loader.StartAll(server);
         server.Sender.RunCommand("test hello world");
         Assert.Contains(capture.Broadcasts.OfType<TestCommandS2C>(), m => m.Command == "hello world");
+    }
+
+    sealed class VersionProbeMod : Mod { }
+
+    // ── A mod is loaded only if its declared target server version is compatible (and its own is valid) ──
+    [Fact]
+    public void ModLoaderGatesOnTargetServerVersion() {
+        var loader = new ModLoader { ServerVersion = SemanticVersion.Parse("0.1.0") };
+
+        Assert.True(loader.TryLoad(new VersionProbeMod(), new ModInfoAttribute("compat", "1.0.0") { TargetServerVersion = "0.1.0" }));
+        Assert.False(loader.TryLoad(new VersionProbeMod(), new ModInfoAttribute("too_new", "1.0.0") { TargetServerVersion = "0.2.0" }));  // needs newer server
+        Assert.False(loader.TryLoad(new VersionProbeMod(), new ModInfoAttribute("wrong_major", "1.0.0") { TargetServerVersion = "1.0.0" })); // major mismatch
+        Assert.False(loader.TryLoad(new VersionProbeMod(), new ModInfoAttribute("bad_version", "not-semver")));                            // invalid own version
+
+        Assert.Single(loader.Mods);                                     // only the compatible mod loaded
+        Assert.Equal("compat", loader.Mods[0].Info.ModId);
+        Assert.Equal(SemanticVersion.Parse("1.0.0"), loader.Mods[0].Version); // parsed version exposed on the mod
     }
 
     // ── Custom objects: a mod-added type renders as the fallback item but carries differentiating NBT ──

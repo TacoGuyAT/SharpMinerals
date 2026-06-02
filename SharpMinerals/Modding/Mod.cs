@@ -1,13 +1,13 @@
 using HarmonyLib;
 using Microsoft.Extensions.Logging;
+using NuGet.Versioning;
 
 namespace SharpMinerals.Modding;
 
 /// <summary>
-/// Base class for a SharpMinerals mod. A mod assembly carries one <see cref="Mod"/> subclass plus an
-/// assembly-level <see cref="ModInfoAttribute"/>; the <see cref="ModLoader"/> instantiates it and drives
-/// its lifecycle. Modelled after the HarmonyMine <c>Mod</c> class, but this server is managed C# — the
-/// per-mod <see cref="Harmony"/> instance patches the server's own code directly (no IKVM/JVM).
+/// Base class for a SharpMinerals mod. A mod assembly <see cref="Mod"/> subclasses with
+/// <see cref="ModInfoAttribute"/>; the <see cref="ModLoader"/> instantiates it and drives
+/// its lifecycle.
 /// <para/>
 /// Lifecycle, in order:
 /// <list type="number">
@@ -23,6 +23,10 @@ public abstract class Mod {
     /// <summary>This mod's metadata, from its assembly's <see cref="ModInfoAttribute"/>.</summary>
     public ModInfoAttribute Info { get; internal set; } = null!;
 
+    /// <summary>This mod's semantic version, parsed from <see cref="ModInfoAttribute.Version"/> (the loader
+    /// validates it before the mod loads).</summary>
+    public SemanticVersion Version { get; private set; } = null!;
+
     /// <summary>A Harmony instance scoped to this mod (id = <see cref="ModInfoAttribute.ModId"/>). Call
     /// <c>Harmony.PatchAll()</c> from <see cref="OnInitialize"/> to apply the mod's <c>[HarmonyPatch]</c> classes.</summary>
     public Harmony Harmony { get; internal set; } = null!;
@@ -37,6 +41,7 @@ public abstract class Mod {
         Info = info;
         Harmony = harmony;
         DataPath = dataPath;
+        Version = SemanticVersion.TryParse(info.Version, out var v) ? v : new SemanticVersion(0, 0, 0); // validated by the loader
         Logger = Logging.For($"Mod/{info.ModId}");
     }
 

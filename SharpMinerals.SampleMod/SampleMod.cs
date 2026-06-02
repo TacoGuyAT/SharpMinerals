@@ -11,7 +11,7 @@ using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.SampleMod;
 
-/// <summary>
+[ModInfo("sample", "1.0.0", ["SharpMinerals"], TargetServerVersion = "0.1.0")]
 /// A worked-example mod, built against the public API only. Ports HarmonyMine's MOTD changer (here just
 /// <c>server.MOTD = …</c>, no Harmony patch needed since the server exposes it) and adds content on top:
 /// a custom block and a custom command that places it. The custom block has no vanilla state id, so a

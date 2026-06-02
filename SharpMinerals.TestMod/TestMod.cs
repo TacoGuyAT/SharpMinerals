@@ -14,7 +14,7 @@ namespace SharpMinerals.TestMod;
 /// Was a hard-wired <c>#if TEST_HARNESS</c> command in core; now it's a mod loaded only in test/debug, which
 /// also doubles as a worked example of a command-adding mod built against the public API.
 /// </summary>
-[ModInfo("sharpminerals_test", "1.0.0", ["__tacoguy"])]
+[ModInfo("sharpminerals_test", "1.0.0", ["__tacoguy"], TargetServerVersion = "0.1.0")]
 public sealed class TestHarnessMod : Mod {
     public override void OnServerStarted(Server server) {
         server.CommandDispatcher.Register(l => l

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using HarmonyLib;
 using Microsoft.Extensions.Logging;
+using NuGet.Versioning;
 
 namespace SharpMinerals.Modding;
 
@@ -14,7 +15,7 @@ namespace SharpMinerals.Modding;
 /// <see cref="StartAll"/> / <see cref="StopAll"/>. Modelled after HarmonyMine's <c>Mod.TryRegister</c> flow.
 /// </summary>
 public sealed partial class ModLoader {
-    [GeneratedRegex(@"^[A-Za-z0-9_.\-]+$", RegexOptions.Compiled)]
+    [GeneratedRegex(@"^[A-Za-z0-9_]+$", RegexOptions.Compiled)]
     private static partial Regex ModIdRegex();
     static readonly Regex ModIdPattern = ModIdRegex();
 
@@ -24,6 +25,16 @@ public sealed partial class ModLoader {
 
     /// <summary>The mods loaded so far, in load order.</summary>
     public IReadOnlyList<Mod> Mods => mods;
+
+    /// <summary>The running server's version, used to gate mods by their declared <see
+    /// cref="ModInfoAttribute.TargetServerVersion"/>. Defaults to the SharpMinerals assembly version; a
+    /// host or test may override it.</summary>
+    public SemanticVersion ServerVersion { get; set; } = CoreVersion();
+
+    static SemanticVersion CoreVersion() {
+        var v = typeof(ModLoader).Assembly.GetName().Version;
+        return v is null ? new SemanticVersion(0, 0, 0) : new SemanticVersion(v.Major, v.Minor, v.Build);
+    }
 
     /// <summary>Loads mods from assemblies already in the process (a host's own referenced mod projects).</summary>
     public void LoadFrom(params Assembly[] assemblies) {
@@ -35,6 +46,23 @@ public sealed partial class ModLoader {
         if(!ModIdPattern.IsMatch(info.ModId)) {
             log.LogError("Mod id \"{Id}\" is invalid — use letters, digits, and _ - . only.", info.ModId);
             return false;
+        }
+        if(!SemanticVersion.TryParse(info.Version, out _)) {
+            log.LogError("Mod \"{Id}\" has an invalid semantic version \"{Version}\".", info.ModId, info.Version);
+            return false;
+        }
+        // Gate on the declared target server version: same major (no breaking API change) and the running
+        // server at least as new (so the mod's expected APIs exist). No target = no check.
+        if(info.TargetServerVersion is { } targetText) {
+            if(!SemanticVersion.TryParse(targetText, out var target)) {
+                log.LogError("Mod \"{Id}\" declares an invalid target server version \"{Target}\".", info.ModId, targetText);
+                return false;
+            }
+            if(!ServerVersion.Supports(target)) {
+                log.LogWarning("Mod \"{Id}\" targets server {Target}, but this server is {Server} — skipping (incompatible).",
+                    info.ModId, target, ServerVersion);
+                return false;
+            }
         }
         if(!ids.Add(info.ModId)) {
             log.LogError("Duplicate mod id \"{Id}\" ({Assembly}) — skipping.", info.ModId, mod.GetType().Assembly);
