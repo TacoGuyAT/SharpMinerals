@@ -8,11 +8,11 @@ namespace SharpMinerals.Items;
 /// components. Everything beyond identity (stack size, placement, …) lives in components.
 /// <see cref="BlockType"/> derives from this — every block is also an item.</summary>
 public class ItemType : ComponentObject {
-    public int Id { get; }
+    internal int ItemId { get; }
     public string Name { get; }
 
     internal ItemType(int id, string name) {
-        Id = id;
+        ItemId = id;
         Name = name;
     }
 

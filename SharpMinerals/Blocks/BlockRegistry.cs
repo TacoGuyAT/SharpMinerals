@@ -4,28 +4,32 @@ using SharpMinerals.Items;
 
 namespace SharpMinerals.Blocks;
 
-/// <summary>The block registry. Air is id 0; every block is also an item, and places/drops itself by
-/// default. Drop overrides use a lazy <c>() =&gt;</c> lambda so a block can reference a kind registered later.</summary>
+/// <summary>The block palette: the dense <see cref="BlockType.BlockId"/> → <see cref="BlockType"/> map that
+/// chunk storage and the protocol state table index by. Air is palette id 0. Each block is also registered as
+/// an item in <see cref="ItemRegistry"/> (every block is an item), so name/item lookups go through there.
+/// Drop overrides use a lazy <c>() =&gt;</c> lambda so a block can reference a kind registered later.</summary>
 public static class BlockRegistry {
-    static readonly List<BlockType> byId = new();
-    static readonly Dictionary<string, BlockType> byName = [];
+    static readonly List<BlockType> palette = new();
     static bool frozen;
+
+    // Explicit (non-beforefieldinit) static ctor so ANY member access — incl. FromName, which now only reads
+    // ItemRegistry — first runs the block field initializers below, registering the built-ins into both stores.
+    static BlockRegistry() { }
 
     static BlockType Define(string name, bool isAir = false) {
         if (frozen)
             throw new InvalidOperationException(
                 $"BlockRegistry is frozen — register block \"{name}\" during mod OnInitialize, before the palette is built.");
-        if (byName.ContainsKey(name))
-            throw new ArgumentException($"A block named \"{name}\" is already registered.", nameof(name));
-        var block = new BlockType(byId.Count, name, isAir);
-        byId.Add(block);
-        byName[name] = block;
+        int blockId = palette.Count;
+        // Register as an item (unified id + name lookup); the factory gets that id, we supply the palette id.
+        var block = ItemRegistry.Add(name, id => new BlockType(id, blockId, name, isAir));
+        palette.Add(block);
         return block;
     }
 
     /// <summary>Registers a new block, returning it for fluent composition. For mods — call from
-    /// <c>Mod.OnInitialize</c>; throws once <see cref="Freeze">frozen</see>. A modded block's wire id falls
-    /// back to stone until a type-mapping component is added.</summary>
+    /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. A modded block's
+    /// wire id falls back to stone until a type-mapping component is added.</summary>
     public static BlockType Register(string name) => Define(name);
 
     /// <summary>Seals the registry — the host calls this after mods init, before the palette is built.</summary>
@@ -42,8 +46,12 @@ public static class BlockRegistry {
     public static readonly BlockType Sand        = Define("sand").DropSelf().Add(new FallingBlockDescriptor());
     public static readonly BlockType Gravel      = Define("gravel").DropSelf().Add(new FallingBlockDescriptor());
 
-    public static IReadOnlyList<BlockType> All => byId;
-    public static BlockType FromId(int id) => byId[id];
-    public static BlockType FromState(ushort state) => byId[state];
-    public static BlockType? FromName(string name) => byName.GetValueOrDefault(name);
+    /// <summary>All blocks, in palette order (index == <see cref="BlockType.BlockId"/>).</summary>
+    public static IReadOnlyList<BlockType> All => palette;
+    public static BlockType FromId(int blockId) => palette[blockId];
+    public static BlockType FromState(ushort state) => palette[state];
+
+    /// <summary>The block registered under <paramref name="name"/>, or null if the name is unregistered or a
+    /// non-block item. Backed by the unified <see cref="ItemRegistry"/>.</summary>
+    public static BlockType? FromName(string name) => ItemRegistry.FromName(name) as BlockType;
 }

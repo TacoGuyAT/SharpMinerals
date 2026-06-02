@@ -39,6 +39,6 @@ internal static class StackCodec {
     }
 
     static ItemType Resolve(string name) =>
-        BlockRegistry.FromName(name) ?? ItemRegistry.FromName(name)
+        ItemRegistry.FromName(name)
             ?? throw new InvalidDataException($"Unknown item '{name}' in saved data.");
 }

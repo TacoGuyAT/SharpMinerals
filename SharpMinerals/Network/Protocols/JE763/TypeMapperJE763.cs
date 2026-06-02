@@ -91,7 +91,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         }
     }
 
-    public int StateId(BlockType block) => stateByBlockId[block.Id];
+    public int StateId(BlockType block) => stateByBlockId[block.BlockId];
 
     public int StateId(BlockState state) {
         // 1) per-block/state override → 2) the linear layout formula → 3) the type's default.

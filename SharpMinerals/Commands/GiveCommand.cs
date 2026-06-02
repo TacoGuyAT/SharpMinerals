@@ -3,7 +3,6 @@ using Brigadier.NET.Builder;
 using Brigadier.NET.Context;
 using SharpMinerals.Blocks;
 using SharpMinerals.Entities.Components;
-using SharpMinerals.Events;
 using SharpMinerals.Items;
 using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
@@ -22,11 +21,9 @@ public static class GiveCommand {
         .Requires(x => x.IsPlayer)
         .Then(x => x.Argument("item", Arguments.Word())
             .Suggests((ctx, builder) => {
-                foreach (var block in BlockRegistry.All)
-                    if (!block.IsAir && block.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase))
-                        builder.Suggest(block.Name);
-                foreach (var item in ItemRegistry.All)
-                    if (item.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase))
+                foreach (var item in ItemRegistry.All) // every block is an item, so one registry covers both
+                    if (item is not BlockType { IsAir: true }
+                        && item.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase))
                         builder.Suggest(item.Name);
                 return builder.BuildFuture();
             })
@@ -44,7 +41,7 @@ public static class GiveCommand {
         }
 
         var name = Arguments.GetString(ctx, "item");
-        if (ItemRegistry.Resolve(name) is not { } type || type is BlockType { IsAir: true }) {
+        if (ItemRegistry.FromName(name) is not { } type || type is BlockType { IsAir: true }) {
             ctx.Source.Reply($"Unknown item '{name}'.");
             return 0;
         }

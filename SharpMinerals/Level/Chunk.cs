@@ -39,7 +39,7 @@ public class Chunk : ITickable {
     internal IReadOnlyCollection<BlockEntity> Entities => blockEntities.Values;
 
     public BlockType GetBlock(Mint x, Mint y, Mint z) => BlockRegistry.FromState(GetState(x, y, z));
-    public void SetBlock(Mint x, Mint y, Mint z, BlockType block) => SetState(x, y, z, (ushort)block.Id);
+    public void SetBlock(Mint x, Mint y, Mint z, BlockType block) => SetState(x, y, z, (ushort)block.BlockId);
 
     /// <summary>The block state at a local cell, or null if it's the type's default (stateless) state.</summary>
     public BlockState? GetBlockState(Mint x, Mint y, Mint z) => blockStates.GetValueOrDefault((int)Index(x, y, z));

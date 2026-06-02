@@ -5,10 +5,14 @@ using SharpMinerals.Items.Components;
 
 namespace SharpMinerals.Blocks;
 
-/// <summary>A registered block type — a flyweight definition assembled from components, and (since
-/// <c>BlockType : ItemType</c>) also an item. <see cref="Id"/> is the block id stored in chunks. A block
-/// places itself by default; drops are NOT automatic without a <see cref="DropBlockDescriptor"/>.</summary>
+/// <summary>A registered block type — a flyweight definition assembled from components, and (since it derives
+/// from <see cref="ItemType"/>) also an item, registered in the one <see cref="ItemRegistry"/>. Its inherited
+/// <see cref="ItemType.ItemId"/> is the unified item id; <see cref="BlockId"/> is the separate dense palette id
+/// stored in chunks. A block places itself by default; drops are NOT automatic without a <see cref="DropBlockDescriptor"/>.</summary>
 public class BlockType : ItemType {
+    /// <summary>The dense palette id stored in chunks (distinct from the unified item <see cref="ItemType.ItemId"/>).</summary>
+    internal int BlockId { get; }
+
     /// <summary>A field (not a component lookup) because it's on the hot serialization path.</summary>
     public bool IsAir { get; }
 
@@ -20,7 +24,8 @@ public class BlockType : ItemType {
 
     public BlockType DropSelf() => this.Add(new DropBlockDescriptor(() => new ItemStack(this)));
 
-    internal BlockType(int id, string name, bool isAir) : base(id, name) {
+    internal BlockType(int itemId, int blockId, string name, bool isAir) : base(itemId, name) {
+        BlockId = blockId;
         IsAir = isAir;
     }
 }

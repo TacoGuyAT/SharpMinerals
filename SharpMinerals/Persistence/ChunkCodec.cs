@@ -58,7 +58,7 @@ public static class ChunkCodec {
         int paletteCount = s.ReadVarInt();
         var palette = new ushort[paletteCount];
         for (int i = 0; i < paletteCount; i++)
-            palette[i] = (ushort)(BlockRegistry.FromName(s.ReadString())?.Id ?? 0); // dropped block → air
+            palette[i] = (ushort)(BlockRegistry.FromName(s.ReadString())?.BlockId ?? 0); // dropped block → air
         for (int i = 0; i < Volume; i++)
             raw[i] = palette[s.ReadVarInt()];
 
