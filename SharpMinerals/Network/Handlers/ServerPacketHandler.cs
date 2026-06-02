@@ -139,7 +139,7 @@ public sealed class ServerPacketHandler {
 
         // Advertise the command tree so the client can tab-complete (and ask us for server-side suggestions on
         // ask_server arguments). Filtered to what this player may run.
-        client.Send(new DeclareCommandsS2C(new CommandContext(ecs.Get<SenderEntityComponent>(context.Entity), server.CommandDispatcher, client)));
+        client.Send(new DeclareCommandsS2C(new SenderContext(ecs.Get<SenderEntityComponent>(context.Entity), server.CommandDispatcher, client)));
 
         client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
 

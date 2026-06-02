@@ -1,7 +1,7 @@
 using Brigadier.NET;
 using Brigadier.NET.Builder;
+using Brigadier.NET.Context;
 using SharpMinerals.Entities.Components;
-using BrigContext = Brigadier.NET.Context.CommandContext<SharpMinerals.Commands.CommandContext>;
 
 namespace SharpMinerals.Commands;
 
@@ -40,7 +40,7 @@ public static class TpCommand {
                         return Teleport(ctx, cid);
                     }))))));
 
-    static int Teleport(BrigContext ctx, ulong target) {
+    static int Teleport(CommandContext<SenderContext> ctx, ulong target) {
         var server = ctx.Source.Server;
         if (!server.TryGetPlayer(target, out var context) || !context.World.Ecs.IsAlive(context.Entity)) {
             ctx.Source.Reply("Target is not online.");

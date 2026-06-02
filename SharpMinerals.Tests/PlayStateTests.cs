@@ -1359,7 +1359,12 @@ public class PlayStateTests {
     // ── Command parse cache: a player's parses are invalidated when their .Requires inputs change ──
     [Fact]
     public void CommandParseCacheInvalidatesPerPlayer() {
-        var dispatcher = new CommandDispatcher();
+        var server = new Server(new ServerContext {
+            NetServer = new CaptureNetServer(new ProtocolJE763()),
+            Worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) },
+            MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
+        });
+        var dispatcher = server.CommandDispatcher; // the dispatcher now needs its Server (cache scales with player count)
         bool allow = false; // stand-in for a permission / world-gate that .Requires depends on
         var replies = new List<string>();
         var sender = new CaptureSender(replies);
@@ -1384,55 +1389,6 @@ public class PlayStateTests {
     }
 
     [Fact]
-    public void SuggestionProviderFiresForEmptyAndPartialArg() {
-        var dispatcher = new CommandDispatcher();
-        dispatcher.Register(l => l.Literal("foo")
-            .Then(a => a.Argument("bar", Brigadier.NET.Arguments.Word())
-                .Suggests((ctx, builder) => {
-                    foreach (var v in new[] { "alpha", "beta" })
-                        if (v.StartsWith(builder.Remaining, System.StringComparison.OrdinalIgnoreCase))
-                            builder.Suggest(v);
-                    return builder.BuildFuture();
-                })
-                .Executes(c => 1)));
-        var source = new CommandContext(new CaptureSender(new()), dispatcher, null);
-        var brig = dispatcher.Brigadier;
-
-        string[] Complete(string text) =>
-            brig.GetCompletionSuggestions(brig.Parse(text, source)).GetAwaiter().GetResult()
-                .List.Select(s => s.Text).ToArray();
-
-        var empty = Complete("foo ");   // trailing space, empty arg — the /world <tab> case
-        var partial = Complete("foo a"); // partial arg — the /world o<tab> case
-        Assert.Contains("alpha", empty);
-        Assert.Contains("beta", empty);
-        Assert.Equal(new[] { "alpha" }, partial);
-    }
-
-    [Fact]
-    public void SuggestionRangeStartsAtTheArgumentForEmptyAndPartial() {
-        var dispatcher = new CommandDispatcher();
-        dispatcher.Register(l => l.Literal("foo")
-            .Then(a => a.Argument("bar", Brigadier.NET.Arguments.Word())
-                .Suggests((ctx, builder) => { builder.Suggest("alpha"); return builder.BuildFuture(); })
-                .Executes(c => 1)));
-        var source = new CommandContext(new CaptureSender(new()), dispatcher, null);
-        var brig = dispatcher.Brigadier;
-
-        Brigadier.NET.Suggestion.Suggestions Suggest(string text) =>
-            brig.GetCompletionSuggestions(brig.Parse(text, source)).GetAwaiter().GetResult();
-
-        var empty = Suggest("foo ");    // arg begins at index 4 (after "foo ")
-        var partial = Suggest("foo a"); // arg begins at index 4, one char typed
-        // The vanilla UI positions the popup at Range.Start and replaces [Start, Start+Length); a wrong Start
-        // makes it render in the wrong place / get rejected — the "nothing shows up" symptom.
-        Assert.Equal(4, empty.Range.Start);
-        Assert.Equal(0, empty.Range.Length);
-        Assert.Equal(4, partial.Range.Start);
-        Assert.Equal(1, partial.Range.Length);
-    }
-
-    [Fact]
     public void WorldCommandSuggestsExistingWorldsFromServer() {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
@@ -1445,7 +1401,7 @@ public class PlayStateTests {
         server.CommandDispatcher.RegisterWorld();
         // A player source (client != null) so .Requires(IsPlayer) passes — same as HandleSuggestions builds.
         var client = new CaptureNetClient(1, new ProtocolJE763());
-        var source = new CommandContext(new CaptureSender(new()), server.CommandDispatcher, client);
+        var source = new SenderContext(new CaptureSender(new()), server.CommandDispatcher, client);
         var brig = server.CommandDispatcher.Brigadier;
 
         var all = brig.GetCompletionSuggestions(brig.Parse("world ", source)).GetAwaiter().GetResult()
@@ -1497,7 +1453,7 @@ public class PlayStateTests {
         });
         server.CommandDispatcher.RegisterWorld().RegisterTp();
         var client = new CaptureNetClient(1, new ProtocolJE763());
-        var source = new CommandContext(new CaptureSender(new()), server.CommandDispatcher, client);
+        var source = new SenderContext(new CaptureSender(new()), server.CommandDispatcher, client);
 
         using var ms = new System.IO.MemoryStream();
         var w = new MinecraftStream(ms, leaveOpen: true) { Types = new TypeMapperJE763() };

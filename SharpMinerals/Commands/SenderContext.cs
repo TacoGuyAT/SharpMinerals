@@ -16,7 +16,7 @@ namespace SharpMinerals.Commands;
 /// never snapshotted — so a cached, re-executed parse always acts on the player's current entity, surviving
 /// respawns and world switches. <c>.Requires(s =&gt; s.IsPlayer)</c> gates player-perspective commands.
 /// </summary>
-public sealed class CommandContext {
+public sealed class SenderContext {
     public ISender Sender { get; }
     public CommandDispatcher Dispatcher { get; }
     /// <summary>The issuing player's connection, or null for the non-player sender.</summary>
@@ -26,7 +26,7 @@ public sealed class CommandContext {
     /// <summary>Whether a player issued this command (i.e. it has an in-world entity).</summary>
     public bool IsPlayer => Client is not null;
 
-    public CommandContext(ISender sender, CommandDispatcher dispatcher, NetClient? client = null) {
+    public SenderContext(ISender sender, CommandDispatcher dispatcher, NetClient? client = null) {
         Sender = sender;
         Dispatcher = dispatcher;
         Client = client;

@@ -8,7 +8,7 @@ namespace SharpMinerals.Network.Messages;
 /// codec walks that source's dispatcher Brigadier tree, filtered (via <c>.Requires</c>) to what the source
 /// may run.
 /// </summary>
-public sealed record DeclareCommandsS2C(CommandContext Source) : IMessage;
+public sealed record DeclareCommandsS2C(SenderContext Source) : IMessage;
 
 /// <summary>
 /// Command Suggestions Request (0x09): the client asks for completions of <paramref name="Text"/> (everything

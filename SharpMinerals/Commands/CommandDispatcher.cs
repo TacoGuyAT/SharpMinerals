@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Threading;
 using Microsoft.Extensions.Logging;
 using Brigadier.NET;
 using Brigadier.NET.Builder;
@@ -7,19 +6,18 @@ using Brigadier.NET.Exceptions;
 using Jitbit.Utils;
 using SharpMinerals.Chat;
 using SharpMinerals.Network;
-using BrigadierDispatcher = Brigadier.NET.CommandDispatcher<SharpMinerals.Commands.CommandContext>;
 
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// Owns command parsing and dispatch, wrapping a Brigadier.NET dispatcher over <see cref="CommandContext"/>
+/// Owns command parsing and dispatch, wrapping a Brigadier.NET dispatcher over <see cref="SenderContext"/>
 /// as the command source. <see cref="ExecuteAsync"/> is the single entry point for a submitted command line
 /// (no leading slash); <see cref="Register"/> adds commands via Brigadier builder lambdas.
 /// </summary>
 public sealed class CommandDispatcher {
-    static readonly ILogger Log = Logging.For("Chat");
+    static readonly ILogger Log = Logging.For("CommandDispatcher");
 
-    readonly BrigadierDispatcher brig = new();
+    readonly CommandDispatcher<SenderContext> brig = new();
 
     // The parse step is the costly one, and a ParseResults can be re-executed (per the Brigadier docs), so we
     // cache it. A parse binds its source and its .Requires pruning, so the cache must be invalidated when that
@@ -28,7 +26,7 @@ public sealed class CommandDispatcher {
     // via the TTL. So a re-register (tree changed) and a player's permission/world change can't be bypassed.
     // (The entity itself is resolved live at execute time, see CommandContext, so the cache is already correct
     // across respawns/world switches even before any world-gated .Requires exists.)
-    readonly FastCache<string, ParseResults<CommandContext>> parseCache = new();
+    readonly FastCache<string, ParseResults<SenderContext>> parseCache = new();
     static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     // FastCache has no built-in capacity, so we bound it ourselves AND scale the bound with the player count:
@@ -45,12 +43,12 @@ public sealed class CommandDispatcher {
     readonly ConcurrentDictionary<ulong, int> playerEpoch = new();
 
     /// <summary>The server this dispatcher drives, injected by <see cref="Server"/>. Commands reach it through
-    /// <see cref="CommandContext.Server"/> instead of a global static.</summary>
+    /// <see cref="SenderContext.Server"/> instead of a global static.</summary>
     public Server Server { get; set; }
 
     /// <summary>The underlying Brigadier dispatcher, exposed so a later phase can serialize the command tree
     /// (the Declare Commands packet) and answer completion suggestions.</summary>
-    public BrigadierDispatcher Brigadier => brig;
+    public CommandDispatcher<SenderContext> Brigadier => brig;
 
     public CommandDispatcher(Server server) {
         Server = server;
@@ -58,7 +56,7 @@ public sealed class CommandDispatcher {
 
     /// <summary>Registers a command from a Brigadier builder lambda; chainable. Changing the tree invalidates
     /// every cached parse (their <c>.Requires</c> pruning may no longer hold).</summary>
-    public CommandDispatcher Register(Func<IArgumentContext<CommandContext>, LiteralArgumentBuilder<CommandContext>> command) {
+    public CommandDispatcher Register(Func<IArgumentContext<SenderContext>, LiteralArgumentBuilder<SenderContext>> command) {
         brig.Register(command);
         Interlocked.Increment(ref generation);
         return this;
@@ -83,7 +81,7 @@ public sealed class CommandDispatcher {
 
         string key = CacheKey(client, text);
         if (!parseCache.TryGet(key, out var parse)) {
-            parse = brig.Parse(text, new CommandContext(sender, this, client));
+            parse = brig.Parse(text, new SenderContext(sender, this, client));
             // Reclaim lapsed/orphaned entries when at the cap; past it, run the parse but don't memoize it
             // (parse is cheap, so an over-cap miss just costs a re-parse — memory stays bounded).
             int cap = CacheCapacity;
@@ -118,7 +116,7 @@ public sealed class CommandDispatcher {
         int offset = 0;
         if (text.StartsWith('/')) { text = text[1..]; offset = 1; }
         var suggestions = brig
-            .GetCompletionSuggestions(brig.Parse(text, new CommandContext(sender, this, client)))
+            .GetCompletionSuggestions(brig.Parse(text, new SenderContext(sender, this, client)))
             .GetAwaiter().GetResult();
         var matches = new List<string>(suggestions.List.Count);
         foreach (var suggestion in suggestions.List) matches.Add(suggestion.Text);

@@ -2,7 +2,7 @@ using Brigadier.NET.ArgumentTypes;
 using Brigadier.NET.Tree;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
-using CmdSource = SharpMinerals.Commands.CommandContext;
+using SharpMinerals.Commands;
 
 namespace SharpMinerals.Network.Protocols.JE763.Codecs;
 
@@ -53,11 +53,11 @@ internal sealed class CommandSuggestionsResponseS2CCodec : ICodec<CommandSuggest
 /// Suggestions Request) instead of completing locally.
 /// </summary>
 static class CommandTreeSerializer {
-    public static void Write(MinecraftStream s, CommandNode<CmdSource> root, CmdSource source) {
+    public static void Write(MinecraftStream s, CommandNode<SenderContext> root, SenderContext source) {
         // Flatten the reachable, usable nodes into an indexed list (depth-first from the root).
-        var nodes = new List<CommandNode<CmdSource>>();
-        var index = new Dictionary<CommandNode<CmdSource>, int>(ReferenceEqualityComparer.Instance);
-        void Visit(CommandNode<CmdSource> node) {
+        var nodes = new List<CommandNode<SenderContext>>();
+        var index = new Dictionary<CommandNode<SenderContext>, int>(ReferenceEqualityComparer.Instance);
+        void Visit(CommandNode<SenderContext> node) {
             if (!index.TryAdd(node, nodes.Count)) return;
             nodes.Add(node);
             foreach (var child in node.Children)
@@ -70,10 +70,10 @@ static class CommandTreeSerializer {
         s.WriteVarInt(index[root]);
     }
 
-    static void WriteNode(MinecraftStream s, CommandNode<CmdSource> node, Dictionary<CommandNode<CmdSource>, int> index) {
+    static void WriteNode(MinecraftStream s, CommandNode<SenderContext> node, Dictionary<CommandNode<SenderContext>, int> index) {
         int type = node switch {
-            RootCommandNode<CmdSource> => 0,
-            LiteralCommandNode<CmdSource> => 1,
+            RootCommandNode<SenderContext> => 0,
+            LiteralCommandNode<SenderContext> => 1,
             _ => 2, // argument
         };
 
@@ -103,7 +103,7 @@ static class CommandTreeSerializer {
         if (hasRedirect) s.WriteVarInt(index[node.Redirect!]);
 
         if (type == 1) {
-            s.WriteString(((LiteralCommandNode<CmdSource>)node).Literal);
+            s.WriteString(((LiteralCommandNode<SenderContext>)node).Literal);
         } else if (type == 2) {
             s.WriteString(node.Name);
             WriteParser(s, argType!);

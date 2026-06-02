@@ -1,12 +1,12 @@
 using Brigadier.NET;
 using Brigadier.NET.Builder;
+using Brigadier.NET.Context;
 using SharpMinerals.Blocks;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Items;
 using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
-using BrigContext = Brigadier.NET.Context.CommandContext<SharpMinerals.Commands.CommandContext>;
 
 namespace SharpMinerals.Commands;
 
@@ -36,7 +36,7 @@ public static class GiveCommand {
             .Then(b => b.Argument("count", Arguments.Integer(1, MaxCount))
                 .Executes(c => Give(c, Arguments.GetInteger(c, "count"))))));
 
-    static int Give(BrigContext ctx, int count) {
+    static int Give(CommandContext<SenderContext> ctx, int count) {
         var server = ctx.Source.Server;
         if (ctx.Source.Client is not { } client
             || !server.TryGetPlayer(client.Id, out var context)
