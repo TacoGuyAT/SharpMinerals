@@ -49,4 +49,15 @@ public static class ComponentObjects {
             self.Set(component);
         return self;
     }
+
+    /// <summary>Copies the <typeparamref name="TComponent"/> component from <paramref name="source"/> onto
+    /// <paramref name="self"/> (the shared flyweight instance, by reference), if present — a no-op otherwise.
+    /// Lets a definition borrow one behavior from another (e.g. <c>.Copy&lt;Stackable&gt;(otherItem)</c>). Returns
+    /// <paramref name="self"/>; specifying the component type explicitly means the self type isn't preserved, so
+    /// chain it after the self-typed calls or use it as a statement.</summary>
+    public static ComponentObject Copy<TComponent>(this ComponentObject self, ComponentObject source) {
+        if (source.TryGet<TComponent>(out var component))
+            self.Set((object)component!);
+        return self;
+    }
 }
