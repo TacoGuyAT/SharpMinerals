@@ -822,6 +822,49 @@ public class PlayStateTests {
         Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
     }
 
+    // ── /summon spawns an entity of the named kind at coordinates (no per-entity data yet) ──
+    [Fact]
+    public void SummonCommandSpawnsEntityAtCoordinates() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator()),
+        };
+        var server = new Server(new ServerContext {
+            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
+        });
+        server.CommandDispatcher.RegisterSummon();
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Assert.True(server.TryGetPlayer(client.Id, out var context));
+        var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
+
+        var fallingQuery = new QueryDescription().WithAll<FallingBlockEntityComponent>();
+        List<ArchEntity> Falling() {
+            var list = new List<ArchEntity>();
+            server.DefaultWorld.Ecs.Query(in fallingQuery, (ArchEntity e, ref FallingBlockEntityComponent _) => list.Add(e));
+            return list;
+        }
+        Assert.Empty(Falling());
+
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "summon sharpminerals:falling_block 1 20 2", client);
+
+        // One falling_block now exists at the exact coordinates, carrying the default "missing" block (no data yet).
+        var spawned = Assert.Single(Falling());
+        var t = server.DefaultWorld.Ecs.Get<TransformEntityComponent>(spawned);
+        Assert.Equal(1.0, t.X, 3);
+        Assert.Equal(20.0, t.Y, 3);
+        Assert.Equal(2.0, t.Z, 3);
+        Assert.Equal(BlockRegistry.Missing, server.DefaultWorld.Ecs.Get<FallingBlockEntityComponent>(spawned).Block);
+
+        // Players can't be summoned — the registry has the kind, but the command refuses it.
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "summon sharpminerals:player 0 20 0", client);
+        var playerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
+        Assert.Equal(1, server.DefaultWorld.Ecs.CountEntities(in playerQuery)); // still just the joined Steve
+    }
+
     // ── InventoryComponent.Add splits a large count across slots, capped at the item's max stack size ──
     [Fact]
     public void InventoryAddRespectsMaxStackSize() {

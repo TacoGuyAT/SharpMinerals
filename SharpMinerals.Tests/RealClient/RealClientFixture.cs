@@ -68,7 +68,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
         // tab-complete). The harness `/test` command used to drive scenarios now comes from the test-harness
         // mod, loaded through the real ModLoader — so the fixture exercises the same mod path as the CLI.
         dispatcher.RegisterHelp().RegisterRun().RegisterTimeout().RegisterServer()
-                  .RegisterSave().RegisterTp().RegisterWorld().RegisterClear().RegisterGive();
+                  .RegisterSave().RegisterTp().RegisterWorld().RegisterClear().RegisterGive().RegisterSummon();
         var mods = new ModLoader();
         mods.LoadFrom(typeof(SharpMinerals.TestMod.TestMod).Assembly);
         mods.StartAll(server);

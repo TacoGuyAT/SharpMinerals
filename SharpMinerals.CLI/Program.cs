@@ -122,7 +122,8 @@ server.CommandDispatcher
     .RegisterTp()
     .RegisterWorld()
     .RegisterClear()
-    .RegisterGive();
+    .RegisterGive()
+    .RegisterSummon();
 
 // Mods run OnServerStarted now (server up, core commands registered): they layer on their own commands, etc.
 modLoader.StartAll(server);
