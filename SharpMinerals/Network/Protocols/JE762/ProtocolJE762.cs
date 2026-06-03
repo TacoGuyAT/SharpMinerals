@@ -13,12 +13,6 @@ public class ProtocolJE762 : ModernJavaProtocol {
     public override int Version => 762;
     public override string VersionName => "1.19.4";
 
-    ITypeMapper? typeMapper;
-    public override ITypeMapper Types => typeMapper ??= CreateTypeMapper();
-
-    /// <summary>The wire-id mapper for this version. Subclasses override to supply their own id deltas.</summary>
-    protected virtual ITypeMapper CreateTypeMapper() => new TypeMapperJE762();
-
     // 1.19.4 Chunk Data carries the trust-edges bool; 1.20 (ProtocolJE763) drops it.
     protected override bool ChunkDataHasTrustEdges => true;
 

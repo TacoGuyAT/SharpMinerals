@@ -16,7 +16,7 @@ public sealed class MinecraftStream : Stream {
     int pushback = -1; // a single peeked byte, re-served on the next read (used to sniff a new connection's framing)
 
     /// <summary>The type mapper for the current encode (set by <see cref="Protocol.EncodePayload"/>); null outside encoding.</summary>
-    public ITypeMapper? Types { get; set; }
+    public TypeMapper? Types { get; set; }
 
     public MinecraftStream(Stream inner, bool leaveOpen = false) {
         this.inner = inner;

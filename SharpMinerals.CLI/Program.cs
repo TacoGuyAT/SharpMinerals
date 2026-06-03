@@ -56,7 +56,8 @@ modLoader.TryLoad(new SampleMod());
 #if !AOT
 modLoader.LoadDirectory(Path.Combine(Directory.GetCurrentDirectory(), "mods")); // dynamic mod loading is JIT-only
 #endif
-ModContent.Freeze(); // seal the palette — no block/item/entity may register past this point
+ModContent.Freeze();  // seal the palette — no block/item/entity may register past this point
+TypeMapper.Freeze();  // seal the wire mappings — protocols build their TypeMapper from them on demand
 
 // Supported protocols; each connection picks one (see ProtocolRegistry.Detect).
 var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());

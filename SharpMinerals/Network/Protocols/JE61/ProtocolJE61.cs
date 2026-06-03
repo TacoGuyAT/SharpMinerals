@@ -11,9 +11,6 @@ public sealed class ProtocolJE61 : LegacyJavaProtocol {
     public override int Version => 61;
     public override string VersionName => "1.5.2";
 
-    readonly TypeMapperJE61 types = new();
-    public override ITypeMapper Types => types;
-
     // RSA keypair for the login encryption handshake (1024-bit per the protocol); one per server.
     readonly RSA rsa = RSA.Create(1024);
 

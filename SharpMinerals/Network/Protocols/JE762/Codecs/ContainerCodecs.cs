@@ -16,7 +16,7 @@ internal static class SlotWire {
 
         // A mod-added type renders as the fallback item; attach NBT (custom name + identity marker) so the
         // client tells it apart and won't stack it with the fallback or other customs. Vanilla types write a plain slot.
-        if (s.Types.IsCustom(stack.Type!)) {
+        if (stack.Type!.IsCustom) {
             s.WriteBool(true);
             s.WriteVarInt(id);
             s.WriteByte2((sbyte)stack.Count);

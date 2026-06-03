@@ -31,6 +31,9 @@ public sealed class MinecraftMod : Mod {
         Vanilla.RedSand.Copy<FallingBlockDescriptor>(Vanilla.Sand);
 
         Vanilla.Stick       = ItemRegistry.Register("stick");
+
+        // Vanilla wire-id mappings (per protocol version) for the data-driven TypeMapper — the core knows no ids.
+        WireMappings.Register();
     }
 }
 

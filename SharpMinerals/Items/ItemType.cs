@@ -19,6 +19,15 @@ public class ItemType : ComponentObject {
         Id = identifier;
     }
 
+    /// <summary>Override for <see cref="IsCustom"/>; null = the namespace-based default. Set via <c>.Custom(bool)</c>.</summary>
+    internal bool? CustomOverride { get; set; }
+
+    /// <summary>Whether the client needs a custom name + identity marker for this item — i.e. it is NOT native
+    /// vanilla content (so it shows its real name and doesn't stack with the vanilla item it renders as). Auto:
+    /// non-<c>minecraft</c> content (engine placeholders like <c>missing</c>, mod items) is custom, <c>minecraft</c>
+    /// content is native. Override per-type with the fluent <see cref="ItemTypes.Custom{T}"/>.</summary>
+    public bool IsCustom => CustomOverride ?? Id.Namespace != Identifier.MinecraftNamespace;
+
     /// <summary>Max stack size (from a <see cref="Stackable"/> component, default 64).</summary>
     public int MaxStackSize => TryGet<Stackable>(out var s) ? s.MaxStackSize : 64;
 
@@ -26,4 +35,14 @@ public class ItemType : ComponentObject {
     public virtual BlockType? PlacedBlock => TryGet<Placeable>(out var p) ? p.Block : null;
 
     public override string ToString() => Id.Name;
+}
+
+/// <summary>Fluent helpers for item/block types.</summary>
+public static class ItemTypes {
+    /// <summary>Overrides <see cref="ItemType.IsCustom"/> (vs the namespace-based default) — e.g. a mod item that
+    /// should render as a plain vanilla item (<c>custom: false</c>), or vanilla content shown distinctly.</summary>
+    public static T Custom<T>(this T self, bool custom = true) where T : ItemType {
+        self.CustomOverride = custom;
+        return self;
+    }
 }

@@ -5,7 +5,7 @@ namespace SharpMinerals.Entities;
 
 /// <summary>A registered entity kind — a flyweight definition (one shared instance per kind) assembled from
 /// components, like <see cref="Items.ItemType"/>/<see cref="Blocks.BlockType"/>. The wire id is a per-version
-/// concern resolved by <see cref="Network.ITypeMapper.EntityTypeId"/>, not stored here; reference identity holds.</summary>
+/// concern resolved by <see cref="Network.TypeMapper.EntityTypeId"/>, not stored here; reference identity holds.</summary>
 public sealed class EntityType : ComponentObject {
     internal int TypeId { get; }
 

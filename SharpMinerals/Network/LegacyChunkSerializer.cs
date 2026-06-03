@@ -16,7 +16,7 @@ public static class LegacyChunkSerializer {
     const int NibblesPerSection = BlocksPerSection / 2; // 2048
     const byte PlainsBiome = 1;
 
-    public static LegacyChunkDataS2C Build(ITypeMapper types, World world, int cx, int cz) {
+    public static LegacyChunkDataS2C Build(TypeMapper types, World world, int cx, int cz) {
         int baseX = cx << 4, baseZ = cz << 4;
 
         var present = new List<byte[]>(); // block-id arrays for non-empty sections, low → high

@@ -20,8 +20,11 @@ public abstract class Protocol {
 
     public abstract string VersionName { get; }
 
-    /// <summary>This version's block/item ⇆ wire-id mapper. Codecs read it off the stream during encode.</summary>
-    public abstract ITypeMapper Types { get; }
+    TypeMapper? typeMapper;
+
+    /// <summary>This version's block/item ⇆ wire-id mapper — the single data-driven <see cref="TypeMapper"/>
+    /// resolved for THIS protocol type from the registered mappings. Codecs read it off the stream during encode.</summary>
+    public TypeMapper Types => typeMapper ??= new TypeMapper(GetType());
 
     /// <summary>Encodes a message into a complete, ready-to-write wire frame for this protocol's format.</summary>
     public abstract byte[] Frame(IMessage message);

@@ -39,7 +39,7 @@ namespace SharpMinerals.Tests;
 /// </summary>
 public class PlayStateTests {
     // The JE763 type mapper, now exposed per-protocol (was a static class).
-    static readonly ITypeMapper Types = new TypeMapperJE763();
+    static readonly TypeMapper Types = new TypeMapper(typeof(ProtocolJE763));
 
     // ── Flat generation ────────────────────────────────────────────────────
     [Fact]
@@ -127,11 +127,11 @@ public class PlayStateTests {
     // ── 1.19.4 (762) ⇄ 1.20.1 (763): same mapping logic, only the 1.20-shifted wire ids differ (inheritance delta) ──
     [Fact]
     public void Je762IsJe763WithThe120IdDeltas() {
-        var v762 = new TypeMapperJE762();
-        var v763 = new TypeMapperJE763();
+        var v762 = new TypeMapper(typeof(ProtocolJE762));
+        var v763 = new TypeMapper(typeof(ProtocolJE763));
 
         // Content not shifted by the 1.20 additions is identical across both versions.
-        foreach (var m in new ITypeMapper[] { v762, v763 }) {
+        foreach (var m in new TypeMapper[] { v762, v763 }) {
             Assert.Equal(1, m.StateId(Vanilla.Stone));
             Assert.Equal(112, m.StateId(Vanilla.Sand));
             Assert.Equal(117, m.StateId(Vanilla.RedSand));
@@ -160,11 +160,24 @@ public class PlayStateTests {
         Assert.Equal(14, v762.FromVanillaItem(193).State?.Get(State.Color));
         Assert.Equal(14, v763.FromVanillaItem(194).State?.Get(State.Color));
 
-        // The protocols wrap the matching version + mapper; the play packet table is shared via inheritance.
+        // Both protocols expose the same unified TypeMapper class; the version-specific ids are data, resolved
+        // per protocol type (the deltas above prove 762 and 763 resolve differently from the same mapper class).
         Assert.Equal(762, new ProtocolJE762().Version);
         Assert.Equal(763, new ProtocolJE763().Version);
-        Assert.IsType<TypeMapperJE762>(new ProtocolJE762().Types);
-        Assert.IsType<TypeMapperJE763>(new ProtocolJE763().Types);
+        Assert.IsType<TypeMapper>(new ProtocolJE762().Types);
+        Assert.IsType<TypeMapper>(new ProtocolJE763().Types);
+    }
+
+    // ── The `missing` placeholder borrows stone's wire ids but must still read as custom (distinct, non-stacking) ──
+    [Fact]
+    public void MissingBlockBorrowsStoneWireIdsButReadsCustom() {
+        var mapper = new TypeMapper(typeof(ProtocolJE763));
+        // Renders as stone on the wire (no native appearance of its own)...
+        Assert.Equal(mapper.StateId(Vanilla.Stone), mapper.StateId(BlockRegistry.Missing));
+        Assert.Equal(mapper.ItemId(Vanilla.Stone), mapper.ItemId(BlockRegistry.Missing));
+        // ...but is flagged custom so the slot encoder gives it a distinct name + identity marker, unlike real stone.
+        Assert.True(BlockRegistry.Missing.IsCustom);
+        Assert.False(Vanilla.Stone.IsCustom);
     }
 
     // ── 762→763 packet-BODY deltas (ids are identical; three bodies the 1.20 update changed) ──
@@ -435,10 +448,12 @@ public class PlayStateTests {
     // ── Custom objects: a mod-added type renders as the fallback item but carries differentiating NBT ──
     [Fact]
     public void CustomItemCarriesNameAndIdentityNbt() {
-        var custom = ItemRegistry.Register("sm_custom_test"); // not a vanilla name → mapper treats it as custom
-        var mapper = new TypeMapperJE763();
-        Assert.True(mapper.IsCustom(custom));
-        Assert.False(mapper.IsCustom(Vanilla.Stone));
+        // A minecraft-namespaced item is native by default; .Custom(true) overrides that (a server item with no
+        // vanilla equivalent). Real mods get custom for free (non-minecraft namespace) — see the gem test below.
+        var custom = ItemRegistry.Register("sm_custom_test").Custom(true);
+        var mapper = new TypeMapper(typeof(ProtocolJE763));
+        Assert.True(custom.IsCustom);
+        Assert.False(Vanilla.Stone.IsCustom);
 
         byte[] Encode(ItemStack stack) {
             using var ms = new System.IO.MemoryStream();
@@ -463,8 +478,8 @@ public class PlayStateTests {
     // ── Custom objects: the identity survives the wire round-trip when the client echoes the slot back ──
     [Fact]
     public void CustomItemIdentitySurvivesSlotRoundTrip() {
-        var custom = ItemRegistry.Register("sm_roundtrip_item");
-        var mapper = new TypeMapperJE763();
+        var custom = ItemRegistry.Register("sm_roundtrip_item").Custom(true);
+        var mapper = new TypeMapper(typeof(ProtocolJE763));
 
         using var ms = new System.IO.MemoryStream();
         var w = new MinecraftStream(ms, leaveOpen: true) { Types = mapper };
@@ -498,7 +513,7 @@ public class PlayStateTests {
         ModContent.CurrentNamespace = "minecraft";
         Assert.Equal("ns_test_mod:gem", gem.Id.Full);
         Assert.Same(gem, ItemRegistry.FromName("ns_test_mod:gem"));
-        Assert.True(new TypeMapperJE763().IsCustom(gem)); // modded → not vanilla → falls back on the wire
+        Assert.True(gem.IsCustom); // modded → not vanilla → falls back on the wire
 
         // Persistence writes the full namespaced id and round-trips it (portable, collision-free).
         using var ms = new System.IO.MemoryStream();
@@ -521,7 +536,7 @@ public class PlayStateTests {
         ModContent.CurrentNamespace = "minecraft";
 
         // Constructed after registration so the precomputed block-state table includes the new blocks.
-        var mapper = new TypeMapperJE763();
+        var mapper = new TypeMapper(typeof(ProtocolJE763));
 
         // Mapped modded block takes dirt's wire ids, not the stone fallback; CopyMapping carries it across.
         Assert.Equal(10, mapper.StateId(moddedBlock));
@@ -535,8 +550,8 @@ public class PlayStateTests {
         // Unmapped modded content still falls back to stone and keeps the custom marker (distinct identity).
         Assert.Equal(1, mapper.StateId(unmapped));
         Assert.Equal(1, mapper.ItemId(unmapped));
-        Assert.True(mapper.IsCustom(unmapped));
-        Assert.True(mapper.IsCustom(moddedBlock));
+        Assert.True(unmapped.IsCustom);
+        Assert.True(moddedBlock.IsCustom);
 
         // An unmapped modded entity has no 1.20.1 wire id and can't be spawned to a client.
         var ghost = EntityRegistry.Register("ghost");
@@ -555,7 +570,7 @@ public class PlayStateTests {
         Assert.Equal(Vanilla.Sand, Vanilla.Sand.Drop?.Type);
 
         // Resolves to its real 1.20.1 wire ids (block-state 117, item 47), not the stone fallback.
-        var mapper = new TypeMapperJE763();
+        var mapper = new TypeMapper(typeof(ProtocolJE763));
         Assert.Equal(117, mapper.StateId(Vanilla.RedSand));
         Assert.Equal(47, mapper.ItemId(Vanilla.RedSand));
         Assert.Same(Vanilla.RedSand, ItemRegistry.FromName("red_sand"));
@@ -1604,7 +1619,7 @@ public class PlayStateTests {
         var source = new SenderContext(new CaptureSender(new()), server.CommandDispatcher, client);
 
         using var ms = new System.IO.MemoryStream();
-        var w = new MinecraftStream(ms, leaveOpen: true) { Types = new TypeMapperJE763() };
+        var w = new MinecraftStream(ms, leaveOpen: true) { Types = new TypeMapper(typeof(ProtocolJE763)) };
         CommandTreeSerializer.Write(w, server.CommandDispatcher.Brigadier.GetRoot(), source);
 
         ms.Position = 0;

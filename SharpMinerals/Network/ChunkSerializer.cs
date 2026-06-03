@@ -24,7 +24,7 @@ public static class ChunkSerializer {
     static byte[] CreateFullSkyLight() { var a = new byte[2048]; Array.Fill(a, (byte)0xFF); return a; }
 
     /// <summary>Builds the Chunk Data packet for the column at (chunkX, chunkZ), mapping ids via <paramref name="types"/>.</summary>
-    public static ChunkDataS2C Build(ITypeMapper types, World world, int chunkX, int chunkZ, bool trustEdges = false) {
+    public static ChunkDataS2C Build(TypeMapper types, World world, int chunkX, int chunkZ, bool trustEdges = false) {
         using var ms = new MemoryStream();
         var s = new MinecraftStream(ms, leaveOpen: true);
 
@@ -65,7 +65,7 @@ public static class ChunkSerializer {
             .WriteRoot(s);
     }
 
-    static byte[] BuildSections(ITypeMapper types, World world, int chunkX, int chunkZ,
+    static byte[] BuildSections(TypeMapper types, World world, int chunkX, int chunkZ,
                                 List<(byte Packed, int Y, int TypeId)> blockEntities) {
         using var ms = new MemoryStream();
         var s = new MinecraftStream(ms, leaveOpen: true);
