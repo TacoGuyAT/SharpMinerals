@@ -19,7 +19,7 @@ public static class GiveCommand {
     public static CommandDispatcher RegisterGive(this CommandDispatcher d) => d.Register(l => l
         .Literal("give")
         .Requires(x => x.IsPlayer)
-        .Then(x => x.Argument("item", Arguments.Word())
+        .Then(x => x.Argument("item", ResourceLocationArgumentType.ResourceLocation())
             .Suggests((ctx, builder) => {
                 foreach(var item in ItemRegistry.All) // every block is an item, so one registry covers both
                     if(item is not BlockType { IsAir: true }
