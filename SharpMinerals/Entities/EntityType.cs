@@ -7,16 +7,18 @@ namespace SharpMinerals.Entities;
 /// components, like <see cref="Items.ItemType"/>/<see cref="Blocks.BlockType"/>. The wire id is a per-version
 /// concern resolved by <see cref="Network.ITypeMapper.EntityTypeId"/>, not stored here; reference identity holds.</summary>
 public sealed class EntityType : ComponentObject {
-    public int Id { get; }
-    public string Name { get; }
+    internal int TypeId { get; }
 
-    internal EntityType(int id, string name) {
-        Id = id;
-        Name = name;
+    /// <summary>The namespaced identifier (e.g. <c>minecraft:falling_block</c>).</summary>
+    public Identifier Id { get; }
+
+    internal EntityType(int id, Identifier identifier) {
+        TypeId = id;
+        Id = identifier;
     }
 
     /// <summary>Max health from a <see cref="HealthEntityDescriptor"/> component (0 if this kind isn't living, e.g. an item).</summary>
     public float MaxHealth => TryGet<HealthEntityDescriptor>(out var l) ? l.MaxHealth : 0f;
 
-    public override string ToString() => Name;
+    public override string ToString() => Id.Name;
 }

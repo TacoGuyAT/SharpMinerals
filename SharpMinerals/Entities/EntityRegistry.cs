@@ -1,5 +1,7 @@
 using SharpMinerals.Components;
 using SharpMinerals.Entities.Descriptors;
+using SharpMinerals.Items;
+using SharpMinerals.Modding;
 
 namespace SharpMinerals.Entities;
 
@@ -7,18 +9,20 @@ namespace SharpMinerals.Entities;
 /// mirroring <c>BlockRegistry</c>/<c>ItemRegistry</c>. Ids are assigned in registration order.</summary>
 public static class EntityRegistry {
     static readonly List<EntityType> byId = new();
-    static readonly Dictionary<string, EntityType> byName = new();
+    static readonly Dictionary<string, EntityType> byIdentifier = new(); // keyed by full namespaced Id
     static bool frozen;
 
     static EntityType Define(string name) {
         if (frozen)
             throw new InvalidOperationException(
                 $"EntityRegistry is frozen — register entity \"{name}\" during mod OnInitialize.");
-        if (byName.ContainsKey(name))
-            throw new ArgumentException($"An entity named \"{name}\" is already registered.", nameof(name));
-        var type = new EntityType(byId.Count, name);
+        var identifier = new Identifier(ModContent.CurrentNamespace, name);
+        string key = identifier.Full;
+        if (byIdentifier.ContainsKey(key))
+            throw new ArgumentException($"An entity \"{key}\" is already registered.", nameof(name));
+        var type = new EntityType(byId.Count, identifier);
         byId.Add(type);
-        byName[name] = type;
+        byIdentifier[key] = type;
         return type;
     }
 
@@ -36,5 +40,8 @@ public static class EntityRegistry {
 
     public static IReadOnlyList<EntityType> All => byId;
     public static EntityType FromId(int id) => byId[id];
-    public static EntityType? FromName(string name) => byName.GetValueOrDefault(name);
+
+    /// <summary>The entity kind for <paramref name="id"/> — a bare path (defaults to <c>minecraft:</c>) or a
+    /// full <c>namespace:path</c> — or null if unregistered.</summary>
+    public static EntityType? FromName(string id) => byIdentifier.GetValueOrDefault(ItemRegistry.Normalize(id));
 }

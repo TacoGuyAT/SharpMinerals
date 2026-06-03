@@ -21,8 +21,8 @@ public static class BlockRegistry {
             throw new InvalidOperationException(
                 $"BlockRegistry is frozen — register block \"{name}\" during mod OnInitialize, before the palette is built.");
         int blockId = palette.Count;
-        // Register as an item (unified id + name lookup); the factory gets that id, we supply the palette id.
-        var block = ItemRegistry.Add(name, id => new BlockType(id, blockId, name, isAir));
+        // Register as an item (unified id + lookup); the factory gets the item id + identifier, we supply the palette id.
+        var block = ItemRegistry.Add(name, (id, identifier) => new BlockType(id, blockId, identifier, isAir));
         palette.Add(block);
         return block;
     }

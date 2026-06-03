@@ -21,10 +21,11 @@ public static class GiveCommand {
         .Requires(x => x.IsPlayer)
         .Then(x => x.Argument("item", Arguments.Word())
             .Suggests((ctx, builder) => {
-                foreach (var item in ItemRegistry.All) // every block is an item, so one registry covers both
-                    if (item is not BlockType { IsAir: true }
-                        && item.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase))
-                        builder.Suggest(item.Name);
+                foreach(var item in ItemRegistry.All) // every block is an item, so one registry covers both
+                    if(item is not BlockType { IsAir: true }
+                        && (item.Id.Full.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)
+                            || item.Id.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)))
+                        builder.Suggest(item.Id.Full); // suggest the canonical namespaced id; bare input still resolves
                 return builder.BuildFuture();
             })
             .Executes(c => Give(c, 1))
@@ -33,7 +34,7 @@ public static class GiveCommand {
 
     static int Give(CommandContext<SenderContext> ctx, int count) {
         var server = ctx.Source.Server;
-        if (ctx.Source.Client is not { } client
+        if(ctx.Source.Client is not { } client
             || !server.TryGetPlayer(client.Id, out var context)
             || !context.World.Ecs.IsAlive(context.Entity)) {
             ctx.Source.Reply("Only an online player can be given items.");
@@ -41,7 +42,7 @@ public static class GiveCommand {
         }
 
         var name = Arguments.GetString(ctx, "item");
-        if (ItemRegistry.FromName(name) is not { } type || type is BlockType { IsAir: true }) {
+        if(ItemRegistry.FromName(name) is not { } type || type is BlockType { IsAir: true }) {
             ctx.Source.Reply($"Unknown item '{name}'.");
             return 0;
         }
@@ -49,12 +50,12 @@ public static class GiveCommand {
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         var leftover = inventory.Add(new ItemStack(type, count));
         int given = count - leftover.Count;
-        if (given <= 0) { ctx.Source.Reply("Your inventory is full."); return 0; }
+        if(given <= 0) { ctx.Source.Reply("Your inventory is full."); return 0; }
 
         // Resync the window; equipment others see is refreshed by the per-tick equipment diff.
         client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
 
-        ctx.Source.Reply($"Gave x{given} {type.Name}.");
+        ctx.Source.Reply($"Gave {given}.");
         return given;
     }
 }

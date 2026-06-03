@@ -52,14 +52,14 @@ internal static class SlotWire {
         return new NbtCompound()
             .Put("display", display)
             // Distinct per custom type → the client won't merge customs/fallback into one stack, and the
-            // server recovers the exact type when the client sends the slot back.
-            .Put(CustomTypeKey, type.Name);
+            // server recovers the exact type (its full namespaced id) when the client sends the slot back.
+            .Put(CustomTypeKey, type.Id.Full);
     }
 
-    // A 1.20.1 item name is a JSON chat component. Use a translatable keyed by the type name with a humanised fallback.
+    // A 1.20.1 item name is a JSON chat component. Use a translatable keyed by the namespaced id with a humanised fallback.
     static string CustomNameJson(ItemType type) {
-        string fallback = Humanize(type.Name);
-        return $"{{\"translate\":\"item.sharpminerals.{Escape(type.Name)}\",\"fallback\":\"{Escape(fallback)}\",\"italic\":false}}";
+        string fallback = Humanize(type.Id.Name);
+        return $"{{\"translate\":\"item.{Escape(type.Id.Namespace)}.{Escape(type.Id.Name)}\",\"fallback\":\"{Escape(fallback)}\",\"italic\":false}}";
     }
 
     static string Humanize(string name) =>

@@ -25,7 +25,7 @@ public static class ChunkCodec {
         var names = new List<string>();
         foreach (var id in raw)
             if (indexOf.TryAdd(id, names.Count))
-                names.Add(BlockRegistry.FromState(id).Name);
+                names.Add(BlockRegistry.FromState(id).Id.Full);
         s.WriteVarInt(names.Count);
         foreach (var name in names) s.WriteString(name);
 
@@ -84,7 +84,7 @@ public static class ChunkCodec {
         s.WriteLong(entity.Position.X);
         s.WriteLong(entity.Position.Y);
         s.WriteLong(entity.Position.Z);
-        s.WriteString(entity.Type.Name);
+        s.WriteString(entity.Type.Id.Full);
 
         if (entity.TryGet<InventoryComponent>(out var inv)) {
             s.WriteBool(true);

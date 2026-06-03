@@ -32,7 +32,7 @@ public class BlockType : ItemType {
 
     public BlockType DropSelf() => this.Add(new DropBlockDescriptor(() => new ItemStack(this)));
 
-    internal BlockType(int itemId, int blockId, string name, bool isAir) : base(itemId, name) {
+    internal BlockType(int itemId, int blockId, Identifier identifier, bool isAir) : base(itemId, identifier) {
         BlockId = blockId;
         IsAir = isAir;
     }

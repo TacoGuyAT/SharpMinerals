@@ -34,5 +34,5 @@ public struct ItemStack {
         return a is null ? b is null : b is not null && a.Matches(b);
     }
 
-    public override readonly string ToString() => IsEmpty ? "empty" : $"{Count}x {Type!.Name}";
+    public override readonly string ToString() => IsEmpty ? "empty" : $"x{Count} {Type!.Id.Name}";
 }

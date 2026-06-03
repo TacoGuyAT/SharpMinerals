@@ -33,10 +33,10 @@ public sealed class TypeMapperJE61 : ITypeMapper {
                 blockById[id] = block;
     }
 
-    public int StateId(BlockType block) => blockIdByName.GetValueOrDefault(block.Name, FallbackId);
+    public int StateId(BlockType block) => block.Id.Namespace == "minecraft" ? blockIdByName.GetValueOrDefault(block.Id.Name, FallbackId) : FallbackId;
     public int StateId(BlockState state) => StateId(state.Type);
-    public int ItemId(ItemType item) => blockIdByName.GetValueOrDefault(item.Name, FallbackId);
-    public bool IsCustom(ItemType item) => !blockIdByName.ContainsKey(item.Name);
+    public int ItemId(ItemType item) => item.Id.Namespace == "minecraft" ? blockIdByName.GetValueOrDefault(item.Id.Name, FallbackId) : FallbackId;
+    public bool IsCustom(ItemType item) => item.Id.Namespace != "minecraft" || !blockIdByName.ContainsKey(item.Id.Name);
     // 1.5.2 embeds tile entities in the legacy chunk format, not as a separate packet list, so none surface here.
     public int BlockEntityTypeId(BlockType block) => 0;
     public int ItemId(ItemStack stack) => stack.Type is { } t ? ItemId(t) : 0;

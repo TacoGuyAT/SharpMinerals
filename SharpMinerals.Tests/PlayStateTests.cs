@@ -208,7 +208,7 @@ public class PlayStateTests {
         for (int i = 0; i < 12; i++) server.DefaultWorld.Tick(); // age past pickup delay, settle, ItemPickupSystem collects it
         server.FlushSystems();                                   // project the pickup (collect animation + removal)
         Assert.True(!server.DefaultWorld.Ecs.IsAlive(dropEntity), "pickup: drop entity removed");
-        server.TryGetPlayer(client.Id, out var context);
+        Assert.True(server.TryGetPlayer(client.Id, out var context), "player is present"); // TODO: change name
         var pickInv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
         bool hasCobble = false;
         for (int s = 0; s < InventoryEntityComponent.MainSize; s++)
@@ -385,9 +385,10 @@ public class PlayStateTests {
         var customText = System.Text.Encoding.UTF8.GetString(Encode(new ItemStack(custom)));
         var stoneText = System.Text.Encoding.UTF8.GetString(Encode(new ItemStack(BlockRegistry.Stone)));
 
-        // The custom item gets a translatable display name (with a humanised fallback) and an identity
-        // marker that keeps the client from stacking it with the fallback item or other custom types.
-        Assert.Contains("item.sharpminerals.sm_custom_test", customText);
+        // The custom item gets a translatable display name keyed by its namespaced id (item.<namespace>.<path>,
+        // lang-file ready), with a humanised fallback, and an identity marker that keeps the client from stacking
+        // it with the fallback item or other custom types. Registered outside a mod, so the namespace is minecraft.
+        Assert.Contains("item.minecraft.sm_custom_test", customText);
         Assert.Contains("Sm Custom Test", customText);
         Assert.Contains("SharpMineralsType", customText);
         // A vanilla item is a plain slot — no display name, no marker (so it stacks normally).
@@ -410,6 +411,37 @@ public class PlayStateTests {
         Assert.NotNull(restored);
         Assert.Equal(custom, restored!.Value.Type); // recovered the custom type, not the fallback (stone)
         Assert.Equal(3, restored.Value.Count);
+    }
+
+    // ── Namespaced identifiers: minecraft default, mod namespace, lookup normalization, persistence ──
+    [Fact]
+    public void ItemBlockNamespacesResolveAndPersist() {
+        // Built-ins live under the minecraft namespace; Id.Name is the path, Id.ToString() the full namespace:path.
+        Assert.Equal("stone", BlockRegistry.Stone.Id.Name);
+        Assert.Equal("minecraft", BlockRegistry.Stone.Id.Namespace);
+        Assert.Equal("minecraft:stone", BlockRegistry.Stone.Id.Full);
+        Assert.Equal(new Identifier("minecraft", "stone"), BlockRegistry.Stone.Id); // value equality
+
+        // A bare path defaults to minecraft; the qualified form resolves to the same instance.
+        Assert.Same(BlockRegistry.Stone, ItemRegistry.FromName("stone"));
+        Assert.Same(BlockRegistry.Stone, ItemRegistry.FromName("minecraft:stone"));
+        Assert.Null(ItemRegistry.FromName("nope:stone"));
+
+        // Mod content is namespaced under the loading mod's id (ModLoader sets CurrentNamespace around OnInitialize).
+        ModContent.CurrentNamespace = "ns_test_mod";
+        var gem = ItemRegistry.Register("gem");
+        ModContent.CurrentNamespace = "minecraft";
+        Assert.Equal("ns_test_mod:gem", gem.Id.Full);
+        Assert.Same(gem, ItemRegistry.FromName("ns_test_mod:gem"));
+        Assert.True(new TypeMapperJE763().IsCustom(gem)); // modded → not vanilla → falls back on the wire
+
+        // Persistence writes the full namespaced id and round-trips it (portable, collision-free).
+        using var ms = new System.IO.MemoryStream();
+        StackCodec.Write(new MinecraftStream(ms, leaveOpen: true), new ItemStack(gem, 5));
+        ms.Position = 0;
+        var back = StackCodec.Read(new MinecraftStream(ms, leaveOpen: true));
+        Assert.Equal(gem, back.Type);
+        Assert.Equal(5, back.Count);
     }
 
     // ── Creative: an item this server can't represent is reported + corrected, honouring the cursor ──
@@ -777,7 +809,7 @@ public class PlayStateTests {
         var c1 = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(c1);
         handler.Handle(c1, new LoginStartC2S("Persist", Guid.Empty));
-        server.TryGetPlayer(c1.Id, out var h1);
+        Assert.True(server.TryGetPlayer(c1.Id, out var h1), "player is present"); // TODO: change name
         ref var t = ref h1.World.Ecs.Get<TransformEntityComponent>(h1.Entity);
         t.X = 40.5; t.Y = 70.0; t.Z = -12.5; t.Yaw = 90f; t.Pitch = 30f;
         h1.World.Ecs.Get<InventoryEntityComponent>(h1.Entity).Main(5) = new ItemStack(BlockRegistry.Cobblestone, 7);
@@ -789,7 +821,7 @@ public class PlayStateTests {
         var c2 = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
         capture.Register(c2);
         handler.Handle(c2, new LoginStartC2S("Persist", Guid.Empty));
-        server.TryGetPlayer(c2.Id, out var h2);
+        Assert.True(server.TryGetPlayer(c2.Id, out var h2), "player is present"); // TODO: change name
         var t2 = h2.World.Ecs.Get<TransformEntityComponent>(h2.Entity);
         var inv2 = h2.World.Ecs.Get<InventoryEntityComponent>(h2.Entity);
         Assert.True(t2.X == 40.5 && t2.Z == -12.5 && t2.Yaw == 90f && t2.Pitch == 30f,

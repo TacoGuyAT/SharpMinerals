@@ -82,7 +82,8 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         var all = BlockRegistry.All; // forces BlockRegistry init first
         var table = new int[all.Count];
         for (int i = 0; i < all.Count; i++)
-            table[i] = stateByName.GetValueOrDefault(all[i].Name, FallbackStateId);
+            // Only minecraft-namespace blocks map to a vanilla state; modded blocks fall back to stone.
+            table[i] = all[i].Id.Namespace == "minecraft" ? stateByName.GetValueOrDefault(all[i].Id.Name, FallbackStateId) : FallbackStateId;
         return table;
     }
 
@@ -98,45 +99,49 @@ public sealed class TypeMapperJE763 : ITypeMapper {
     public int StateId(BlockType block) => stateByBlockId[block.BlockId];
 
     public int StateId(BlockState state) {
-        // 1) per-block/state override → 2) the linear layout formula → 3) the type's default.
-        if (stateOverrides.TryGetValue(state.Type.Name, out var over) && over(state) is int forced)
-            return forced;
+        // Vanilla state mapping (1) per-block/state override → (2) the linear layout formula applies only to
+        // minecraft blocks; everything else falls through to (3) the type's default (stone for modded blocks).
+        if (state.Type.Id.Namespace == "minecraft") {
+            if (stateOverrides.TryGetValue(state.Type.Id.Name, out var over) && over(state) is int forced)
+                return forced;
 
-        if (stateLayouts.TryGetValue(state.Type.Name, out var layout)) {
-            int id = layout.DefaultState;
-            foreach (var (property, stride) in layout.Strides)
-                id += state.Get(property) * stride;
-            return id;
+            if (stateLayouts.TryGetValue(state.Type.Id.Name, out var layout)) {
+                int id = layout.DefaultState;
+                foreach (var (property, stride) in layout.Strides)
+                    id += state.Get(property) * stride;
+                return id;
+            }
         }
 
         return StateId(state.Type);
     }
 
-    public int EntityTypeId(EntityType type) => type.Name switch {
-        "item" => 54, // minecraft:item
-        "falling_block" => 36, // minecraft:falling_block
+    public int EntityTypeId(EntityType type) => type.Id.Full switch {
+        "minecraft:item" => 54,
+        "minecraft:falling_block" => 36,
         // 1.20.1 spawns players via Spawn Player, not Spawn Entity (players carry an entity type only from 1.20.2+).
-        "player" => throw new NotSupportedException(
+        "minecraft:player" => throw new NotSupportedException(
             "JE763 spawns players via the dedicated Spawn Player packet, not Spawn Entity."),
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type.Name, "No JE763 wire id for this entity type."),
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type.Id.Full, "No JE763 wire id for this entity type."),
     };
 
     public int BlockEntityTypeId(BlockType block) {
-        if(blockEntityIdByName.TryGetValue(block.Name, out var id)) {
+        if(block.Id.Namespace == "minecraft" && blockEntityIdByName.TryGetValue(block.Id.Name, out var id)) {
             return id;
         }
         Log?.LogWarning("Invalid mapping for block entity {blockEntity}", block);
         return 1;
     }
 
-    public int ItemId(ItemType item) => itemIdByName.GetValueOrDefault(item.Name, FallbackItemId);
+    public int ItemId(ItemType item) =>
+        item.Id.Namespace == "minecraft" ? itemIdByName.GetValueOrDefault(item.Id.Name, FallbackItemId) : FallbackItemId;
 
-    public bool IsCustom(ItemType item) => !itemIdByName.ContainsKey(item.Name);
+    public bool IsCustom(ItemType item) => item.Id.Namespace != "minecraft" || !itemIdByName.ContainsKey(item.Id.Name);
 
     public int ItemId(ItemStack stack) {
         if (stack.Type is not { } type)
             return FallbackItemId;
-        if (stack.State is { } state && itemOverrides.TryGetValue(type.Name, out var over))
+        if (stack.State is { } state && type.Id.Namespace == "minecraft" && itemOverrides.TryGetValue(type.Id.Name, out var over))
             return over(state);
         return ItemId(type);
     }

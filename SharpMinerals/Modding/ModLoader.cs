@@ -88,11 +88,15 @@ public sealed partial class ModLoader {
                  dataPath);
 
         // TODO: better handling
+        // Content the mod registers during OnInitialize is namespaced under its id (e.g. "sample:ruby_block").
+        ModContent.CurrentNamespace = info.ModId;
         try {
             mod.OnInitialize();
         } catch(Exception ex) {
             log.LogError(ex, "Mod \"{Id}\" OnInitialize threw — the mod may be partially loaded.", info.ModId);
             // Best-effort: keep the mod so OnServerStarted still runs, rather than aborting the whole server.
+        } finally {
+            ModContent.CurrentNamespace = "minecraft";
         }
 
         mods.Add(mod);

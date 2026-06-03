@@ -12,7 +12,7 @@ internal static class StackCodec {
     public static void Write(MinecraftStream s, ItemStack stack) {
         if (stack.IsEmpty) { s.WriteBool(false); return; }
         s.WriteBool(true);
-        s.WriteString(stack.Type!.Name);
+        s.WriteString(stack.Type!.Id.Full);
         s.WriteVarInt(stack.Count);
 
         // Carried block state (e.g. a wool's colour).
