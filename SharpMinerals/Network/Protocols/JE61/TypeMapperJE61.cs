@@ -33,9 +33,14 @@ public sealed class TypeMapperJE61 : ITypeMapper {
                 blockById[id] = block;
     }
 
-    public int StateId(BlockType block) => block.Id.Namespace == "minecraft" ? blockIdByName.GetValueOrDefault(block.Id.Name, FallbackId) : FallbackId;
+    // A vanilla target resolves to its flat id; anything else falls back to stone. TargetOf turns a modded
+    // definition into the vanilla content it maps to (via its VanillaMapping component), or leaves it modded.
+    int IdFor(Identifier target) =>
+        target.Namespace == "minecraft" ? blockIdByName.GetValueOrDefault(target.Name, FallbackId) : FallbackId;
+
+    public int StateId(BlockType block) => IdFor(VanillaMapping.TargetOf(block.Id, block));
     public int StateId(BlockState state) => StateId(state.Type);
-    public int ItemId(ItemType item) => item.Id.Namespace == "minecraft" ? blockIdByName.GetValueOrDefault(item.Id.Name, FallbackId) : FallbackId;
+    public int ItemId(ItemType item) => IdFor(VanillaMapping.TargetOf(item.Id, item));
     public bool IsCustom(ItemType item) => item.Id.Namespace != "minecraft" || !blockIdByName.ContainsKey(item.Id.Name);
     // 1.5.2 embeds tile entities in the legacy chunk format, not as a separate packet list, so none surface here.
     public int BlockEntityTypeId(BlockType block) => 0;

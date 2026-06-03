@@ -33,6 +33,12 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         ["chest"] = 1, // minecraft:chest
     };
 
+    // 1.20.1 entity-type registry ids. Players carry no entity type here — they spawn via the dedicated packet.
+    readonly Dictionary<string, int> entityIdByName = new() {
+        ["item"] = 54,
+        ["falling_block"] = 36,
+    };
+
     // 1.20.1 item-registry ids.
     readonly Dictionary<string, int> itemIdByName = new() {
         ["bedrock"] = 43,
@@ -82,10 +88,16 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         var all = BlockRegistry.All; // forces BlockRegistry init first
         var table = new int[all.Count];
         for (int i = 0; i < all.Count; i++)
-            // Only minecraft-namespace blocks map to a vanilla state; modded blocks fall back to stone.
-            table[i] = all[i].Id.Namespace == "minecraft" ? stateByName.GetValueOrDefault(all[i].Id.Name, FallbackStateId) : FallbackStateId;
+            table[i] = StateIdFor(VanillaMapping.TargetOf(all[i].Id, all[i]));
         return table;
     }
+
+    // The per-version table lookups: a vanilla target resolves to its wire id; anything else falls back to stone.
+    // (TargetOf already turns a modded definition into the vanilla content it maps to, or leaves it modded.)
+    int StateIdFor(Identifier target) =>
+        target.Namespace == "minecraft" ? stateByName.GetValueOrDefault(target.Name, FallbackStateId) : FallbackStateId;
+    int ItemIdFor(Identifier target) =>
+        target.Namespace == "minecraft" ? itemIdByName.GetValueOrDefault(target.Name, FallbackItemId) : FallbackItemId;
 
     sealed class StateLayout {
         public readonly int DefaultState;
@@ -116,25 +128,29 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         return StateId(state.Type);
     }
 
-    public int EntityTypeId(EntityType type) => type.Id.Full switch {
-        "minecraft:item" => 54,
-        "minecraft:falling_block" => 36,
+    public int EntityTypeId(EntityType type) {
+        var target = VanillaMapping.TargetOf(type.Id, type);
+        if (target.Namespace == "minecraft") {
         // 1.20.1 spawns players via Spawn Player, not Spawn Entity (players carry an entity type only from 1.20.2+).
-        "minecraft:player" => throw new NotSupportedException(
-            "JE763 spawns players via the dedicated Spawn Player packet, not Spawn Entity."),
-        _ => throw new ArgumentOutOfRangeException(nameof(type), type.Id.Full, "No JE763 wire id for this entity type."),
-    };
+            if (target.Name == "player")
+                throw new NotSupportedException(
+                    "JE763 spawns players via the dedicated Spawn Player packet, not Spawn Entity.");
+            if (entityIdByName.TryGetValue(target.Name, out var id))
+                return id;
+        }
+        throw new ArgumentOutOfRangeException(nameof(type), type.Id.Full, "No JE763 wire id for this entity type.");
+    }
 
     public int BlockEntityTypeId(BlockType block) {
-        if(block.Id.Namespace == "minecraft" && blockEntityIdByName.TryGetValue(block.Id.Name, out var id)) {
+        var target = VanillaMapping.TargetOf(block.Id, block);
+        if(target.Namespace == "minecraft" && blockEntityIdByName.TryGetValue(target.Name, out var id)) {
             return id;
         }
         Log?.LogWarning("Invalid mapping for block entity {blockEntity}", block);
         return 1;
     }
 
-    public int ItemId(ItemType item) =>
-        item.Id.Namespace == "minecraft" ? itemIdByName.GetValueOrDefault(item.Id.Name, FallbackItemId) : FallbackItemId;
+    public int ItemId(ItemType item) => ItemIdFor(VanillaMapping.TargetOf(item.Id, item));
 
     public bool IsCustom(ItemType item) => item.Id.Namespace != "minecraft" || !itemIdByName.ContainsKey(item.Id.Name);
 
