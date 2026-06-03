@@ -187,13 +187,42 @@ public class World : ITickable {
         return block;
     }
 
-    /// <summary>Places a block at <paramref name="pos"/> if the space is currently air.</summary>
+    /// <summary>Places a block at <paramref name="pos"/> if the space is air AND no solid entity is standing in
+    /// it — like vanilla, you can't place a block inside a player's (or mob's) collision box.</summary>
     public bool PlaceBlock(Vector3i pos, BlockType block) {
         if (!GetBlock(pos).IsAir)
+            return false;
+        if (IsObstructedByEntity(pos))
             return false;
 
         SetBlock(pos, block);
         return true;
+    }
+
+    // The vanilla player collision hitbox (0.6 wide × 1.8 tall) — NOT the ColliderEntityComponent, which on a
+    // player is the (larger) item-pickup reach. Placement uses the true hitbox so you can build right next to
+    // yourself. PlacementScanRadius bounds the spatial-index scan (the precise AABB test decides actual overlap).
+    const double PlayerHitboxHalfWidth = 0.3;
+    const double PlayerHitboxHeight = 1.8;
+    const double PlacementScanRadius = 3.0;
+
+    /// <summary>Whether a solid entity's collision box overlaps the unit cube at <paramref name="pos"/>. Only
+    /// players block placement today (mobs would be added the same way); dropped items and the like do not.</summary>
+    bool IsObstructedByEntity(Vector3i pos) {
+        double bx = pos.X, by = pos.Y, bz = pos.Z; // block cube spans [b, b+1] on each axis
+        var candidates = new List<ArchEntity>();
+        Entities.Near(bx + 0.5, by + 0.5, bz + 0.5, PlacementScanRadius, candidates);
+        foreach (var e in candidates) {
+            if (!Ecs.Has<NetPlayerEntityComponent>(e)) continue; // only players are solid for placement
+            var t = Ecs.Get<TransformEntityComponent>(e);
+            double hw = PlayerHitboxHalfWidth, h = PlayerHitboxHeight, tx = t.X, ty = t.Y, tz = t.Z;
+            // AABB overlap between the player hitbox [X±hw]×[Y,Y+h]×[Z±hw] and the block cube.
+            if (tx - hw < bx + 1 && tx + hw > bx &&
+                ty      < by + 1 && ty + h   > by &&
+                tz - hw < bz + 1 && tz + hw > bz)
+                return true;
+        }
+        return false;
     }
 
     // ── Entities ────────────────────────────────────────────────────────────

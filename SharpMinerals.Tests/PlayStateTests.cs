@@ -69,6 +69,26 @@ public class PlayStateTests {
         Assert.True(!gen.PlaceBlock(new Vector3i(5, 5, 5), Vanilla.Dirt), "place: into a solid fails");
     }
 
+    // ── Placement can't put a block inside a standing entity (player collision box) ──
+    [Fact]
+    public void BlockPlacementBlockedByStandingPlayer() {
+        var world = new World("place_collision", new FlatChunkGenerator());
+        world.SpawnPlayer(1, "Steve", Guid.NewGuid(), 1); // feet at (0.5, SurfaceY, 0.5); box overlaps the cube at (0, SurfaceY, 0)
+
+        var inside = new Vector3i(0, WorldDefaults.SurfaceY, 0);
+        Assert.False(world.PlaceBlock(inside, Vanilla.Stone), "can't place into the player's collision box");
+        Assert.True(world.GetBlock(inside).IsAir, "nothing was placed");
+
+        // The hitbox is the true 0.6-wide player box, not the larger pickup-reach collider, so the cell right
+        // next to the player (X [1,2] vs the player's [0.2,0.8]) is clear — you can build alongside yourself.
+        var adjacent = new Vector3i(1, WorldDefaults.SurfaceY, 0);
+        Assert.True(world.PlaceBlock(adjacent, Vanilla.Dirt), "placing in the adjacent cell (clear of the hitbox) succeeds");
+
+        var clear = new Vector3i(10, WorldDefaults.SurfaceY, 10);
+        Assert.True(world.PlaceBlock(clear, Vanilla.Stone), "placing clear of any entity succeeds");
+        Assert.Equal(Vanilla.Stone, world.GetBlock(clear));
+    }
+
     // ── Position packing ────────────────────────────────────────────────────
     [Fact]
     public void PositionPacking() {
