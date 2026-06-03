@@ -444,6 +444,41 @@ public class PlayStateTests {
         Assert.Equal(5, back.Count);
     }
 
+    // ── A mod's wire mapping: VanillaMapping is the registration point; the mapper honours it (no hardcoded switch) ──
+    [Fact]
+    public void ModdedTypeWithVanillaMappingResolvesToMappedWireIds() {
+        ModContent.CurrentNamespace = "ns_map_test";
+        // Map to dirt (state 10 / item 15) — distinct from the stone fallback (1), so honouring is observable.
+        var moddedBlock = BlockRegistry.Register("ruby_block").Add(new VanillaMapping(BlockRegistry.Dirt));
+        var copied = BlockRegistry.Register("ruby_ore").CopyMapping(moddedBlock); // borrows the same mapping
+        var moddedEntity = EntityRegistry.Register("spark").Add(new VanillaMapping(EntityRegistry.Item));
+        var unmapped = BlockRegistry.Register("void_block"); // no mapping → stone fallback
+        ModContent.CurrentNamespace = "minecraft";
+
+        // Constructed after registration so the precomputed block-state table includes the new blocks.
+        var mapper = new TypeMapperJE763();
+
+        // Mapped modded block takes dirt's wire ids, not the stone fallback; CopyMapping carries it across.
+        Assert.Equal(10, mapper.StateId(moddedBlock));
+        Assert.Equal(15, mapper.ItemId(moddedBlock));
+        Assert.Equal(10, mapper.StateId(copied));
+        Assert.Equal(15, mapper.ItemId(copied));
+
+        // Mapped modded entity resolves through the entity table (replacing the old hardcoded switch).
+        Assert.Equal(54, mapper.EntityTypeId(moddedEntity));
+
+        // Unmapped modded content still falls back to stone and keeps the custom marker (distinct identity).
+        Assert.Equal(1, mapper.StateId(unmapped));
+        Assert.Equal(1, mapper.ItemId(unmapped));
+        Assert.True(mapper.IsCustom(unmapped));
+        Assert.True(mapper.IsCustom(moddedBlock));
+
+        // An unmapped modded entity has no 1.20.1 wire id and can't be spawned to a client.
+        var ghost = EntityRegistry.Register("ghost");
+        Assert.Throws<ArgumentOutOfRangeException>(() => mapper.EntityTypeId(ghost));
+    }
+
+
     // ── Creative: an item this server can't represent is reported + corrected, honouring the cursor ──
     [Fact]
     public void CreativeSlotWithUnknownItemWarnsAndCorrectsClient() {
