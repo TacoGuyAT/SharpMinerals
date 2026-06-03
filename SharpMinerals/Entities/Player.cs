@@ -1,6 +1,4 @@
-﻿using SharpMinerals.Blocks;
-using SharpMinerals.Entities.Components;
-using SharpMinerals.Entities.Descriptors;
+﻿using SharpMinerals.Entities.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Level;
 using ArchEntity = Arch.Core.Entity;
@@ -16,28 +14,19 @@ public static class Player {
         // A returning player restores their saved placement/health/inventory; a new one gets the
         // default spawn point, full health and a starter kit.
         var transform = saved?.Transform ?? spawn;
-        var health = saved?.Health ?? new HealthEntityComponent(MaxHealth);
-        var inventory = saved?.Inventory ?? NewInventory();
+        var entity = world.Spawn(EntityRegistry.Player, transform);
 
-        return world.Ecs.Create(
-            transform,
-            // Seed the movement-relay baseline to spawn, so a freshly-joined player doesn't re-broadcast it.
-            new SyncedTransformEntityComponent { X = transform.X, Y = transform.Y, Z = transform.Z, Yaw = transform.Yaw, Pitch = transform.Pitch },
-            new VelocityEntityComponent(0, 0, 0),
-            health,
-            inventory,
-            // The true 0.6×1.8 player hitbox, used to block placement (a block can't go where a player stands).
-            // Players are physics-excluded (client-driven), so it has no Physics usage.
-            new HitboxEntityComponent(0.6, 1.8, CollisionUsage.Placement),
-            // A wider proximity box for nearby interactions (item pickup today); larger than the hitbox.
-            new InteractionReachEntityComponent(1.5, 2.0),
-            // Object initializer, NOT a parameterless ctor — that's bypassed on Arch default-init paths.
-            new CollisionEntityComponent { Touching = new List<ArchEntity>() },
-            new ChunkViewEntityComponent(),
-            new TypeEntityDescriptor { Type = EntityRegistry.Player },
-            SenderEntityComponent.ForPlayer(name),
-            new NetPlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, EntityId = entityId },
-            new EquipmentEntityComponent());
+        // The blueprint (EntityRegistry.Player) laid down every component with placeholder defaults; here we set
+        // only the ones that are per-instance. Everything else (hitbox, reach, collision list, …) is already correct.
+        var ecs = world.Ecs;
+        // Seed the movement-relay baseline to spawn, so a freshly-joined player doesn't re-broadcast it.
+        ecs.Get<SyncedTransformEntityComponent>(entity) = new SyncedTransformEntityComponent {
+            X = transform.X, Y = transform.Y, Z = transform.Z, Yaw = transform.Yaw, Pitch = transform.Pitch };
+        ecs.Get<HealthEntityComponent>(entity) = saved?.Health ?? new HealthEntityComponent(MaxHealth);
+        ecs.Get<InventoryEntityComponent>(entity) = saved?.Inventory ?? NewInventory();
+        ecs.Get<SenderEntityComponent>(entity) = SenderEntityComponent.ForPlayer(name);
+        ecs.Get<NetPlayerEntityComponent>(entity) = new NetPlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, EntityId = entityId };
+        return entity;
     }
 
     static InventoryEntityComponent NewInventory() {

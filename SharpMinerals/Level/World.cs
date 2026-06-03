@@ -11,7 +11,6 @@ using SharpMinerals.Math;
 using SharpMinerals.Persistence;
 using ArchWorld = Arch.Core.World;
 using ArchEntity = Arch.Core.Entity;
-using SharpMinerals.Entities.Descriptors;
 
 namespace SharpMinerals.Level;
 
@@ -19,9 +18,6 @@ namespace SharpMinerals.Level;
 /// cuboid chunks. <see cref="Tick"/> runs the per-tick systems; block reads/writes go through the chunk grid.</summary>
 public class World : ITickable {
     static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
-
-    // Half-extent of a dropped item's collision box.
-    const double ItemHalfSize = 0.125;
 
     readonly IChunkGenerator chunkGenerator;
     readonly IWorldStore? store;
@@ -228,13 +224,20 @@ public class World : ITickable {
     // ── Entities ────────────────────────────────────────────────────────────
     public SpatialIndex Entities { get; }
 
-    /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
-    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, PlayerState? saved = null) {
-        var entity = Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
-        var t = Ecs.Get<TransformEntityComponent>(entity);
-        Entities.Add(entity, t.X, t.Y, t.Z); // restored spawns may not be at the default position
+    /// <summary>Materialises an entity of <paramref name="type"/> from its blueprint at <paramref name="transform"/>:
+    /// creates and type-tags it (<see cref="EntityType.Create"/>), sets its transform, and registers it in the spatial
+    /// index. Callers then assign any per-instance components via <c>Ecs.Get&lt;T&gt;(e) = …</c>. This is the single
+    /// path every spawn flows through, so the spatial-index registration can never be forgotten.</summary>
+    public ArchEntity Spawn(EntityType type, TransformEntityComponent transform) {
+        var entity = type.Create(Ecs);
+        Ecs.Get<TransformEntityComponent>(entity) = transform;
+        Entities.Add(entity, transform.X, transform.Y, transform.Z);
         return entity;
     }
+
+    /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
+    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, PlayerState? saved = null) =>
+        Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
 
     /// <summary>Spawns a dropped-item entity centred on a block with a small random upward pop.</summary>
     public ArchEntity SpawnDroppedItem(Vector3i blockPos, ItemStack stack) {
@@ -246,15 +249,9 @@ public class World : ITickable {
     /// <summary>Spawns a dropped-item entity at an explicit world position with an explicit velocity and
     /// pickup delay — the primitive behind both block-break drops and player tosses.</summary>
     public ArchEntity SpawnItem(double x, double y, double z, VelocityEntityComponent velocity, ItemStack stack, int pickupDelay) {
-        var entity = Ecs.Create(
-            new TransformEntityComponent(x, y, z),
-            velocity,
-            // A dropped item collides with terrain but doesn't block placement (Physics, not Placement).
-            new HitboxEntityComponent(ItemHalfSize * 2, ItemHalfSize * 2, CollisionUsage.Physics),
-            new GravityEntityComponent(),
-            new TypeEntityDescriptor { Type = EntityRegistry.Item },
-            new PickupEntityComponent { Stack = stack, Age = 0, PickupDelay = pickupDelay });
-        Entities.Add(entity, x, y, z);
+        var entity = Spawn(EntityRegistry.Item, new TransformEntityComponent(x, y, z));
+        Ecs.Get<VelocityEntityComponent>(entity) = velocity;
+        Ecs.Get<PickupEntityComponent>(entity) = new PickupEntityComponent { Stack = stack, Age = 0, PickupDelay = pickupDelay };
         return entity;
     }
 
@@ -276,24 +273,12 @@ public class World : ITickable {
         return SpawnItem(t.X, t.Y + EyeHeight - 0.3, t.Z, velocity, stack, pickupDelay: 40);
     }
 
-    // A falling block's collision box (vanilla falling_block is 0.98³).
-    const double FallingBlockSize = 0.98;
-
     /// <summary>Spawns a <c>falling_block</c> entity for <paramref name="block"/> at the centre of
     /// <paramref name="cell"/>. EntityPhysicsSystem pulls it down; FallingBlockSystem re-places it (or drops
     /// it) on landing. The caller must have cleared the source cell and announced that change.</summary>
     public ArchEntity SpawnFallingBlock(Vector3i cell, BlockType block) {
-        double x = cell.X + 0.5, y = cell.Y, z = cell.Z + 0.5;
-        var entity = Ecs.Create(
-            new TransformEntityComponent(x, y, z),
-            new VelocityEntityComponent(0, 0, 0),
-            // A falling block collides with terrain (so it lands) AND blocks placement while it's mid-fall.
-            new HitboxEntityComponent(FallingBlockSize, FallingBlockSize, CollisionUsage.Physics | CollisionUsage.Placement),
-            new GravityEntityComponent(),
-            new BlockCollisionEntityComponent(),
-            new TypeEntityDescriptor { Type = EntityRegistry.FallingBlock },
-            new FallingBlockEntityComponent { Block = block, EntityId = 0 });
-        Entities.Add(entity, x, y, z);
+        var entity = Spawn(EntityRegistry.FallingBlock, new TransformEntityComponent(cell.X + 0.5, cell.Y, cell.Z + 0.5));
+        Ecs.Get<FallingBlockEntityComponent>(entity).Block = block;
         return entity;
     }
 
