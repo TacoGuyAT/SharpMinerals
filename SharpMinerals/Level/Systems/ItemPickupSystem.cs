@@ -13,7 +13,7 @@ namespace SharpMinerals.Level.Systems;
 /// and the collector's window resync are projected to clients in <see cref="Flush"/> after the tick.</summary>
 public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     static readonly QueryDescription CollectorQuery =
-        new QueryDescription().WithAll<NetPlayerEntityComponent, CollisionFeedbackEntityComponent, InventoryEntityComponent>();
+        new QueryDescription().WithAll<NetPlayerEntityComponent, CollisionEntityComponent, InventoryEntityComponent>();
 
     readonly World world;
     // Collected during the query, processed after (mutating inventories/despawning mid-iteration is unsafe).
@@ -25,7 +25,7 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     public void Tick() {
         var ecs = world.Ecs;
         pending.Clear();
-        ecs.Query(in CollectorQuery, (ArchEntity self, ref CollisionFeedbackEntityComponent c) => {
+        ecs.Query(in CollectorQuery, (ArchEntity self, ref CollisionEntityComponent c) => {
             foreach (var other in c.Touching)
                 if (ecs.IsAlive(other) && ecs.Has<PickupEntityComponent>(other))
                     pending.Add((self, other));

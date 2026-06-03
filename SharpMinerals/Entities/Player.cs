@@ -26,10 +26,13 @@ public static class Player {
             new VelocityEntityComponent(0, 0, 0),
             health,
             inventory,
-            // Players are physics-excluded (client-driven); this box only serves item-pickup reach.
-            new ColliderEntityComponent(1.5, 2.0),
+            // The true 0.6×1.8 player hitbox, used to block placement (a block can't go where a player stands).
+            // Players are physics-excluded (client-driven), so it has no Physics usage.
+            new HitboxEntityComponent(0.6, 1.8, CollisionUsage.Placement),
+            // A wider proximity box for nearby interactions (item pickup today); larger than the hitbox.
+            new InteractionReachEntityComponent(1.5, 2.0),
             // Object initializer, NOT a parameterless ctor — that's bypassed on Arch default-init paths.
-            new CollisionFeedbackEntityComponent { Touching = new List<ArchEntity>() },
+            new CollisionEntityComponent { Touching = new List<ArchEntity>() },
             new ChunkViewEntityComponent(),
             new TypeEntityDescriptor { Type = EntityRegistry.Player },
             SenderEntityComponent.ForPlayer(name),

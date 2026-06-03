@@ -199,24 +199,24 @@ public class World : ITickable {
         return true;
     }
 
-    // The vanilla player collision hitbox (0.6 wide × 1.8 tall) — NOT the ColliderEntityComponent, which on a
-    // player is the (larger) item-pickup reach. Placement uses the true hitbox so you can build right next to
-    // yourself. PlacementScanRadius bounds the spatial-index scan (the precise AABB test decides actual overlap).
-    const double PlayerHitboxHalfWidth = 0.3;
-    const double PlayerHitboxHeight = 1.8;
+    // Bounds the spatial-index scan for placement obstruction (the precise AABB test decides actual overlap).
+    // Covers a standing player/mob (~3 blocks from centre); revisit if a much larger Placement entity is added.
     const double PlacementScanRadius = 3.0;
 
-    /// <summary>Whether a solid entity's collision box overlaps the unit cube at <paramref name="pos"/>. Only
-    /// players block placement today (mobs would be added the same way); dropped items and the like do not.</summary>
+    /// <summary>Whether an entity whose hitbox declares <see cref="CollisionUsage.Placement"/> overlaps the unit
+    /// cube at <paramref name="pos"/>. Any such entity (players, future mobs) blocks placement; entities without
+    /// the flag (dropped items, falling blocks) don't — no per-type special-casing.</summary>
     bool IsObstructedByEntity(Vector3i pos) {
         double bx = pos.X, by = pos.Y, bz = pos.Z; // block cube spans [b, b+1] on each axis
         var candidates = new List<ArchEntity>();
         Entities.Near(bx + 0.5, by + 0.5, bz + 0.5, PlacementScanRadius, candidates);
         foreach (var e in candidates) {
-            if (!Ecs.Has<NetPlayerEntityComponent>(e)) continue; // only players are solid for placement
+            if (!Ecs.Has<HitboxEntityComponent>(e)) continue;
+            var box = Ecs.Get<HitboxEntityComponent>(e);
+            if (!box.Usage.HasFlag(CollisionUsage.Placement)) continue;
             var t = Ecs.Get<TransformEntityComponent>(e);
-            double hw = PlayerHitboxHalfWidth, h = PlayerHitboxHeight, tx = t.X, ty = t.Y, tz = t.Z;
-            // AABB overlap between the player hitbox [X±hw]×[Y,Y+h]×[Z±hw] and the block cube.
+            double hw = box.HalfWidth, h = box.Height, tx = t.X, ty = t.Y, tz = t.Z;
+            // AABB overlap between the entity hitbox [X±hw]×[Y,Y+h]×[Z±hw] and the block cube.
             if (tx - hw < bx + 1 && tx + hw > bx &&
                 ty      < by + 1 && ty + h   > by &&
                 tz - hw < bz + 1 && tz + hw > bz)
@@ -249,7 +249,8 @@ public class World : ITickable {
         var entity = Ecs.Create(
             new TransformEntityComponent(x, y, z),
             velocity,
-            new ColliderEntityComponent(ItemHalfSize * 2, ItemHalfSize * 2),
+            // A dropped item collides with terrain but doesn't block placement (Physics, not Placement).
+            new HitboxEntityComponent(ItemHalfSize * 2, ItemHalfSize * 2, CollisionUsage.Physics),
             new GravityEntityComponent(),
             new TypeEntityDescriptor { Type = EntityRegistry.Item },
             new PickupEntityComponent { Stack = stack, Age = 0, PickupDelay = pickupDelay });
@@ -286,9 +287,10 @@ public class World : ITickable {
         var entity = Ecs.Create(
             new TransformEntityComponent(x, y, z),
             new VelocityEntityComponent(0, 0, 0),
-            new ColliderEntityComponent(FallingBlockSize, FallingBlockSize),
+            // A falling block collides with terrain (so it lands) AND blocks placement while it's mid-fall.
+            new HitboxEntityComponent(FallingBlockSize, FallingBlockSize, CollisionUsage.Physics | CollisionUsage.Placement),
             new GravityEntityComponent(),
-            new BlockCollisionFeedbackEntityComponent(),
+            new BlockCollisionEntityComponent(),
             new TypeEntityDescriptor { Type = EntityRegistry.FallingBlock },
             new FallingBlockEntityComponent { Block = block, EntityId = 0 });
         Entities.Add(entity, x, y, z);

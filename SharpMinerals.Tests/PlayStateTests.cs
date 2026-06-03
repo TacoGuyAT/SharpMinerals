@@ -89,6 +89,17 @@ public class PlayStateTests {
         Assert.Equal(Vanilla.Stone, world.GetBlock(clear));
     }
 
+    // ── A falling block (Physics | Placement) also blocks placement while it's mid-fall ──
+    [Fact]
+    public void FallingBlockBlocksPlacement() {
+        var world = new World("falling_place", new VoidChunkGenerator());
+        var cell = new Vector3i(0, 10, 0);
+        world.SpawnFallingBlock(cell, Vanilla.Sand); // occupies the cell (0.98 box, Physics | Placement)
+
+        Assert.False(world.PlaceBlock(cell, Vanilla.Stone), "can't place into a falling block");
+        Assert.True(world.PlaceBlock(new Vector3i(2, 10, 0), Vanilla.Stone), "the cell beside it is clear");
+    }
+
     // ── Position packing ────────────────────────────────────────────────────
     [Fact]
     public void PositionPacking() {
@@ -1420,7 +1431,7 @@ public class PlayStateTests {
         var t = world.Ecs.Get<TransformEntityComponent>(entity);
         // The wall's west face is x=1, so the box's right edge can't push past it (read the actual
         // collider half-width so the test tracks the item's real size, not a hardcoded one).
-        var hw = world.Ecs.Get<ColliderEntityComponent>(entity).HalfWidth;
+        var hw = world.Ecs.Get<HitboxEntityComponent>(entity).HalfWidth;
         Assert.True(t.X + hw <= 1.0 + 1e-3, $"item stopped at the wall (X={t.X}, hw={hw})");
     }
 
@@ -1433,7 +1444,7 @@ public class PlayStateTests {
         var world = new World("collide", new FlatChunkGenerator());
         var player = world.SpawnPlayer(1, "P", Guid.NewGuid(), 1);
 
-        Assert.NotNull(world.Ecs.Get<CollisionFeedbackEntityComponent>(player).Touching);
+        Assert.NotNull(world.Ecs.Get<CollisionEntityComponent>(player).Touching);
         Assert.Null(Record.Exception(() => world.Tick()));
     }
 

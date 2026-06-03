@@ -18,7 +18,7 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
     static readonly QueryDescription LiveQuery =
         new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent>();
     static readonly QueryDescription GroundedQuery =
-        new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent, BlockCollisionFeedbackEntityComponent>();
+        new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent, BlockCollisionEntityComponent>();
 
     static readonly Vector3i Down = new(0, -1, 0);
     static readonly Vector3i Up = new(0, 1, 0);
@@ -47,7 +47,7 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
     public void Tick() {
         var ecs = world.Ecs;
         grounded.Clear();
-        ecs.Query(in GroundedQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t, ref BlockCollisionFeedbackEntityComponent fb) => {
+        ecs.Query(in GroundedQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t, ref BlockCollisionEntityComponent fb) => {
             if (f.EntityId == 0 || !fb.OnGround) return; // unannounced (client can't track it) or still falling
             grounded.Add((e, f.Block, ToCell(t)));
         });

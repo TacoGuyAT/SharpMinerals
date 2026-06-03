@@ -6,9 +6,10 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Level.Systems;
 
-/// <summary>Server-simulated physics for non-player entities (items, falling blocks): velocity integration
-/// swept against terrain, gravity (opt-in via <see cref="GravityEntityComponent"/>), then drag. Players are
-/// client-driven and excluded. Ground contact is recorded on any <see cref="BlockCollisionFeedbackEntityComponent"/>.</summary>
+/// <summary>Server-simulated physics for entities whose hitbox opts in with <see cref="CollisionUsage.Physics"/>
+/// (items, falling blocks): velocity integration swept against terrain, gravity (opt-in via
+/// <see cref="GravityEntityComponent"/>), then drag. Players are client-driven so their hitbox has no Physics
+/// usage and is skipped. Ground contact is recorded on any <see cref="BlockCollisionEntityComponent"/>.</summary>
 public sealed class EntityPhysicsSystem : ITickable {
     // Physics tuning, per tick.
     const double Gravity = 0.04;
@@ -19,14 +20,15 @@ public sealed class EntityPhysicsSystem : ITickable {
     const double MoveEpsilon = 1e-3;
 
     static readonly QueryDescription PhysicsQuery =
-        new QueryDescription().WithAll<TransformEntityComponent, VelocityEntityComponent, ColliderEntityComponent>().WithNone<NetPlayerEntityComponent>();
+        new QueryDescription().WithAll<TransformEntityComponent, VelocityEntityComponent, HitboxEntityComponent>();
 
     readonly World world;
 
     public EntityPhysicsSystem(World world) => this.world = world;
 
     public void Tick() {
-        world.Ecs.Query(in PhysicsQuery, (ArchEntity e, ref TransformEntityComponent t, ref VelocityEntityComponent v, ref ColliderEntityComponent box) => {
+        world.Ecs.Query(in PhysicsQuery, (ArchEntity e, ref TransformEntityComponent t, ref VelocityEntityComponent v, ref HitboxEntityComponent box) => {
+            if (!box.Usage.HasFlag(CollisionUsage.Physics)) return; // e.g. a player's hitbox (client-driven)
             double ox = t.X, oy = t.Y, oz = t.Z;
             if (world.Ecs.Has<GravityEntityComponent>(e)) v.Y -= Gravity;
             bool onGround = MoveWithCollision(ref t, ref v, box);
@@ -35,8 +37,8 @@ public sealed class EntityPhysicsSystem : ITickable {
             v.Y *= Drag;
             v.Z *= horizontalDrag;
 
-            if (world.Ecs.Has<BlockCollisionFeedbackEntityComponent>(e))
-                world.Ecs.Get<BlockCollisionFeedbackEntityComponent>(e).OnGround = onGround;
+            if (world.Ecs.Has<BlockCollisionEntityComponent>(e))
+                world.Ecs.Get<BlockCollisionEntityComponent>(e).OnGround = onGround;
 
             // Deferred: worlds tick on parallel threads, so subscribers run on the tick-writer thread.
             if (Moved(ox, oy, oz, in t))
@@ -52,7 +54,7 @@ public sealed class EntityPhysicsSystem : ITickable {
     /// <summary>Integrates velocity into the transform one axis at a time, sweeping the AABB against solid
     /// blocks; on a hit the box snaps flush and that axis's velocity zeroes. Y is resolved first so the
     /// horizontal axes settle on solid ground. Returns true if the entity landed on a floor this step.</summary>
-    bool MoveWithCollision(ref TransformEntityComponent t, ref VelocityEntityComponent v, in ColliderEntityComponent box) {
+    bool MoveWithCollision(ref TransformEntityComponent t, ref VelocityEntityComponent v, in HitboxEntityComponent box) {
         double hw = box.HalfWidth, h = box.Height;
         bool onGround = false;
 

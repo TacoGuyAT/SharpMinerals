@@ -6,6 +6,6 @@ namespace SharpMinerals.Entities.Components;
 /// pass clears and refills <see cref="Touching"/>. Deliberately NO parameterless ctor — those are bypassed on
 /// Arch default-init paths, leaving <see cref="Touching"/> null; it's set via object initializer in <c>Player.Spawn</c>.</summary>
 [Component]
-public struct CollisionFeedbackEntityComponent {
+public struct CollisionEntityComponent {
     public List<ArchEntity> Touching;
 }
