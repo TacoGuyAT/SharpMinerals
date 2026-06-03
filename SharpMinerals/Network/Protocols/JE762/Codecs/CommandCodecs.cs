@@ -5,7 +5,7 @@ using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Commands;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 /// <summary>Commands / Declare Commands (0x10): serializes the dispatcher's Brigadier tree, filtered to the
 /// message's source, into the 1.20.1 command-node graph.</summary>

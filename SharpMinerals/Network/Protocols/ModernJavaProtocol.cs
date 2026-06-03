@@ -41,7 +41,12 @@ public abstract class ModernJavaProtocol : Protocol {
         return codec.Decode(payload);
     }
 
+    /// <summary>Whether Chunk Data carries the pre-1.20 <c>trustEdges</c> bool before its light section
+    /// (1.19.4 does; 1.20 dropped it). Concrete versions set it.</summary>
+    protected virtual bool ChunkDataHasTrustEdges => false;
+
     // Modern paletted chunk format + the Set Center Chunk preamble.
-    public override IMessage BuildChunk(World world, int cx, int cz) => ChunkSerializer.Build(Types, world, cx, cz);
+    public override IMessage BuildChunk(World world, int cx, int cz) =>
+        ChunkSerializer.Build(Types, world, cx, cz, ChunkDataHasTrustEdges);
     public override IMessage? ChunkViewCenter(int cx, int cz) => new SetCenterChunkS2C(cx, cz);
 }

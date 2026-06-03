@@ -1,7 +1,7 @@
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 internal sealed class SystemChatMessageS2CCodec : ICodec<SystemChatMessageS2C> {
     public void Encode(MinecraftStream s, SystemChatMessageS2C m) {

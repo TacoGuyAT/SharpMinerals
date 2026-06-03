@@ -21,8 +21,9 @@ using SharpMinerals.Events.Contexts;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Chat;
 using SharpMinerals.Network.Protocols.JE61;
+using SharpMinerals.Network.Protocols.JE762;
 using SharpMinerals.Network.Protocols.JE763;
-using SharpMinerals.Network.Protocols.JE763.Codecs;
+using SharpMinerals.Network.Protocols.JE762.Codecs;
 using SharpMinerals.Persistence;
 using Xunit;
 using World = SharpMinerals.Level.World;
@@ -120,6 +121,68 @@ public class PlayStateTests {
             "pickup: different wool colours take separate slots");
         woolInv.Add(Types.FromVanillaItem(194)); // another red merges with the first
         Assert.True(woolInv.Main(0).Count == 2 && woolInv.Main(1).Count == 1, "pickup: same wool colour stacks");
+    }
+
+    // ── 1.19.4 (762) ⇄ 1.20.1 (763): same mapping logic, only the 1.20-shifted wire ids differ (inheritance delta) ──
+    [Fact]
+    public void Je762IsJe763WithThe120IdDeltas() {
+        var v762 = new TypeMapperJE762();
+        var v763 = new TypeMapperJE763();
+
+        // Content not shifted by the 1.20 additions is identical across both versions.
+        foreach (var m in new ITypeMapper[] { v762, v763 }) {
+            Assert.Equal(1, m.StateId(BlockRegistry.Stone));
+            Assert.Equal(112, m.StateId(BlockRegistry.Sand));
+            Assert.Equal(117, m.StateId(BlockRegistry.RedSand));
+            Assert.Equal(43, m.ItemId(BlockRegistry.Bedrock));
+            Assert.Equal(54, m.EntityTypeId(EntityRegistry.Item)); // entity ids unchanged 762→763
+        }
+
+        // Block-states the 1.20 content shifted up (incl. the chest facing layout + wool colour override).
+        Assert.Equal(2951, v762.StateId(BlockRegistry.Chest));
+        Assert.Equal(2955, v763.StateId(BlockRegistry.Chest));
+        Assert.Equal(2969, v762.StateId(new BlockState(BlockRegistry.Chest).Set(State.Facing, "east"))); // 2951 + 3*6
+        Assert.Equal(2973, v763.StateId(new BlockState(BlockRegistry.Chest).Set(State.Facing, "east")));
+        Assert.Equal(2057, v762.StateId(new BlockState(BlockRegistry.Wool).Set(State.Color, "red")));     // 2043 + 14
+        Assert.Equal(2061, v763.StateId(new BlockState(BlockRegistry.Wool).Set(State.Color, "red")));
+
+        // Item ids the 1.20 content shifted up.
+        Assert.Equal((275, 277), (v762.ItemId(BlockRegistry.Chest), v763.ItemId(BlockRegistry.Chest)));
+        Assert.Equal((46, 47), (v762.ItemId(BlockRegistry.RedSand), v763.ItemId(BlockRegistry.RedSand)));
+        Assert.Equal((47, 48), (v762.ItemId(BlockRegistry.Gravel), v763.ItemId(BlockRegistry.Gravel)));
+        Assert.Equal((803, 807), (v762.ItemId(ItemRegistry.Stick), v763.ItemId(ItemRegistry.Stick)));
+
+        // The wool colour override AND its inverse (FromVanillaItem) both track the wool item base (179 vs 180).
+        var redWool = new ItemStack(BlockRegistry.Wool).WithState(new BlockState(BlockRegistry.Wool).Set(State.Color, "red"));
+        Assert.Equal(193, v762.ItemId(redWool)); // 179 + 14
+        Assert.Equal(194, v763.ItemId(redWool)); // 180 + 14
+        Assert.Equal(14, v762.FromVanillaItem(193).State?.Get(State.Color));
+        Assert.Equal(14, v763.FromVanillaItem(194).State?.Get(State.Color));
+
+        // The protocols wrap the matching version + mapper; the play packet table is shared via inheritance.
+        Assert.Equal(762, new ProtocolJE762().Version);
+        Assert.Equal(763, new ProtocolJE763().Version);
+        Assert.IsType<TypeMapperJE762>(new ProtocolJE762().Types);
+        Assert.IsType<TypeMapperJE763>(new ProtocolJE763().Types);
+    }
+
+    // ── 762→763 packet-BODY deltas (ids are identical; three bodies the 1.20 update changed) ──
+    [Fact]
+    public void Je762PacketBodiesMatch119_4Shape() {
+        var p762 = new ProtocolJE762();
+        var p763 = new ProtocolJE763();
+
+        // Join Game + Respawn: 1.20 appended a portal-cooldown VarInt(0) ⇒ the 763 body is exactly 1 byte longer.
+        var join = new JoinGameS2C(1, 0, "minecraft:overworld", 0L, 8, false);
+        Assert.Equal(p762.EncodePayload(join).Length + 1, p763.EncodePayload(join).Length);
+        var respawn = new RespawnS2C("minecraft:overworld", "minecraft:overworld", 0L, 0, true);
+        Assert.Equal(p762.EncodePayload(respawn).Length + 1, p763.EncodePayload(respawn).Length);
+
+        // Chunk Data: 1.19.4 carries a trust-edges bool before the light section ⇒ the 762 payload is 1 byte longer.
+        var world = new World("overworld", new FlatChunkGenerator());
+        var c762 = ((ChunkDataS2C)p762.BuildChunk(world, 0, 0)).Payload;
+        var c763 = ((ChunkDataS2C)p763.BuildChunk(world, 0, 0)).Payload;
+        Assert.Equal(c763.Length + 1, c762.Length);
     }
 
     // ── Handler flow over an in-memory transport ────────────────────────────
@@ -1102,7 +1165,7 @@ public class PlayStateTests {
     // ── Legacy (JE61 / 1.5.2) framing: detection + non-VarInt wire format ──────────
     [Fact]
     public void LegacyProtocolDetectionAndFraming() {
-        var registry = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE61());
+        var registry = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());
 
         // First-byte detection: legacy markers route to JE61; a normal modern frame length stays modern.
         Assert.Equal(61, registry.Detect(0xFE).Version);  // legacy server-list ping

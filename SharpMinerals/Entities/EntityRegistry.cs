@@ -12,11 +12,15 @@ public static class EntityRegistry {
     static readonly Dictionary<string, EntityType> byIdentifier = new(); // keyed by full namespaced Id
     static bool frozen;
 
-    static EntityType Define(string name) {
+    // Define = built-in (forces the minecraft namespace — see BlockRegistry for why the ambient
+    // ModContent.CurrentNamespace can't be trusted at static-init time); Register = mod (current namespace).
+    static EntityType Define(string name) => Add(Identifier.MinecraftNamespace, name);
+
+    static EntityType Add(string ns, string name) {
         if (frozen)
             throw new InvalidOperationException(
                 $"EntityRegistry is frozen — register entity \"{name}\" during mod OnInitialize.");
-        var identifier = new Identifier(ModContent.CurrentNamespace, name);
+        var identifier = new Identifier(ns, name);
         string key = identifier.Full;
         if (byIdentifier.ContainsKey(key))
             throw new ArgumentException($"An entity \"{key}\" is already registered.", nameof(name));
@@ -27,9 +31,9 @@ public static class EntityRegistry {
     }
 
     /// <summary>Registers a new entity kind, returning it for fluent composition (<c>.Add(...)</c>).
-    /// For mods — call from <c>Mod.OnInitialize</c>; throws once <see cref="Freeze">frozen</see>. A modded
-    /// kind needs a wire id in the type mapper before it can be spawned to clients.</summary>
-    public static EntityType Register(string name) => Define(name);
+    /// For mods — call from <c>Mod.OnInitialize</c>; throws once <see cref="Freeze">frozen</see>. Namespaced under
+    /// the loading mod's id. A modded kind needs a wire id in the type mapper before it can be spawned to clients.</summary>
+    public static EntityType Register(string name) => Add(ModContent.CurrentNamespace, name);
 
     /// <summary>Seals the registry — the host calls this after mods init, before protocols are built.</summary>
     public static void Freeze() => frozen = true;

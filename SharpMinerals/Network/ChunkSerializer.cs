@@ -24,7 +24,7 @@ public static class ChunkSerializer {
     static byte[] CreateFullSkyLight() { var a = new byte[2048]; Array.Fill(a, (byte)0xFF); return a; }
 
     /// <summary>Builds the Chunk Data packet for the column at (chunkX, chunkZ), mapping ids via <paramref name="types"/>.</summary>
-    public static ChunkDataS2C Build(ITypeMapper types, World world, int chunkX, int chunkZ) {
+    public static ChunkDataS2C Build(ITypeMapper types, World world, int chunkX, int chunkZ, bool trustEdges = false) {
         using var ms = new MemoryStream();
         var s = new MinecraftStream(ms, leaveOpen: true);
 
@@ -48,6 +48,8 @@ public static class ChunkSerializer {
             new NbtCompound().WriteRoot(s); // 1.20.1 named root
         }
 
+        // 1.19.4 (762) has a trust-edges bool here, before the light section; 1.20 (763) dropped it.
+        if (trustEdges) s.WriteBool(true);
         WriteLight(s);
 
         return new ChunkDataS2C(ms.ToArray());

@@ -2,7 +2,7 @@ using SharpMinerals.Entities;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 // ── Clientbound ──────────────────────────────────────────────────────────────
 

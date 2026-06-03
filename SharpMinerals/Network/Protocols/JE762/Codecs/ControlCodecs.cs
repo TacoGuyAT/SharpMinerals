@@ -1,7 +1,7 @@
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 /// <summary>The test-harness control channel name.</summary>
 internal static class ControlChannel {

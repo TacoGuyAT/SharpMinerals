@@ -7,6 +7,7 @@ using SharpMinerals.Modding;
 using SharpMinerals.Network;
 using SharpMinerals.Network.Handlers;
 using SharpMinerals.Network.Protocols.JE61;
+using SharpMinerals.Network.Protocols.JE762;
 using SharpMinerals.Network.Protocols.JE763;
 using SharpMinerals.Network.Tcp;
 using SharpMinerals.Persistence;
@@ -52,7 +53,7 @@ modLoader.LoadDirectory(Path.Combine(Directory.GetCurrentDirectory(), "mods")); 
 ModContent.Freeze(); // seal the palette — no block/item/entity may register past this point
 
 // Supported protocols; each connection picks one (see ProtocolRegistry.Detect).
-var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE61());
+var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());
 var endpoint = new IPEndPoint(IPAddress.Parse(config.Host), config.Port);
 
 // Persistence behind write-behind queues so saves never block hot paths. The backing store is chosen at

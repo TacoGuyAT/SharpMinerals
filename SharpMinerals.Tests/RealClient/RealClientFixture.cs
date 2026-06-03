@@ -9,6 +9,7 @@ using SharpMinerals.Level;
 using SharpMinerals.Network;
 using SharpMinerals.Network.Handlers;
 using SharpMinerals.Network.Protocols.JE61;
+using SharpMinerals.Network.Protocols.JE762;
 using SharpMinerals.Network.Protocols.JE763;
 using SharpMinerals.Network.Tcp;
 using Xunit;
@@ -43,7 +44,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
 
         // Mirror the CLI's wiring: a real TCP transport so a real client can connect, feeding decoded packets
         // into the server and despawning players on drop.
-        var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE61());
+        var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());
         var endpoint = new IPEndPoint(IPAddress.Any, Port);
         Server server = null!;
         ServerPacketHandler packetHandler = null!;

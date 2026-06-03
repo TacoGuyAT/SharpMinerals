@@ -1,6 +1,7 @@
 using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Components;
 using SharpMinerals.Items;
+using SharpMinerals.Modding;
 
 namespace SharpMinerals.Blocks;
 
@@ -21,21 +22,27 @@ public static class BlockRegistry {
         RedSand.Copy<FallingBlockDescriptor>(Sand);
     }
 
-    static BlockType Define(string name, bool isAir = false) {
+    // Built-in blocks below FORCE the minecraft namespace: their field initializers can be triggered lazily
+    // during a mod's OnInitialize (e.g. the mod calls BlockRegistry.Register, which inits this class while the
+    // ambient ModContent.CurrentNamespace is the mod's), which would otherwise mis-namespace every built-in and
+    // make the type mapper fall everything back to stone.
+    static BlockType Define(string name, bool isAir = false) => Add(Identifier.MinecraftNamespace, name, isAir);
+
+    static BlockType Add(string ns, string name, bool isAir) {
         if (frozen)
             throw new InvalidOperationException(
                 $"BlockRegistry is frozen — register block \"{name}\" during mod OnInitialize, before the palette is built.");
         int blockId = palette.Count;
         // Register as an item (unified id + lookup); the factory gets the item id + identifier, we supply the palette id.
-        var block = ItemRegistry.Add(name, (id, identifier) => new BlockType(id, blockId, identifier, isAir));
+        var block = ItemRegistry.Add(ns, name, (id, identifier) => new BlockType(id, blockId, identifier, isAir));
         palette.Add(block);
         return block;
     }
 
     /// <summary>Registers a new block, returning it for fluent composition. For mods — call from
-    /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. A modded block's
-    /// wire id falls back to stone until a type-mapping component is added.</summary>
-    public static BlockType Register(string name) => Define(name);
+    /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. Namespaced under the
+    /// loading mod's id. A modded block's wire id falls back to stone until a type-mapping component is added.</summary>
+    public static BlockType Register(string name) => Add(ModContent.CurrentNamespace, name, isAir: false);
 
     /// <summary>Seals the registry — the host calls this after mods init, before the palette is built.</summary>
     public static void Freeze() => frozen = true;

@@ -17,11 +17,11 @@ public static class ItemRegistry {
     /// assigning its unified item id (its index here) and indexing it by full <c>namespace:path</c> id. The
     /// factory receives that id and the namespace so a subclass (e.g. <see cref="BlockType"/>) is built with
     /// them. Used by both item registration and <see cref="BlockRegistry"/>.</summary>
-    internal static T Add<T>(string name, Func<int, Identifier, T> create) where T : ItemType {
+    internal static T Add<T>(string ns, string name, Func<int, Identifier, T> create) where T : ItemType {
         if (frozen)
             throw new InvalidOperationException(
                 $"ItemRegistry is frozen — register \"{name}\" during mod OnInitialize.");
-        var identifier = new Identifier(ModContent.CurrentNamespace, name);
+        var identifier = new Identifier(ns, name);
         string key = identifier.Full;
         if (byIdentifier.ContainsKey(key))
             throw new ArgumentException($"An item or block \"{key}\" is already registered.", nameof(name));
@@ -32,10 +32,17 @@ public static class ItemRegistry {
     }
 
     /// <summary>Registers a new (non-block) item, returning it for fluent composition. For mods — call from
-    /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. Wire id falls back
-    /// to stone until a type-mapping component is added.</summary>
+    /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. Namespaced under the
+    /// loading mod's id. Wire id falls back to stone until a type-mapping component is added.</summary>
     public static ItemType Register(string name, int maxStackSize = 64) =>
-        Add(name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
+        Add(ModContent.CurrentNamespace, name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
+
+    /// <summary>Registers a built-in (<c>minecraft</c>-namespaced) item. Forces the namespace rather than reading
+    /// <see cref="ModContent.CurrentNamespace"/>, because the static field initializers below can be triggered
+    /// lazily during a mod's <c>OnInitialize</c> (when the ambient namespace is the mod's), which would otherwise
+    /// mis-namespace every built-in and break vanilla wire mapping.</summary>
+    static ItemType Builtin(string name, int maxStackSize = 64) =>
+        Add(Identifier.MinecraftNamespace, name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
 
     /// <summary>Seals the registry — the host calls this after mods init, before protocols are built.</summary>
     public static void Freeze() => frozen = true;
@@ -53,5 +60,5 @@ public static class ItemRegistry {
     public static ItemType? FromName(string id) => byIdentifier.GetValueOrDefault(Normalize(id));
 
     // ── Built-in (non-block) items; blocks are defined in BlockRegistry and register themselves here too ──
-    public static readonly ItemType Stick = Register("stick");
+    public static readonly ItemType Stick = Builtin("stick");
 }

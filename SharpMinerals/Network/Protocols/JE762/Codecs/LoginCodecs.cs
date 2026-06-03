@@ -1,8 +1,8 @@
-﻿using SharpMinerals.Chat;
+using SharpMinerals.Chat;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 internal sealed class LoginStartC2SCodec : ICodec<LoginStartC2S> {
     public void Encode(MinecraftStream s, LoginStartC2S m) {

@@ -3,7 +3,7 @@ using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Nbt;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 // Shared slot helper: encode our ItemStack as a wire Slot (empty stacks write "not present").
 internal static class SlotWire {

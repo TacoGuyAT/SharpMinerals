@@ -1,9 +1,9 @@
-﻿using SharpMinerals.Math;
+using SharpMinerals.Math;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Nbt;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 // ── Clientbound ──────────────────────────────────────────────────────────────
 
@@ -13,6 +13,11 @@ internal sealed class BundleDelimiterS2CCodec : ICodec<BundleDelimiterS2C> {
 }
 
 internal sealed class JoinGameS2CCodec : ICodec<JoinGameS2C> {
+    // The Login (play) 0x28 body is identical for 1.19.4 (762) and 1.20.1 (763) EXCEPT 1.20 appended a trailing
+    // portal-cooldown VarInt. Default off = 1.19.4 shape; ProtocolJE763 registers it with portalCooldown: true.
+    readonly bool portalCooldown;
+    public JoinGameS2CCodec(bool portalCooldown = false) => this.portalCooldown = portalCooldown;
+
     // Field order for 1.20.1 Login (play), 0x28. The registry codec NBT sits
     // between the dimension-name array and the dimension type identifier.
     public void Encode(MinecraftStream s, JoinGameS2C m) {
@@ -34,7 +39,7 @@ internal sealed class JoinGameS2CCodec : ICodec<JoinGameS2C> {
         s.WriteBool(false);                       // is debug
         s.WriteBool(true);                        // is flat
         s.WriteBool(false);                       // has death location
-        s.WriteVarInt(0);                         // portal cooldown (added in 1.20)
+        if (portalCooldown) s.WriteVarInt(0);     // portal cooldown (added in 1.20; absent in 1.19.4)
     }
 
     // Clientbound only — decoding would require an NBT reader, which the server
@@ -51,6 +56,9 @@ internal sealed class KeepAliveS2CCodec : ICodec<KeepAliveS2C> {
 /// <summary>Respawn (0x41). Same dimension fields as Join Game's tail, minus the registry codec/entity id.
 /// copyMetadata=false resets the player's client-side metadata for a clean reload.</summary>
 internal sealed class RespawnS2CCodec : ICodec<RespawnS2C> {
+    readonly bool portalCooldown; // 1.20 appended it; absent in 1.19.4 (see JoinGameS2CCodec)
+    public RespawnS2CCodec(bool portalCooldown = false) => this.portalCooldown = portalCooldown;
+
     public void Encode(MinecraftStream s, RespawnS2C m) {
         s.WriteString(m.DimensionType);   // dimension type (must exist in the registry)
         s.WriteString(m.WorldName);       // dimension (world) name
@@ -61,7 +69,7 @@ internal sealed class RespawnS2CCodec : ICodec<RespawnS2C> {
         s.WriteBool(m.IsFlat);            // is flat
         s.WriteBool(false);               // copy metadata (reset)
         s.WriteBool(false);               // has death location
-        s.WriteVarInt(0);                 // portal cooldown
+        if (portalCooldown) s.WriteVarInt(0); // portal cooldown (added in 1.20; absent in 1.19.4)
     }
 
     public RespawnS2C Decode(MinecraftStream s) =>

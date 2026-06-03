@@ -1,7 +1,7 @@
-﻿using SharpMinerals.Network.Buffers;
+using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 
-namespace SharpMinerals.Network.Protocols.JE763.Codecs;
+namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
 internal sealed class HandshakeC2SCodec : ICodec<HandshakeC2S> {
     public void Encode(MinecraftStream s, HandshakeC2S m) {
