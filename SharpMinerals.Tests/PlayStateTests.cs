@@ -3,6 +3,7 @@ using Arch.Core;
 using Brigadier.NET.Builder;
 using SharpMinerals;
 using SharpMinerals.Blocks;
+using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Commands;
 using SharpMinerals.Components;
 using SharpMinerals.Entities;
@@ -478,6 +479,23 @@ public class PlayStateTests {
         Assert.Throws<ArgumentOutOfRangeException>(() => mapper.EntityTypeId(ghost));
     }
 
+    // ── Red sand: built with the component Copy API — borrows Sand's falling behaviour, drops itself ──
+    [Fact]
+    public void RedSandFallsLikeSandButDropsItself() {
+        // The falling behaviour was copied from Sand (.Copy<FallingBlockDescriptor>), so it's a falling block...
+        Assert.True(BlockRegistry.RedSand.Has<FallingBlockDescriptor>());
+        Assert.True(BlockRegistry.Sand.Has<FallingBlockDescriptor>());
+
+        // ...but its drop is its own, not Sand's (Sand's DropBlockDescriptor was intentionally NOT copied).
+        Assert.Equal(BlockRegistry.RedSand, BlockRegistry.RedSand.Drop?.Type);
+        Assert.Equal(BlockRegistry.Sand, BlockRegistry.Sand.Drop?.Type);
+
+        // Resolves to its real 1.20.1 wire ids (block-state 117, item 47), not the stone fallback.
+        var mapper = new TypeMapperJE763();
+        Assert.Equal(117, mapper.StateId(BlockRegistry.RedSand));
+        Assert.Equal(47, mapper.ItemId(BlockRegistry.RedSand));
+        Assert.Same(BlockRegistry.RedSand, ItemRegistry.FromName("red_sand"));
+    }
 
     // ── Creative: an item this server can't represent is reported + corrected, honouring the cursor ──
     [Fact]
