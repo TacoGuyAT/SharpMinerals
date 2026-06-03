@@ -1,3 +1,4 @@
+using SharpMinerals.Blocks;
 using SharpMinerals.Components;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Entities.Descriptors;
@@ -83,7 +84,9 @@ public static class EntityRegistry {
         new HitboxEntityComponent(0.98, 0.98, CollisionUsage.Physics | CollisionUsage.Placement),
         new GravityEntityComponent(),
         new BlockCollisionEntityComponent(),
-        new FallingBlockEntityComponent())
+        // Default to the "missing" block so a data-less spawn (e.g. /summon falling_block) still has a real block
+        // to fall, render and re-place as; SpawnFallingBlock overwrites it with the actual block.
+        new FallingBlockEntityComponent { Block = BlockRegistry.Missing })
     );
 
     public static IReadOnlyList<EntityType> All => byId;
