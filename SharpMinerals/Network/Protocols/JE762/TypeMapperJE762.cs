@@ -104,12 +104,17 @@ public class TypeMapperJE762 : ITypeMapper {
         return table;
     }
 
-    // The per-version table lookups: a vanilla target resolves to its wire id; anything else falls back to stone.
-    // (TargetOf already turns a modded definition into the vanilla content it maps to, or leaves it modded.)
+    // Content we map by name: vanilla (minecraft) AND the engine primitives (sharpminerals: air/missing +
+    // the player/item/falling_block entities), all keyed by bare name in the dicts (air→0, stone→1, item→54, …).
+    // `missing` is in no dict → it falls back to stone, which is exactly its "default id of stone". Third-party
+    // mod content (other namespaces) falls back unless it carries a VanillaMapping (resolved earlier by TargetOf).
+    static bool IsMappable(Identifier id) =>
+        id.Namespace == Identifier.MinecraftNamespace || id.Namespace == Identifier.EngineNamespace;
+
     int StateIdFor(Identifier target) =>
-        target.Namespace == "minecraft" ? stateByName.GetValueOrDefault(target.Name, FallbackStateId) : FallbackStateId;
+        IsMappable(target) ? stateByName.GetValueOrDefault(target.Name, FallbackStateId) : FallbackStateId;
     int ItemIdFor(Identifier target) =>
-        target.Namespace == "minecraft" ? itemIdByName.GetValueOrDefault(target.Name, FallbackItemId) : FallbackItemId;
+        IsMappable(target) ? itemIdByName.GetValueOrDefault(target.Name, FallbackItemId) : FallbackItemId;
 
     protected sealed class StateLayout {
         public readonly int DefaultState;
@@ -124,8 +129,8 @@ public class TypeMapperJE762 : ITypeMapper {
 
     public int StateId(BlockState state) {
         // Vanilla state mapping (1) per-block/state override → (2) the linear layout formula applies only to
-        // minecraft blocks; everything else falls through to (3) the type's default (stone for modded blocks).
-        if (state.Type.Id.Namespace == "minecraft") {
+        // mappable blocks; everything else falls through to (3) the type's default (stone for modded blocks).
+        if (IsMappable(state.Type.Id)) {
             if (stateOverrides.TryGetValue(state.Type.Id.Name, out var over) && over(state) is int forced)
                 return forced;
 
@@ -142,7 +147,7 @@ public class TypeMapperJE762 : ITypeMapper {
 
     public int EntityTypeId(EntityType type) {
         var target = VanillaMapping.TargetOf(type.Id, type);
-        if (target.Namespace == "minecraft") {
+        if (IsMappable(target)) {
             // Modern Java spawns players via the dedicated Spawn Player packet, not Spawn Entity
             // (players carry an entity type only from 1.20.2+).
             if (target.Name == "player")
@@ -156,7 +161,7 @@ public class TypeMapperJE762 : ITypeMapper {
 
     public int BlockEntityTypeId(BlockType block) {
         var target = VanillaMapping.TargetOf(block.Id, block);
-        if(target.Namespace == "minecraft" && blockEntityIdByName.TryGetValue(target.Name, out var id)) {
+        if(IsMappable(target) && blockEntityIdByName.TryGetValue(target.Name, out var id)) {
             return id;
         }
         Log?.LogWarning("Invalid mapping for block entity {blockEntity}", block);
@@ -165,7 +170,7 @@ public class TypeMapperJE762 : ITypeMapper {
 
     public int ItemId(ItemType item) => ItemIdFor(VanillaMapping.TargetOf(item.Id, item));
 
-    public bool IsCustom(ItemType item) => item.Id.Namespace != "minecraft" || !itemIdByName.ContainsKey(item.Id.Name);
+    public bool IsCustom(ItemType item) => !IsMappable(item.Id) || !itemIdByName.ContainsKey(item.Id.Name);
 
     public int ItemId(ItemStack stack) {
         if (stack.Type is not { } type)
@@ -181,11 +186,16 @@ public class TypeMapperJE762 : ITypeMapper {
     /// of <c>itemOverrides["wool"]</c>. A subclass shifts it when the 1.20 additions move the wool block.</summary>
     protected virtual int WoolItemBase => 179;
 
+    // wool is vanilla content (registered by the minecraft mod), so resolve it by name — lazily, since the mapper
+    // may be constructed before/around mod load. Cached after first use.
+    BlockType? wool;
+    BlockType Wool => wool ??= (BlockType)ItemRegistry.FromName("minecraft:wool")!;
+
     public ItemStack FromVanillaItem(int vanillaId) {
         // Wool colours are a contiguous vanilla range → our one wool block with Color set (inverse of itemOverrides["wool"]).
         if (vanillaId >= WoolItemBase && vanillaId <= WoolItemBase + 15)
-            return new ItemStack(BlockRegistry.Wool)
-                .WithState(new BlockState(BlockRegistry.Wool).Set(State.Color, vanillaId - WoolItemBase));
+            return new ItemStack(Wool)
+                .WithState(new BlockState(Wool).Set(State.Color, vanillaId - WoolItemBase));
         return FromItemId(vanillaId) is { } type ? new ItemStack(type) : default;
     }
 }

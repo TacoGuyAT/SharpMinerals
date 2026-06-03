@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+    <!-- Vanilla content mod: loaded once by TestBootstrap so tests can reference Vanilla.* and the mapper resolves minecraft:* ids. -->
+    <ProjectReference Include="..\SharpMinerals.Minecraft\SharpMinerals.Minecraft.csproj" />
     <!-- The test-harness mod (/test), exercised through the real ModLoader by the RealClient fixture. -->
     <ProjectReference Include="..\SharpMinerals.TestMod\SharpMinerals.TestMod.csproj" />
   </ItemGroup>

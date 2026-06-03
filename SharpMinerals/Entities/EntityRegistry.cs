@@ -12,9 +12,10 @@ public static class EntityRegistry {
     static readonly Dictionary<string, EntityType> byIdentifier = new(); // keyed by full namespaced Id
     static bool frozen;
 
-    // Define = built-in (forces the minecraft namespace — see BlockRegistry for why the ambient
-    // ModContent.CurrentNamespace can't be trusted at static-init time); Register = mod (current namespace).
-    static EntityType Define(string name) => Add(Identifier.MinecraftNamespace, name);
+    // Engine = built-in (forces the sharpminerals namespace — these are engine entities, not vanilla content, but
+    // the type mapper still maps them to vanilla wire ids: sharpminerals:item→54, falling_block→36, player→spawn).
+    // Register = mod (current namespace). Forcing avoids the ambient-namespace trap at static-init time (see BlockRegistry).
+    static EntityType Engine(string name) => Add(Identifier.EngineNamespace, name);
 
     static EntityType Add(string ns, string name) {
         if (frozen)
@@ -38,9 +39,9 @@ public static class EntityRegistry {
     /// <summary>Seals the registry — the host calls this after mods init, before protocols are built.</summary>
     public static void Freeze() => frozen = true;
 
-    public static readonly EntityType Item         = Define("item");
-    public static readonly EntityType Player       = Define("player").Add(new HealthEntityDescriptor(MaxHealth: 20f));
-    public static readonly EntityType FallingBlock = Define("falling_block");
+    public static readonly EntityType Item         = Engine("item");
+    public static readonly EntityType Player       = Engine("player").Add(new HealthEntityDescriptor(MaxHealth: 20f));
+    public static readonly EntityType FallingBlock = Engine("falling_block");
 
     public static IReadOnlyList<EntityType> All => byId;
     public static EntityType FromId(int id) => byId[id];

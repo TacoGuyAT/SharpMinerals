@@ -6,6 +6,7 @@ using SharpMinerals.Modding;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
 using SharpMinerals.Level;
+using SharpMinerals.Minecraft;
 using SharpMinerals.Network;
 using SharpMinerals.Network.Handlers;
 using SharpMinerals.Network.Protocols.JE61;
@@ -106,7 +107,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
     /// <summary>Switches the client into a fresh per-test world and unloads the PREVIOUS test's world (now
     /// empty). Each test calls this at its start: "create a new world, delete the previous one."</summary>
     public async Task<World> EnterFreshWorld(string name) {
-        var world = Server.GetOrCreateWorld(name, static (name, server) => new World(name));
+        var world = Server.GetOrCreateWorld(name, static (name, server) => new World(name, new FlatChunkGenerator()));
         Server.SwitchWorld(ClientId, world);
         await Task.Delay(2500); // the client Respawns + reloads chunks into the new world
         if (previousWorld is not null)

@@ -201,7 +201,7 @@ public class World : ITickable {
 
     /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
     public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, PlayerState? saved = null) {
-        var entity = Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, FlatChunkGenerator.SurfaceY, 0.5), saved);
+        var entity = Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
         var t = Ecs.Get<TransformEntityComponent>(entity);
         Entities.Add(entity, t.X, t.Y, t.Z); // restored spawns may not be at the default position
         return entity;

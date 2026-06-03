@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using SharpMinerals;
+using SharpMinerals.Blocks;
 using SharpMinerals.CLI;
 using SharpMinerals.Commands;
+using SharpMinerals.Minecraft;
 using SharpMinerals.Level;
 using SharpMinerals.Modding;
 using SharpMinerals.Network;
@@ -41,6 +43,10 @@ if (loaded.Notice is { } notice) {
 // Initialise mods before the protocols snapshot the palette (OnInitialize registers content). File mods are
 // `mods/*.dll`; the test/sample mods are compiled in and loaded only on the matching build flags.
 var modLoader = new ModLoader();
+// Force the core engine blocks (air id 0, missing id 1) to register before any mod, then load the vanilla
+// content mod FIRST so minecraft:* blocks get the lowest palette ids right after the engine primitives.
+_ = BlockRegistry.Air;
+modLoader.TryLoad(new MinecraftMod());
 #if TEST_HARNESS
 modLoader.TryLoad(new TestMod());
 #endif

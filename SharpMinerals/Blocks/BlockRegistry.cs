@@ -1,32 +1,26 @@
-using SharpMinerals.Blocks.Descriptors;
-using SharpMinerals.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Modding;
 
 namespace SharpMinerals.Blocks;
 
 /// <summary>The block palette: the dense <see cref="BlockType.BlockId"/> → <see cref="BlockType"/> map that
-/// chunk storage and the protocol state table index by. Air is palette id 0. Each block is also registered as
-/// an item in <see cref="ItemRegistry"/> (every block is an item), so name/item lookups go through there.
-/// Drop overrides use a lazy <c>() =&gt;</c> lambda so a block can reference a kind registered later.</summary>
+/// chunk storage and the protocol state table index by. <see cref="Air"/> is palette id 0. Each block is also
+/// registered as an item in <see cref="ItemRegistry"/> (every block is an item), so name/item lookups go there.
+/// The only built-ins are the two engine primitives (<see cref="Air"/> + <see cref="Missing"/>) under the
+/// <c>sharpminerals</c> namespace; ALL vanilla content (stone, dirt, …) is registered by the
+/// <c>SharpMinerals.Minecraft</c> mod under <c>minecraft</c>, like any other mod.</summary>
 public static class BlockRegistry {
     static readonly List<BlockType> palette = new();
     static bool frozen;
 
-    // Explicit (non-beforefieldinit) static ctor so ANY member access — incl. FromName, which now only reads
-    // ItemRegistry — first runs the block field initializers below, registering the built-ins into both stores.
-    // It also wires up cross-block component borrowing once every field is set (e.g. RedSand copying Sand's fall).
-    static BlockRegistry() {
-        // Red sand falls exactly like sand — borrow the (stateless) falling behaviour via the component Copy API
-        // rather than re-declaring it. Its drop is its own (DropSelf), so Sand's drop descriptor is NOT copied.
-        RedSand.Copy<FallingBlockDescriptor>(Sand);
-    }
+    // Explicit (non-beforefieldinit) static ctor so the engine field initializers below run eagerly the first
+    // time any member is touched — the host forces this (`_ = BlockRegistry.Air;`) before loading mods, so Air
+    // gets palette id 0 and Missing id 1 ahead of all mod content.
+    static BlockRegistry() { }
 
-    // Built-in blocks below FORCE the minecraft namespace: their field initializers can be triggered lazily
-    // during a mod's OnInitialize (e.g. the mod calls BlockRegistry.Register, which inits this class while the
-    // ambient ModContent.CurrentNamespace is the mod's), which would otherwise mis-namespace every built-in and
-    // make the type mapper fall everything back to stone.
-    static BlockType Define(string name, bool isAir = false) => Add(Identifier.MinecraftNamespace, name, isAir);
+    // The two engine blocks FORCE the sharpminerals namespace, independent of the ambient
+    // ModContent.CurrentNamespace (their static init may be triggered lazily during a mod's OnInitialize).
+    static BlockType Engine(string name, bool isAir = false) => Add(Identifier.EngineNamespace, name, isAir);
 
     static BlockType Add(string ns, string name, bool isAir) {
         if (frozen)
@@ -47,17 +41,12 @@ public static class BlockRegistry {
     /// <summary>Seals the registry — the host calls this after mods init, before the palette is built.</summary>
     public static void Freeze() => frozen = true;
 
-    public static readonly BlockType Air         = Define("air", isAir: true);
-    public static readonly BlockType Bedrock     = Define("bedrock");
-    public static readonly BlockType Cobblestone = Define("cobblestone").DropSelf();
-    public static readonly BlockType Stone       = Define("stone").Add(new DropBlockDescriptor(() => new ItemStack(Cobblestone)));
-    public static readonly BlockType Dirt        = Define("dirt").DropSelf();
-    public static readonly BlockType GrassBlock  = Define("grass_block").Add(new DropBlockDescriptor(() => new ItemStack(Dirt)));
-    public static readonly BlockType Chest       = Define("chest").DropSelf().Add(new ContainerBlockDescriptor(27), new StatesBlockDescriptor(State.Facing));
-    public static readonly BlockType Wool        = Define("wool").DropSelf().Add(new StatesBlockDescriptor(State.Color));
-    public static readonly BlockType Sand        = Define("sand").DropSelf().Add(new FallingBlockDescriptor());
-    public static readonly BlockType Gravel      = Define("gravel").DropSelf().Add(new FallingBlockDescriptor());
-    public static readonly BlockType RedSand     = Define("red_sand").DropSelf(); // falling behaviour copied from Sand in the static ctor
+    /// <summary>The empty cell (palette id 0). The chunk store and <see cref="FromState"/> depend on this id.</summary>
+    public static readonly BlockType Air     = Engine("air", isAir: true);
+
+    /// <summary>Placeholder for content the server can't represent (a dropped mod block, an unmappable type). It
+    /// renders as stone on the wire (the type mapper's fallback) but is a distinct, non-air block.</summary>
+    public static readonly BlockType Missing = Engine("missing");
 
     /// <summary>All blocks, in palette order (index == <see cref="BlockType.BlockId"/>).</summary>
     public static IReadOnlyList<BlockType> All => palette;

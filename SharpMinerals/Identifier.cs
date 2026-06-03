@@ -10,6 +10,10 @@ public readonly struct Identifier : IEquatable<Identifier> {
     /// <summary>The namespace a bare path defaults to.</summary>
     public const string MinecraftNamespace = "minecraft";
 
+    /// <summary>The engine's own namespace, for core primitives (air, missing, the player/item/falling_block
+    /// entities) that aren't vanilla content but still map to vanilla wire ids.</summary>
+    public const string EngineNamespace = "sharpminerals";
+
     public string Namespace { get; }
     public string Name { get; }
     readonly string id; // cached "namespace:path"

@@ -4,6 +4,7 @@ using Brigadier.NET.Builder;
 using SharpMinerals;
 using SharpMinerals.Blocks;
 using SharpMinerals.Blocks.Descriptors;
+using SharpMinerals.Minecraft;
 using SharpMinerals.Commands;
 using SharpMinerals.Components;
 using SharpMinerals.Entities;
@@ -44,11 +45,11 @@ public class PlayStateTests {
     [Fact]
     public void FlatGeneration() {
         var gen = new World("gen", new FlatChunkGenerator());
-        Assert.True(gen.GetBlock(new Vector3i(0, 0, 0)) == BlockRegistry.Bedrock, "flat: bedrock at y=0");
-        Assert.True(gen.GetBlock(new Vector3i(0, 2, 0)) == BlockRegistry.Dirt, "flat: dirt at y=2");
-        Assert.True(gen.GetBlock(new Vector3i(0, 4, 0)) == BlockRegistry.GrassBlock, "flat: grass at y=4");
+        Assert.True(gen.GetBlock(new Vector3i(0, 0, 0)) == Vanilla.Bedrock, "flat: bedrock at y=0");
+        Assert.True(gen.GetBlock(new Vector3i(0, 2, 0)) == Vanilla.Dirt, "flat: dirt at y=2");
+        Assert.True(gen.GetBlock(new Vector3i(0, 4, 0)) == Vanilla.GrassBlock, "flat: grass at y=4");
         Assert.True(gen.GetBlock(new Vector3i(0, 5, 0)).IsAir, "flat: air at y=5");
-        Assert.True(gen.GetBlock(new Vector3i(-1, 0, -33)) == BlockRegistry.Bedrock, "flat: works at negative coords");
+        Assert.True(gen.GetBlock(new Vector3i(-1, 0, -33)) == Vanilla.Bedrock, "flat: works at negative coords");
     }
 
     // ── Block break + drop, then placement ──────────────────────────────────
@@ -58,14 +59,14 @@ public class PlayStateTests {
 
         int before = DropCount(gen);
         var broken = gen.BreakBlock(new Vector3i(5, 4, 5));
-        Assert.True(broken == BlockRegistry.GrassBlock, "break: returned the grass block");
+        Assert.True(broken == Vanilla.GrassBlock, "break: returned the grass block");
         Assert.True(gen.GetBlock(new Vector3i(5, 4, 5)).IsAir, "break: space is now air");
         Assert.True(DropCount(gen) == before + 1, "break: spawned one drop entity");
         Assert.True(gen.BreakBlock(new Vector3i(5, 50, 5)).IsAir, "break: air yields nothing");
 
-        Assert.True(gen.PlaceBlock(new Vector3i(5, 5, 5), BlockRegistry.Stone), "place: into air succeeds");
-        Assert.True(gen.GetBlock(new Vector3i(5, 5, 5)) == BlockRegistry.Stone, "place: block was set");
-        Assert.True(!gen.PlaceBlock(new Vector3i(5, 5, 5), BlockRegistry.Dirt), "place: into a solid fails");
+        Assert.True(gen.PlaceBlock(new Vector3i(5, 5, 5), Vanilla.Stone), "place: into air succeeds");
+        Assert.True(gen.GetBlock(new Vector3i(5, 5, 5)) == Vanilla.Stone, "place: block was set");
+        Assert.True(!gen.PlaceBlock(new Vector3i(5, 5, 5), Vanilla.Dirt), "place: into a solid fails");
     }
 
     // ── Position packing ────────────────────────────────────────────────────
@@ -102,17 +103,17 @@ public class PlayStateTests {
     // ── Block-state + item mapping (no server needed) ───────────────────────
     [Fact]
     public void StateAndItemMapping() {
-        Assert.True(Types.StateId(new BlockState(BlockRegistry.Chest).Set(State.Facing, "east")) == 2973,
+        Assert.True(Types.StateId(new BlockState(Vanilla.Chest).Set(State.Facing, "east")) == 2973,
             "state: facing maps to vanilla id (chest east = 2955 + 3*6)");
-        Assert.True(Types.StateId(new BlockState(BlockRegistry.Wool).Set(State.Color, "red")) == 2061,
+        Assert.True(Types.StateId(new BlockState(Vanilla.Wool).Set(State.Color, "red")) == 2061,
             "state: wool colour override (red = 2047 + 14)");
         Assert.True(Types.FromVanillaItem(194).State?.Get(State.Color) == 14,
             "item: vanilla wool id → coloured stack (red 194 → colour 14)");
         Assert.True(Types.ItemId(Types.FromVanillaItem(194)) == 194,
             "item: coloured wool stack round-trips its vanilla id (red 194)");
-        Assert.True(Types.FromVanillaItem(807).Type == ItemRegistry.Stick && Types.FromVanillaItem(807).Type is not BlockType,
+        Assert.True(Types.FromVanillaItem(807).Type == Vanilla.Stick && Types.FromVanillaItem(807).Type is not BlockType,
             "item: a non-block item (stick = 807) is recovered by the reverse table, not just blocks");
-        Assert.True(Types.ItemId(ItemRegistry.Stick) == 807, "item: stick round-trips its vanilla id");
+        Assert.True(Types.ItemId(Vanilla.Stick) == 807, "item: stick round-trips its vanilla id");
 
         var woolInv = new InventoryEntityComponent();
         woolInv.Add(Types.FromVanillaItem(194)); // red wool
@@ -131,29 +132,29 @@ public class PlayStateTests {
 
         // Content not shifted by the 1.20 additions is identical across both versions.
         foreach (var m in new ITypeMapper[] { v762, v763 }) {
-            Assert.Equal(1, m.StateId(BlockRegistry.Stone));
-            Assert.Equal(112, m.StateId(BlockRegistry.Sand));
-            Assert.Equal(117, m.StateId(BlockRegistry.RedSand));
-            Assert.Equal(43, m.ItemId(BlockRegistry.Bedrock));
+            Assert.Equal(1, m.StateId(Vanilla.Stone));
+            Assert.Equal(112, m.StateId(Vanilla.Sand));
+            Assert.Equal(117, m.StateId(Vanilla.RedSand));
+            Assert.Equal(43, m.ItemId(Vanilla.Bedrock));
             Assert.Equal(54, m.EntityTypeId(EntityRegistry.Item)); // entity ids unchanged 762→763
         }
 
         // Block-states the 1.20 content shifted up (incl. the chest facing layout + wool colour override).
-        Assert.Equal(2951, v762.StateId(BlockRegistry.Chest));
-        Assert.Equal(2955, v763.StateId(BlockRegistry.Chest));
-        Assert.Equal(2969, v762.StateId(new BlockState(BlockRegistry.Chest).Set(State.Facing, "east"))); // 2951 + 3*6
-        Assert.Equal(2973, v763.StateId(new BlockState(BlockRegistry.Chest).Set(State.Facing, "east")));
-        Assert.Equal(2057, v762.StateId(new BlockState(BlockRegistry.Wool).Set(State.Color, "red")));     // 2043 + 14
-        Assert.Equal(2061, v763.StateId(new BlockState(BlockRegistry.Wool).Set(State.Color, "red")));
+        Assert.Equal(2951, v762.StateId(Vanilla.Chest));
+        Assert.Equal(2955, v763.StateId(Vanilla.Chest));
+        Assert.Equal(2969, v762.StateId(new BlockState(Vanilla.Chest).Set(State.Facing, "east"))); // 2951 + 3*6
+        Assert.Equal(2973, v763.StateId(new BlockState(Vanilla.Chest).Set(State.Facing, "east")));
+        Assert.Equal(2057, v762.StateId(new BlockState(Vanilla.Wool).Set(State.Color, "red")));     // 2043 + 14
+        Assert.Equal(2061, v763.StateId(new BlockState(Vanilla.Wool).Set(State.Color, "red")));
 
         // Item ids the 1.20 content shifted up.
-        Assert.Equal((275, 277), (v762.ItemId(BlockRegistry.Chest), v763.ItemId(BlockRegistry.Chest)));
-        Assert.Equal((46, 47), (v762.ItemId(BlockRegistry.RedSand), v763.ItemId(BlockRegistry.RedSand)));
-        Assert.Equal((47, 48), (v762.ItemId(BlockRegistry.Gravel), v763.ItemId(BlockRegistry.Gravel)));
-        Assert.Equal((803, 807), (v762.ItemId(ItemRegistry.Stick), v763.ItemId(ItemRegistry.Stick)));
+        Assert.Equal((275, 277), (v762.ItemId(Vanilla.Chest), v763.ItemId(Vanilla.Chest)));
+        Assert.Equal((46, 47), (v762.ItemId(Vanilla.RedSand), v763.ItemId(Vanilla.RedSand)));
+        Assert.Equal((47, 48), (v762.ItemId(Vanilla.Gravel), v763.ItemId(Vanilla.Gravel)));
+        Assert.Equal((803, 807), (v762.ItemId(Vanilla.Stick), v763.ItemId(Vanilla.Stick)));
 
         // The wool colour override AND its inverse (FromVanillaItem) both track the wool item base (179 vs 180).
-        var redWool = new ItemStack(BlockRegistry.Wool).WithState(new BlockState(BlockRegistry.Wool).Set(State.Color, "red"));
+        var redWool = new ItemStack(Vanilla.Wool).WithState(new BlockState(Vanilla.Wool).Set(State.Color, "red"));
         Assert.Equal(193, v762.ItemId(redWool)); // 179 + 14
         Assert.Equal(194, v763.ItemId(redWool)); // 180 + 14
         Assert.Equal(14, v762.FromVanillaItem(193).State?.Get(State.Color));
@@ -218,7 +219,7 @@ public class PlayStateTests {
         client.Sent.Clear();
         capture.Broadcasts.Clear();
         var digPos = new Vector3i(0, 4, 0);
-        Assert.True(server.DefaultWorld.GetBlock(digPos) == BlockRegistry.GrassBlock, "dig: target starts as grass");
+        Assert.True(server.DefaultWorld.GetBlock(digPos) == Vanilla.GrassBlock, "dig: target starts as grass");
         handler.Handle(client, new PlayerActionC2S(0, digPos, 1, 42));
         server.Events.DrainDeferred(); // dig is deferred to the tick's single-writer phase
         Assert.True(server.DefaultWorld.GetBlock(digPos).IsAir, "dig: block removed");
@@ -235,14 +236,14 @@ public class PlayStateTests {
         var placedAt = new Vector3i(2, 5, 2);
         handler.Handle(client, new UseItemOnC2S(0, placeOn, (int)BlockFace.Top, 0.5f, 1f, 0.5f, false, 43));
         server.Events.DrainDeferred(); // placement is deferred to the tick's single-writer phase
-        Assert.True(server.DefaultWorld.GetBlock(placedAt) == BlockRegistry.Stone, "place: stone placed above clicked face");
+        Assert.True(server.DefaultWorld.GetBlock(placedAt) == Vanilla.Stone, "place: stone placed above clicked face");
         Assert.True(
-            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == placedAt && b.Block == BlockRegistry.Stone),
+            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == placedAt && b.Block == Vanilla.Stone),
             "place: BlockUpdate broadcast");
 
         // ── Containers: open a chest, move an item in, sync to a second viewer ──
         client.Sent.Clear();
-        var chestEntity = new BlockEntity(new Vector3i(10, 5, 10), BlockRegistry.Chest);
+        var chestEntity = new BlockEntity(new Vector3i(10, 5, 10), Vanilla.Chest);
         server.DefaultWorld.SetBlockEntity(chestEntity);
         server.Containers.Open(server, client.Id, chestEntity);
         Assert.True(client.Sent.OfType<OpenScreenS2C>().Any(), "container: open sent OpenScreen");
@@ -253,7 +254,7 @@ public class PlayStateTests {
         server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 0, 54, 0, 0));
         server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 1, 0, 0, 0));
         var chestInv = chestEntity.Get<InventoryComponent>();
-        Assert.True(!chestInv[0].IsEmpty && chestInv[0].Type == BlockRegistry.Stone, "container: stone moved into chest");
+        Assert.True(!chestInv[0].IsEmpty && chestInv[0].Type == Vanilla.Stone, "container: stone moved into chest");
 
         // A second viewer of the same chest is synced when the first viewer clicks.
         var viewer = new CaptureNetClient(2, protocol) { State = ConnectionState.Play };
@@ -266,7 +267,7 @@ public class PlayStateTests {
         server.RemovePlayer(viewer.Id);
 
         // ── Item pickup: a dropped stack near the player is collected via collision ──
-        var dropEntity = server.DefaultWorld.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(BlockRegistry.Cobblestone, 1));
+        var dropEntity = server.DefaultWorld.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(Vanilla.Cobblestone, 1));
         server.DefaultWorld.Ecs.Get<VelocityEntityComponent>(dropEntity) = new VelocityEntityComponent(0, 0, 0); // pin it under the player (no random scatter)
         server.AnnounceSystems();                    // assign its network id (pickup ignores un-announced drops)
         for (int i = 0; i < 12; i++) server.DefaultWorld.Tick(); // age past pickup delay, settle, ItemPickupSystem collects it
@@ -276,7 +277,7 @@ public class PlayStateTests {
         var pickInv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
         bool hasCobble = false;
         for (int s = 0; s < InventoryEntityComponent.MainSize; s++)
-            if (pickInv.Main(s).Type == BlockRegistry.Cobblestone) hasCobble = true;
+            if (pickInv.Main(s).Type == Vanilla.Cobblestone) hasCobble = true;
         Assert.True(hasCobble, "pickup: item added to inventory");
         int pickerNetId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).EntityId;
         Assert.True(
@@ -285,8 +286,8 @@ public class PlayStateTests {
 
         // ── Block state: set + read a chest's facing; break clears it ──
         var statePos = new Vector3i(7, 5, 7);
-        server.DefaultWorld.SetBlock(statePos, BlockRegistry.Chest);
-        server.DefaultWorld.SetBlockState(statePos, new BlockState(BlockRegistry.Chest).Set(State.Facing, "east"));
+        server.DefaultWorld.SetBlock(statePos, Vanilla.Chest);
+        server.DefaultWorld.SetBlockState(statePos, new BlockState(Vanilla.Chest).Set(State.Facing, "east"));
         Assert.True(
             server.DefaultWorld.GetBlockState(statePos)?.Get(State.Facing) == State.Facing.IndexOf("east"),
             "state: facing stored + read back");
@@ -303,15 +304,15 @@ public class PlayStateTests {
     public void WoolDropsAsColouredStack() {
         var world = new World("drop", new FlatChunkGenerator());
         var pos = new Vector3i(3, 6, 3);
-        world.SetBlock(pos, BlockRegistry.Wool);
-        world.SetBlockState(pos, new BlockState(BlockRegistry.Wool).Set(State.Color, "red"));
+        world.SetBlock(pos, Vanilla.Wool);
+        world.SetBlockState(pos, new BlockState(Vanilla.Wool).Set(State.Color, "red"));
 
         world.BreakBlock(pos);
 
         ItemStack? dropped = null;
         world.Ecs.Query(in new QueryDescription().WithAll<PickupEntityComponent>(),
             (ref PickupEntityComponent d) => dropped = d.Stack);
-        Assert.True(dropped is { } ds && ds.Type == BlockRegistry.Wool && ds.State?.Get(State.Color) == 14,
+        Assert.True(dropped is { } ds && ds.Type == Vanilla.Wool && ds.State?.Get(State.Color) == 14,
             "drop: wool drops as a coloured ItemStack");
     }
 
@@ -359,8 +360,8 @@ public class PlayStateTests {
         var floor = new Vector3i(20, 100, 20);
         var sand = new Vector3i(20, 104, 20);
         var landed = new Vector3i(20, 101, 20); // rests on top of the floor
-        world.SetBlock(floor, BlockRegistry.Stone);
-        world.SetBlock(sand, BlockRegistry.Sand);
+        world.SetBlock(floor, Vanilla.Stone);
+        world.SetBlock(sand, Vanilla.Sand);
 
         var fallingQuery = new QueryDescription().WithAll<FallingBlockEntityComponent>();
 
@@ -373,7 +374,7 @@ public class PlayStateTests {
         server.AnnounceSystems();
         var spawn = capture.Broadcasts.OfType<SpawnEntityS2C>().First();
         Assert.Equal(EntityRegistry.FallingBlock, spawn.Type);
-        Assert.Equal(BlockRegistry.Sand, spawn.BlockData);
+        Assert.Equal(Vanilla.Sand, spawn.BlockData);
 
         // Landing happens inside the world tick (FallingBlockSystem fires the block's IOnLand reaction and
         // despawns the entity, recording the landing); its Flush then projects the block update + removal.
@@ -382,10 +383,10 @@ public class PlayStateTests {
         server.FlushSystems();
 
         Assert.Equal(0, world.Ecs.CountEntities(in fallingQuery));
-        Assert.Equal(BlockRegistry.Sand, world.GetBlock(landed));
+        Assert.Equal(Vanilla.Sand, world.GetBlock(landed));
         Assert.True(world.GetBlock(sand).IsAir, "fall: the original cell stays air after landing");
         Assert.Contains(capture.Broadcasts.OfType<BlockUpdateS2C>(),
-            b => b.Position.Equals(landed) && b.Block == BlockRegistry.Sand);
+            b => b.Position.Equals(landed) && b.Block == Vanilla.Sand);
         Assert.Contains(capture.Broadcasts.OfType<RemoveEntitiesS2C>(), r => r.EntityIds.Contains(spawn.EntityId));
     }
 
@@ -437,7 +438,7 @@ public class PlayStateTests {
         var custom = ItemRegistry.Register("sm_custom_test"); // not a vanilla name → mapper treats it as custom
         var mapper = new TypeMapperJE763();
         Assert.True(mapper.IsCustom(custom));
-        Assert.False(mapper.IsCustom(BlockRegistry.Stone));
+        Assert.False(mapper.IsCustom(Vanilla.Stone));
 
         byte[] Encode(ItemStack stack) {
             using var ms = new System.IO.MemoryStream();
@@ -447,7 +448,7 @@ public class PlayStateTests {
         }
 
         var customText = System.Text.Encoding.UTF8.GetString(Encode(new ItemStack(custom)));
-        var stoneText = System.Text.Encoding.UTF8.GetString(Encode(new ItemStack(BlockRegistry.Stone)));
+        var stoneText = System.Text.Encoding.UTF8.GetString(Encode(new ItemStack(Vanilla.Stone)));
 
         // The custom item gets a translatable display name keyed by its namespaced id (item.<namespace>.<path>,
         // lang-file ready), with a humanised fallback, and an identity marker that keeps the client from stacking
@@ -481,14 +482,14 @@ public class PlayStateTests {
     [Fact]
     public void ItemBlockNamespacesResolveAndPersist() {
         // Built-ins live under the minecraft namespace; Id.Name is the path, Id.ToString() the full namespace:path.
-        Assert.Equal("stone", BlockRegistry.Stone.Id.Name);
-        Assert.Equal("minecraft", BlockRegistry.Stone.Id.Namespace);
-        Assert.Equal("minecraft:stone", BlockRegistry.Stone.Id.Full);
-        Assert.Equal(new Identifier("minecraft", "stone"), BlockRegistry.Stone.Id); // value equality
+        Assert.Equal("stone", Vanilla.Stone.Id.Name);
+        Assert.Equal("minecraft", Vanilla.Stone.Id.Namespace);
+        Assert.Equal("minecraft:stone", Vanilla.Stone.Id.Full);
+        Assert.Equal(new Identifier("minecraft", "stone"), Vanilla.Stone.Id); // value equality
 
         // A bare path defaults to minecraft; the qualified form resolves to the same instance.
-        Assert.Same(BlockRegistry.Stone, ItemRegistry.FromName("stone"));
-        Assert.Same(BlockRegistry.Stone, ItemRegistry.FromName("minecraft:stone"));
+        Assert.Same(Vanilla.Stone, ItemRegistry.FromName("stone"));
+        Assert.Same(Vanilla.Stone, ItemRegistry.FromName("minecraft:stone"));
         Assert.Null(ItemRegistry.FromName("nope:stone"));
 
         // Mod content is namespaced under the loading mod's id (ModLoader sets CurrentNamespace around OnInitialize).
@@ -513,7 +514,7 @@ public class PlayStateTests {
     public void ModdedTypeWithVanillaMappingResolvesToMappedWireIds() {
         ModContent.CurrentNamespace = "ns_map_test";
         // Map to dirt (state 10 / item 15) — distinct from the stone fallback (1), so honouring is observable.
-        var moddedBlock = BlockRegistry.Register("ruby_block").Add(new VanillaMapping(BlockRegistry.Dirt));
+        var moddedBlock = BlockRegistry.Register("ruby_block").Add(new VanillaMapping(Vanilla.Dirt));
         var copied = BlockRegistry.Register("ruby_ore").CopyMapping(moddedBlock); // borrows the same mapping
         var moddedEntity = EntityRegistry.Register("spark").Add(new VanillaMapping(EntityRegistry.Item));
         var unmapped = BlockRegistry.Register("void_block"); // no mapping → stone fallback
@@ -546,18 +547,18 @@ public class PlayStateTests {
     [Fact]
     public void RedSandFallsLikeSandButDropsItself() {
         // The falling behaviour was copied from Sand (.Copy<FallingBlockDescriptor>), so it's a falling block...
-        Assert.True(BlockRegistry.RedSand.Has<FallingBlockDescriptor>());
-        Assert.True(BlockRegistry.Sand.Has<FallingBlockDescriptor>());
+        Assert.True(Vanilla.RedSand.Has<FallingBlockDescriptor>());
+        Assert.True(Vanilla.Sand.Has<FallingBlockDescriptor>());
 
         // ...but its drop is its own, not Sand's (Sand's DropBlockDescriptor was intentionally NOT copied).
-        Assert.Equal(BlockRegistry.RedSand, BlockRegistry.RedSand.Drop?.Type);
-        Assert.Equal(BlockRegistry.Sand, BlockRegistry.Sand.Drop?.Type);
+        Assert.Equal(Vanilla.RedSand, Vanilla.RedSand.Drop?.Type);
+        Assert.Equal(Vanilla.Sand, Vanilla.Sand.Drop?.Type);
 
         // Resolves to its real 1.20.1 wire ids (block-state 117, item 47), not the stone fallback.
         var mapper = new TypeMapperJE763();
-        Assert.Equal(117, mapper.StateId(BlockRegistry.RedSand));
-        Assert.Equal(47, mapper.ItemId(BlockRegistry.RedSand));
-        Assert.Same(BlockRegistry.RedSand, ItemRegistry.FromName("red_sand"));
+        Assert.Equal(117, mapper.StateId(Vanilla.RedSand));
+        Assert.Equal(47, mapper.ItemId(Vanilla.RedSand));
+        Assert.Same(Vanilla.RedSand, ItemRegistry.FromName("red_sand"));
     }
 
     // ── Creative: an item this server can't represent is reported + corrected, honouring the cursor ──
@@ -590,14 +591,14 @@ public class PlayStateTests {
 
         // Swap onto a FILLED slot: the invalid item is rejected, but the stone the player grabbed in the same
         // action is kept on the cursor (slot emptied), so they don't lose it. Window slot 36 = hotbar 0.
-        inv.Main(0) = new ItemStack(BlockRegistry.Stone, 5);
+        inv.Main(0) = new ItemStack(Vanilla.Stone, 5);
         client.Sent.Clear();
         handler.Handle(client, new SetCreativeModeSlotC2S(36, null));
         server.Events.DrainDeferred(); // creative slot is deferred to the tick
 
         Assert.Contains(client.Sent, m => m is SystemChatMessageS2C s && s.Overlay); // overlay warning forwarded
         var resync = client.Sent.OfType<SetContainerContentS2C>().Last();
-        Assert.Equal(BlockRegistry.Stone, resync.Carried.Type); // the grabbed item stays on the cursor
+        Assert.Equal(Vanilla.Stone, resync.Carried.Type); // the grabbed item stays on the cursor
         Assert.True(resync.Slots[36].IsEmpty);                  // ...and the slot it came from is now empty
         Assert.True(inv.Main(0).IsEmpty);                       // server agrees: the slot was emptied (item on cursor)
 
@@ -624,7 +625,7 @@ public class PlayStateTests {
         var bw = new MinecraftStream(bodyMs, leaveOpen: true) { Types = protocol.Types };
         bw.WriteVarInt(0x2B); // Sb.SetCreativeModeSlot
         bw.WriteShort(36);
-        SlotWire.WriteStack(bw, new ItemStack(BlockRegistry.Stone, 5));
+        SlotWire.WriteStack(bw, new ItemStack(Vanilla.Stone, 5));
         var body = bodyMs.ToArray();
 
         // Frame it (VarInt length + body) and decode it through the protocol — the production path whose
@@ -640,7 +641,7 @@ public class PlayStateTests {
         var creative = Assert.IsType<SetCreativeModeSlotC2S>(msg);
         Assert.Equal(36, creative.Slot);
         Assert.NotNull(creative.Stack);
-        Assert.Equal(BlockRegistry.Stone, creative.Stack!.Value.Type);
+        Assert.Equal(Vanilla.Stone, creative.Stack!.Value.Type);
         Assert.Equal(5, creative.Stack.Value.Count);
     }
 
@@ -651,7 +652,7 @@ public class PlayStateTests {
         var pos = new Vector3i(3, 70, 5);
         // Just the block — NO BlockEntity instance (an unopened chest). The packet entry is derived from the
         // block state, so it must still be sent (this is exactly the "some chests don't render" case).
-        world.SetBlock(pos, BlockRegistry.Chest);
+        world.SetBlock(pos, Vanilla.Chest);
 
         var packet = ChunkSerializer.Build(Types, world, 0, 0);
         var s = new MinecraftStream(new System.IO.MemoryStream(packet.Payload, writable: false));
@@ -716,9 +717,9 @@ public class PlayStateTests {
         Assert.True(server.TryGetPlayer(client.Id, out var context));
 
         var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
-        inv.Main(0) = new ItemStack(BlockRegistry.Stone, 10);
-        inv.Main(5) = new ItemStack(BlockRegistry.Dirt, 3);
-        inv.Offhand = new ItemStack(BlockRegistry.Cobblestone, 1);
+        inv.Main(0) = new ItemStack(Vanilla.Stone, 10);
+        inv.Main(5) = new ItemStack(Vanilla.Dirt, 3);
+        inv.Offhand = new ItemStack(Vanilla.Cobblestone, 1);
         client.Sent.Clear();
 
         var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
@@ -756,9 +757,18 @@ public class PlayStateTests {
 
         int total = 0;
         for (int i = 0; i < InventoryEntityComponent.MainSize; i++)
-            if (inv.Main(i).Type == BlockRegistry.Cobblestone) total += inv.Main(i).Count;
+            if (inv.Main(i).Type == Vanilla.Cobblestone) total += inv.Main(i).Count;
         Assert.Equal(10, total);                                              // the 10 cobblestone landed in the inventory
         Assert.NotEmpty(client.Sent.OfType<SetContainerContentS2C>());        // window resynced to the client
+
+        // A NAMESPACED id (with a colon) parses — Brigadier's word() chokes on the ':', so the give item argument
+        // is a resource-location type. Now that content is namespaced (minecraft:wool), this is the common case.
+        client.Sent.Clear();
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "give minecraft:wool 5", client);
+        int wool = 0;
+        for (int i = 0; i < InventoryEntityComponent.MainSize; i++)
+            if (inv.Main(i).Type == Vanilla.Wool) wool += inv.Main(i).Count;
+        Assert.Equal(5, wool);
 
         // An unknown item is rejected without touching the inventory.
         client.Sent.Clear();
@@ -772,18 +782,18 @@ public class PlayStateTests {
         var inv = new InventoryComponent(InventoryEntityComponent.MainSize);
 
         // 100 stone (max 64) → 64 + 36 across two slots, nothing left over (the old Add over-stuffed one slot).
-        Assert.True(inv.Add(new ItemStack(BlockRegistry.Stone, 100)).IsEmpty);
+        Assert.True(inv.Add(new ItemStack(Vanilla.Stone, 100)).IsEmpty);
         Assert.Equal(64, inv[0].Count);
         Assert.Equal(36, inv[1].Count);
 
         // Adding more tops up the partial slot first, then spills into a fresh one.
-        Assert.True(inv.Add(new ItemStack(BlockRegistry.Stone, 30)).IsEmpty);
+        Assert.True(inv.Add(new ItemStack(Vanilla.Stone, 30)).IsEmpty);
         Assert.Equal(64, inv[1].Count); // 36 → 64
         Assert.Equal(2, inv[2].Count);  // the remaining 2
 
         // When the range is full, the overflow is returned rather than over-stacked.
         var small = new InventoryComponent(1);
-        var leftover = small.Add(new ItemStack(BlockRegistry.Stone, 100));
+        var leftover = small.Add(new ItemStack(Vanilla.Stone, 100));
         Assert.Equal(64, small[0].Count);
         Assert.Equal(36, leftover.Count);
     }
@@ -808,7 +818,7 @@ public class PlayStateTests {
         int eid = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).EntityId;
 
         // Selecting a hotbar slot broadcasts the held item to others as main-hand equipment.
-        inv.Main(2) = new ItemStack(BlockRegistry.Cobblestone, 1);
+        inv.Main(2) = new ItemStack(Vanilla.Cobblestone, 1);
         capture.Broadcasts.Clear();
         handler.Handle(client, new SetHeldItemC2S(2));
         server.Events.DrainDeferred(); // the held-item change is deferred to the tick
@@ -817,11 +827,11 @@ public class PlayStateTests {
         var held = capture.Broadcasts.OfType<SetEquipmentS2C>().Single();
         Assert.Equal(eid, held.EntityId);
         Assert.Equal(EquipmentSlot.MainHand, held.Slot);
-        Assert.Equal(BlockRegistry.Cobblestone, held.Item.Type);
+        Assert.Equal(Vanilla.Cobblestone, held.Item.Type);
 
         // A container click that moves the held item updates the hand for others — here, picking the held
         // cobblestone up off hotbar slot 2 (chest-window slot 54 + 2) onto the cursor empties the hand.
-        var chest = new BlockEntity(new Vector3i(10, 5, 10), BlockRegistry.Chest);
+        var chest = new BlockEntity(new Vector3i(10, 5, 10), Vanilla.Chest);
         server.DefaultWorld.SetBlockEntity(chest);
         server.Containers.Open(server, client.Id, chest);
         int win = client.Sent.OfType<OpenScreenS2C>().Last().WindowId;
@@ -834,7 +844,7 @@ public class PlayStateTests {
         Assert.True(cleared.Item.IsEmpty, "container click cleared the hand for other players");
 
         // Modern wire: Set Equipment 0x55 = entity id, slot byte (Helmet=5, top bit clear), then the item Slot.
-        var payload = protocol.EncodePayload(new SetEquipmentS2C(eid, EquipmentSlot.Helmet, new ItemStack(BlockRegistry.Cobblestone, 1)));
+        var payload = protocol.EncodePayload(new SetEquipmentS2C(eid, EquipmentSlot.Helmet, new ItemStack(Vanilla.Cobblestone, 1)));
         using (var ms = new MinecraftStream(new MemoryStream(payload, writable: false))) {
             Assert.Equal(0x55, ms.ReadVarInt());
             Assert.Equal(eid, ms.ReadVarInt());
@@ -844,7 +854,7 @@ public class PlayStateTests {
 
         // Legacy wire: 1.5.2 Entity Equipment 0x05 = int entity id, short slot (Helmet → 4), then a legacy Slot.
         var je61 = new ProtocolJE61();
-        var framed = je61.Frame(new SetEquipmentS2C(eid, EquipmentSlot.Helmet, new ItemStack(BlockRegistry.Cobblestone, 1)));
+        var framed = je61.Frame(new SetEquipmentS2C(eid, EquipmentSlot.Helmet, new ItemStack(Vanilla.Cobblestone, 1)));
         Assert.Equal((byte)0x05, framed[0]);
         using (var ls = new MinecraftStream(new MemoryStream(framed[1..], writable: false))) {
             Assert.Equal(eid, ls.ReadInt());
@@ -855,7 +865,7 @@ public class PlayStateTests {
 
         // The legacy encoder genuinely cannot represent the off-hand (added in 1.9) — so it MUST be filtered.
         Assert.Throws<NotSupportedException>(() =>
-            je61.Frame(new SetEquipmentS2C(eid, EquipmentSlot.OffHand, new ItemStack(BlockRegistry.Cobblestone, 1))));
+            je61.Frame(new SetEquipmentS2C(eid, EquipmentSlot.OffHand, new ItemStack(Vanilla.Cobblestone, 1))));
 
         // ...and it is: a legacy in-world client is ALSO in the Play state, so the gate is protocol VERSION.
         var legacyClient = new CaptureNetClient(2, je61) { State = ConnectionState.Play };
@@ -881,11 +891,11 @@ public class PlayStateTests {
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
         Assert.True(server.TryGetPlayer(client.Id, out var before));
         var oldWorld = before.World;
-        before.World.Ecs.Get<InventoryEntityComponent>(before.Entity).Main(5) = new ItemStack(BlockRegistry.Cobblestone, 3);
+        before.World.Ecs.Get<InventoryEntityComponent>(before.Entity).Main(5) = new ItemStack(Vanilla.Cobblestone, 3);
         int eid = before.World.Ecs.Get<NetPlayerEntityComponent>(before.Entity).EntityId;
 
         client.Sent.Clear();
-        var target = server.GetOrCreateWorld("arena", static (name, server) => new World("arena"));
+        var target = server.GetOrCreateWorld("arena", static (name, server) => new World("arena", new FlatChunkGenerator()));
         server.SwitchWorld(client.Id, target);
 
         // The context now points at the target world, with a live entity reusing the same network id.
@@ -895,7 +905,7 @@ public class PlayStateTests {
         Assert.True(after.World.Ecs.IsAlive(after.Entity), "entity alive in the new world");
         Assert.False(oldWorld.Ecs.IsAlive(before.Entity), "old entity despawned");
         Assert.Equal(eid, after.World.Ecs.Get<NetPlayerEntityComponent>(after.Entity).EntityId);
-        Assert.Equal(BlockRegistry.Cobblestone, after.World.Ecs.Get<InventoryEntityComponent>(after.Entity).Main(5).Type);
+        Assert.Equal(Vanilla.Cobblestone, after.World.Ecs.Get<InventoryEntityComponent>(after.Entity).Main(5).Type);
         // The client was told to respawn into the new dimension and got its fresh chunks.
         var respawn = Assert.IsType<RespawnS2C>(client.Sent.First(m => m is RespawnS2C));
         Assert.Contains(client.Sent, m => m is ChunkDataS2C);
@@ -928,7 +938,7 @@ public class PlayStateTests {
         Assert.True(server.TryGetPlayer(c1.Id, out var h1), "player is present"); // TODO: change name
         ref var t = ref h1.World.Ecs.Get<TransformEntityComponent>(h1.Entity);
         t.X = 40.5; t.Y = 70.0; t.Z = -12.5; t.Yaw = 90f; t.Pitch = 30f;
-        h1.World.Ecs.Get<InventoryEntityComponent>(h1.Entity).Main(5) = new ItemStack(BlockRegistry.Cobblestone, 7);
+        h1.World.Ecs.Get<InventoryEntityComponent>(h1.Entity).Main(5) = new ItemStack(Vanilla.Cobblestone, 7);
 
         server.RemovePlayer(c1.Id);
         Assert.True(server.PlayerCount == 0, "disconnected");
@@ -942,7 +952,7 @@ public class PlayStateTests {
         var inv2 = h2.World.Ecs.Get<InventoryEntityComponent>(h2.Entity);
         Assert.True(t2.X == 40.5 && t2.Z == -12.5 && t2.Yaw == 90f && t2.Pitch == 30f,
             "position + rotation restored");
-        Assert.True(inv2.Main(5).Type == BlockRegistry.Cobblestone && inv2.Main(5).Count == 7,
+        Assert.True(inv2.Main(5).Type == Vanilla.Cobblestone && inv2.Main(5).Count == 7,
             "inventory restored");
     }
 
@@ -950,7 +960,7 @@ public class PlayStateTests {
     [Fact]
     public void PlayerStateCodecRoundTrips() {
         var inv = new InventoryEntityComponent { SelectedSlot = 3 };
-        inv.Main(0) = new ItemStack(BlockRegistry.Stone, 64);
+        inv.Main(0) = new ItemStack(Vanilla.Stone, 64);
         inv.Main(7) = Types.FromVanillaItem(194); // red wool, carrying its Color state
         var state = new PlayerState(new TransformEntityComponent(1.5, 70.0, -3.25, 45f, 12f), new HealthEntityComponent(15f, 20f), inv);
 
@@ -960,9 +970,9 @@ public class PlayStateTests {
             "transform round-trips");
         Assert.True(restored.Health.Current == 15f && restored.Health.Max == 20f, "health round-trips");
         Assert.True(restored.Inventory.SelectedSlot == 3, "selected slot round-trips");
-        Assert.True(restored.Inventory.Main(0).Type == BlockRegistry.Stone && restored.Inventory.Main(0).Count == 64,
+        Assert.True(restored.Inventory.Main(0).Type == Vanilla.Stone && restored.Inventory.Main(0).Count == 64,
             "plain stack round-trips");
-        Assert.True(restored.Inventory.Main(7).Type == BlockRegistry.Wool
+        Assert.True(restored.Inventory.Main(7).Type == Vanilla.Wool
             && restored.Inventory.Main(7).State?.Get(State.Color) == 14,
             "stack with carried state round-trips");
     }
@@ -975,12 +985,12 @@ public class PlayStateTests {
         var chestPos = new Vector3i(3, 6, 3);
 
         var w1 = new World("save", new FlatChunkGenerator(), store);
-        w1.SetBlock(pos, BlockRegistry.Wool);
-        w1.SetBlockState(pos, new BlockState(BlockRegistry.Wool).Set(State.Color, "red"));
-        w1.SetBlock(chestPos, BlockRegistry.Chest);
-        var chest = new BlockEntity(chestPos, BlockRegistry.Chest);
+        w1.SetBlock(pos, Vanilla.Wool);
+        w1.SetBlockState(pos, new BlockState(Vanilla.Wool).Set(State.Color, "red"));
+        w1.SetBlock(chestPos, Vanilla.Chest);
+        var chest = new BlockEntity(chestPos, Vanilla.Chest);
         var contents = new InventoryComponent(27);
-        contents[0] = new ItemStack(BlockRegistry.Stone, 5);
+        contents[0] = new ItemStack(Vanilla.Stone, 5);
         chest.Add(contents);
         w1.SetBlockEntity(chest);
 
@@ -988,12 +998,12 @@ public class PlayStateTests {
 
         // A fresh world over the same store loads the chunk instead of regenerating it.
         var w2 = new World("save", new FlatChunkGenerator(), store);
-        Assert.True(w2.GetBlock(pos) == BlockRegistry.Wool, "block persisted");
+        Assert.True(w2.GetBlock(pos) == Vanilla.Wool, "block persisted");
         Assert.True(w2.GetBlockState(pos)?.Get(State.Color) == 14, "block state (wool colour) persisted");
-        Assert.True(w2.GetBlock(new Vector3i(0, 0, 0)) == BlockRegistry.Bedrock, "generated terrain persisted too");
+        Assert.True(w2.GetBlock(new Vector3i(0, 0, 0)) == Vanilla.Bedrock, "generated terrain persisted too");
         var be = w2.GetBlockEntity(chestPos);
-        Assert.True(be is { } && be.Type == BlockRegistry.Chest
-            && be.Get<InventoryComponent>()[0].Type == BlockRegistry.Stone && be.Get<InventoryComponent>()[0].Count == 5,
+        Assert.True(be is { } && be.Type == Vanilla.Chest
+            && be.Get<InventoryComponent>()[0].Type == Vanilla.Stone && be.Get<InventoryComponent>()[0].Count == 5,
             "chest block entity + contents persisted");
     }
 
@@ -1004,7 +1014,7 @@ public class PlayStateTests {
         var world = new World("dirtytest", new FlatChunkGenerator(), store);
         world.GetBlock(new Vector3i(0, 0, 0)); // generate a chunk, no gameplay change
         Assert.True(world.Save() == 0, "a freshly generated chunk is not dirty");
-        world.SetBlock(new Vector3i(1, 6, 1), BlockRegistry.Stone);
+        world.SetBlock(new Vector3i(1, 6, 1), Vanilla.Stone);
         Assert.True(world.Save() == 1, "a gameplay edit marks the chunk dirty");
         Assert.True(world.Save() == 0, "saving clears the dirty flag");
     }
@@ -1029,14 +1039,14 @@ public class PlayStateTests {
 
         // Before confirming the join teleport, the client's position is stale → ignored (no stream).
         client.Sent.Clear();
-        handler.Handle(client, new SetPlayerPositionC2S(40.0, FlatChunkGenerator.SurfaceY, 0.5, true));
+        handler.Handle(client, new SetPlayerPositionC2S(40.0, WorldDefaults.SurfaceY, 0.5, true));
         server.FlushSystems(); // streaming is now a per-tick system, not synchronous on the move packet
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "position ignored while teleport unconfirmed");
 
         // Confirm the teleport; now a move into a new column streams (spawn chunk 0,0; x=40 → chunk 2).
         handler.Handle(client, new ConfirmTeleportationC2S(joinTeleport.TeleportId));
         client.Sent.Clear();
-        handler.Handle(client, new SetPlayerPositionC2S(40.0, FlatChunkGenerator.SurfaceY, 0.5, true));
+        handler.Handle(client, new SetPlayerPositionC2S(40.0, WorldDefaults.SurfaceY, 0.5, true));
         server.FlushSystems();
         Assert.True(client.Sent.OfType<SetCenterChunkS2C>().Any(c => c.ChunkX == 2 && c.ChunkZ == 0),
             "recenters on the new chunk");
@@ -1044,7 +1054,7 @@ public class PlayStateTests {
 
         // Moving within the same column streams nothing new.
         client.Sent.Clear();
-        handler.Handle(client, new SetPlayerPositionC2S(41.0, FlatChunkGenerator.SurfaceY, 1.0, true));
+        handler.Handle(client, new SetPlayerPositionC2S(41.0, WorldDefaults.SurfaceY, 1.0, true));
         server.FlushSystems();
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "no chunks while staying in a column");
     }
@@ -1110,7 +1120,7 @@ public class PlayStateTests {
     public void ChunkEvictionDropsAndSavesOutOfRangeChunks() {
         var store = new InMemoryWorldStore();
         var world = new World("evict", new FlatChunkGenerator(), store);
-        world.SetBlock(new Vector3i(1, 6, 1), BlockRegistry.Stone); // chunk (0,0,0) — dirty
+        world.SetBlock(new Vector3i(1, 6, 1), Vanilla.Stone); // chunk (0,0,0) — dirty
         world.GetBlock(new Vector3i(1600, 4, 0));                   // chunk (100,0,0) — generated, clean
         int before = world.LoadedChunkCount;
         Assert.True(before >= 2, "two columns loaded");
@@ -1130,7 +1140,7 @@ public class PlayStateTests {
     [Fact]
     public void ChunkEvictionKeepsDirtyChunkWithoutStore() {
         var world = new World("nostore", new FlatChunkGenerator()); // no store
-        world.SetBlock(new Vector3i(1, 6, 1), BlockRegistry.Stone);  // dirty chunk (0,0,0)
+        world.SetBlock(new Vector3i(1, 6, 1), Vanilla.Stone);  // dirty chunk (0,0,0)
         int evicted = world.EvictChunks(new List<(long, long)>(), keepRadius: 1); // try to evict all
         Assert.True(evicted == 0 && world.LoadedChunkCount >= 1, "dirty chunk kept (no store to save to)");
     }
@@ -1140,12 +1150,12 @@ public class PlayStateTests {
     public void ProtocolExposesMapperAndCodecsUseIt() {
         var protocol = new ProtocolJE763();
         // The mapper is now exposed per-protocol (was a static class welded to JE763).
-        Assert.True(protocol.Types.StateId(BlockRegistry.Stone) == 1, "protocol exposes its type mapper");
+        Assert.True(protocol.Types.StateId(Vanilla.Stone) == 1, "protocol exposes its type mapper");
 
         // A container packet carries domain ItemStacks; the codec maps them via the mapper that
         // EncodePayload sets on the stream — this would NullReference in SlotWire if the seam broke.
         var content = new SetContainerContentS2C(0, 0,
-            new[] { new ItemStack(BlockRegistry.Stone, 5), protocol.Types.FromVanillaItem(194) /* red wool */ },
+            new[] { new ItemStack(Vanilla.Stone, 5), protocol.Types.FromVanillaItem(194) /* red wool */ },
             default);
         var bytes = protocol.EncodePayload(content);
         Assert.True(bytes.Length > 0, "SetContainerContent encoded via the protocol's mapper");
@@ -1155,7 +1165,7 @@ public class PlayStateTests {
     [Fact]
     public void BroadcastPacketEncodesOncePerVersion() {
         var protocol = new ProtocolJE763();
-        var packet = new CachedPacket(new BlockUpdateS2C(new Vector3i(1, 2, 3), BlockRegistry.Stone));
+        var packet = new CachedPacket(new BlockUpdateS2C(new Vector3i(1, 2, 3), Vanilla.Stone));
         var first = packet.Framed(protocol);
         var second = packet.Framed(protocol);
         Assert.Same(first, second); // 2nd call hits the per-version cache — no re-encode
@@ -1336,16 +1346,16 @@ public class PlayStateTests {
     [Fact]
     public void DropStateKeepsColourResetsFacing() {
         // A facing chest's drop resets facing to default → all-default → carries no state on the drop.
-        var chest = new BlockState(BlockRegistry.Chest).Set(State.Facing, "east");
+        var chest = new BlockState(Vanilla.Chest).Set(State.Facing, "east");
         var chestDrop = chest.ForDrop();
         Assert.Equal(0, chestDrop.Get(State.Facing));
-        Assert.True(chestDrop.Matches(new BlockState(BlockRegistry.Chest)), "facing-only state ⇒ stateless drop");
+        Assert.True(chestDrop.Matches(new BlockState(Vanilla.Chest)), "facing-only state ⇒ stateless drop");
 
         // Red wool keeps its colour, so the drop carries it (a non-default, item-identity state).
-        var wool = new BlockState(BlockRegistry.Wool).Set(State.Color, "red");
+        var wool = new BlockState(Vanilla.Wool).Set(State.Color, "red");
         var woolDrop = wool.ForDrop();
         Assert.Equal(State.Color.IndexOf("red"), woolDrop.Get(State.Color));
-        Assert.False(woolDrop.Matches(new BlockState(BlockRegistry.Wool)), "colour kept ⇒ stateful drop");
+        Assert.False(woolDrop.Matches(new BlockState(Vanilla.Wool)), "colour kept ⇒ stateful drop");
     }
 
     // ── Physics: a generic entity falls under gravity and rests on terrain ─────────
@@ -1353,7 +1363,7 @@ public class PlayStateTests {
     public void DroppedItemFallsAndRestsOnGround() {
         var world = new World("physics", new FlatChunkGenerator());
         // Spawn well above the flat surface (grass occupies y=4, so its top face is y=5).
-        var entity = world.SpawnDroppedItem(new Vector3i(0, 12, 0), new ItemStack(BlockRegistry.Stone, 1));
+        var entity = world.SpawnDroppedItem(new Vector3i(0, 12, 0), new ItemStack(Vanilla.Stone, 1));
         for (int i = 0; i < 60; i++) world.Tick();
 
         var t = world.Ecs.Get<TransformEntityComponent>(entity);
@@ -1366,9 +1376,9 @@ public class PlayStateTests {
     [Fact]
     public void PhysicsStopsAtWalls() {
         var world = new World("walls", new FlatChunkGenerator());
-        world.SetBlock(new Vector3i(1, 5, 0), BlockRegistry.Stone); // a wall east of the spawn
+        world.SetBlock(new Vector3i(1, 5, 0), Vanilla.Stone); // a wall east of the spawn
 
-        var entity = world.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(BlockRegistry.Stone, 1));
+        var entity = world.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(Vanilla.Stone, 1));
         world.Ecs.Get<VelocityEntityComponent>(entity) = new VelocityEntityComponent(0.5, 0, 0); // override the random scatter: shove it due east
         for (int i = 0; i < 20; i++) world.Tick();
 
@@ -1429,7 +1439,7 @@ public class PlayStateTests {
         var world = new World("idxspawn", new FlatChunkGenerator());
         var cell = new Vector3i(0, 0, 0); // block (5,6,5) → chunk-cube (0,0,0)
 
-        var item = world.SpawnDroppedItem(new Vector3i(5, 6, 5), new ItemStack(BlockRegistry.Stone, 1));
+        var item = world.SpawnDroppedItem(new Vector3i(5, 6, 5), new ItemStack(Vanilla.Stone, 1));
         Assert.Contains(item, world.Entities.InChunk(cell));
 
         world.DestroyEntity(item);
@@ -1445,7 +1455,7 @@ public class PlayStateTests {
 
         var world = new World("emove", new FlatChunkGenerator()) { Events = events };
         // Spawn above the surface so gravity actually shifts it; pin a known scatter so it moves.
-        var item = world.SpawnDroppedItem(new Vector3i(0, 12, 0), new ItemStack(BlockRegistry.Stone, 1));
+        var item = world.SpawnDroppedItem(new Vector3i(0, 12, 0), new ItemStack(Vanilla.Stone, 1));
 
         for (int i = 0; i < 5; i++) { world.Tick(); events.DrainDeferred(); }
         Assert.Contains(item, moved); // the falling item published EntityMoved (deferred → drained)
@@ -1477,7 +1487,7 @@ public class PlayStateTests {
 
     sealed class CountingBlockEntity : BlockEntity, ITickable {
         public int Ticks;
-        public CountingBlockEntity(Vector3i pos) : base(pos, BlockRegistry.Chest) { }
+        public CountingBlockEntity(Vector3i pos) : base(pos, Vanilla.Chest) { }
         public void Tick() => Ticks++;
     }
 

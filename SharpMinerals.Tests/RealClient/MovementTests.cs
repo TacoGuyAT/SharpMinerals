@@ -25,8 +25,8 @@ public sealed class MovementTests {
     [RealClientFact, Order(1)]
     public async Task SpawnsOnTheSurface() {
         var pos = await f.Send("pos");
-        Assert.True(System.Math.Abs(PosY(pos) - FlatChunkGenerator.SurfaceY) < 1.5,
-            $"player should spawn on the flat surface (Y≈{FlatChunkGenerator.SurfaceY}), got '{pos}'");
+        Assert.True(System.Math.Abs(PosY(pos) - WorldDefaults.SurfaceY) < 1.5,
+            $"player should spawn on the flat surface (Y≈{WorldDefaults.SurfaceY}), got '{pos}'");
     }
 
     [RealClientFact, Order(2)]

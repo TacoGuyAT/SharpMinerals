@@ -35,6 +35,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+    <!-- Vanilla content (blocks/items/generator) is a normal mod, loaded first by Program.cs — needed in all configs. -->
+    <ProjectReference Include="..\SharpMinerals.Minecraft\SharpMinerals.Minecraft.csproj" />
   </ItemGroup>
 
   <!-- Persistence backend differs by build: JIT uses RocksDbSharp (Reflection.Emit, full API); the AOT build

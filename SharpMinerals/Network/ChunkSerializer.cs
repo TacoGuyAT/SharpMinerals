@@ -58,7 +58,7 @@ public static class ChunkSerializer {
     static void WriteHeightmaps(MinecraftStream s) {
         // MOTION_BLOCKING: 256 entries of 9 bits, packed non-spanning (7 per long → 37 longs).
         // Flat surface sits on grass at GrassY, so the lowest motion-blocking air is GrassY+1.
-        int height = FlatChunkGenerator.GrassY + 1 - MinY;
+        int height = WorldDefaults.GrassY + 1 - MinY;
         long[] packed = PackBits(Enumerable.Repeat(height, 256).ToArray(), 9);
         new NbtCompound()
             .Put("MOTION_BLOCKING", new NbtLongArray(packed))

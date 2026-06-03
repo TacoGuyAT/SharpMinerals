@@ -37,13 +37,6 @@ public static class ItemRegistry {
     public static ItemType Register(string name, int maxStackSize = 64) =>
         Add(ModContent.CurrentNamespace, name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
 
-    /// <summary>Registers a built-in (<c>minecraft</c>-namespaced) item. Forces the namespace rather than reading
-    /// <see cref="ModContent.CurrentNamespace"/>, because the static field initializers below can be triggered
-    /// lazily during a mod's <c>OnInitialize</c> (when the ambient namespace is the mod's), which would otherwise
-    /// mis-namespace every built-in and break vanilla wire mapping.</summary>
-    static ItemType Builtin(string name, int maxStackSize = 64) =>
-        Add(Identifier.MinecraftNamespace, name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
-
     /// <summary>Seals the registry — the host calls this after mods init, before protocols are built.</summary>
     public static void Freeze() => frozen = true;
 
@@ -58,7 +51,4 @@ public static class ItemRegistry {
     /// <summary>The item-type (item or block) for <paramref name="id"/> — a bare path (defaults to
     /// <c>minecraft:</c>) or a full <c>namespace:path</c> — or null if unregistered.</summary>
     public static ItemType? FromName(string id) => byIdentifier.GetValueOrDefault(Normalize(id));
-
-    // ── Built-in (non-block) items; blocks are defined in BlockRegistry and register themselves here too ──
-    public static readonly ItemType Stick = Builtin("stick");
 }

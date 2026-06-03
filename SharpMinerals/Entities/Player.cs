@@ -38,9 +38,11 @@ public static class Player {
     }
 
     static InventoryEntityComponent NewInventory() {
+        // Starter kit is vanilla content (registered by the minecraft mod) — resolve by name so the core doesn't
+        // depend on the mod, and a server without vanilla content just spawns players empty-handed.
         var inventory = new InventoryEntityComponent();
-        inventory.Main(0) = new ItemStack(BlockRegistry.Stone, 64);
-        inventory.Main(1) = new ItemStack(BlockRegistry.Chest, 64);
+        if (ItemRegistry.FromName("minecraft:stone") is { } stone) inventory.Main(0) = new ItemStack(stone, 64);
+        if (ItemRegistry.FromName("minecraft:chest") is { } chest) inventory.Main(1) = new ItemStack(chest, 64);
         return inventory;
     }
 }

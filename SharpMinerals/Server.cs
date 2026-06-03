@@ -397,7 +397,7 @@ public class Server : ITickable {
 
         // Reload the client into the target world (WorldName = target's unique key forces the teardown).
         client.Send(new RespawnS2C("minecraft:overworld", target.Name, HashedSeed: 0, GameMode: 1, IsFlat: true));
-        client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, FlatChunkGenerator.SurfaceY, 0), 0f));
+        client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, WorldDefaults.SurfaceY, 0), 0f));
         Streaming.StreamInitial(moved); // fresh ChunkView ⇒ streams the new world's columns
         var t = target.Ecs.Get<TransformEntityComponent>(moved.Entity);
         client.Send(new SynchronizePlayerPositionS2C(t.X, t.Y, t.Z, t.Yaw, t.Pitch, BeginTeleport(clientId)));
