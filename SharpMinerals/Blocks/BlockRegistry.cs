@@ -14,7 +14,12 @@ public static class BlockRegistry {
 
     // Explicit (non-beforefieldinit) static ctor so ANY member access — incl. FromName, which now only reads
     // ItemRegistry — first runs the block field initializers below, registering the built-ins into both stores.
-    static BlockRegistry() { }
+    // It also wires up cross-block component borrowing once every field is set (e.g. RedSand copying Sand's fall).
+    static BlockRegistry() {
+        // Red sand falls exactly like sand — borrow the (stateless) falling behaviour via the component Copy API
+        // rather than re-declaring it. Its drop is its own (DropSelf), so Sand's drop descriptor is NOT copied.
+        RedSand.Copy<FallingBlockDescriptor>(Sand);
+    }
 
     static BlockType Define(string name, bool isAir = false) {
         if (frozen)
@@ -45,6 +50,7 @@ public static class BlockRegistry {
     public static readonly BlockType Wool        = Define("wool").DropSelf().Add(new StatesBlockDescriptor(State.Color));
     public static readonly BlockType Sand        = Define("sand").DropSelf().Add(new FallingBlockDescriptor());
     public static readonly BlockType Gravel      = Define("gravel").DropSelf().Add(new FallingBlockDescriptor());
+    public static readonly BlockType RedSand     = Define("red_sand").DropSelf(); // falling behaviour copied from Sand in the static ctor
 
     /// <summary>All blocks, in palette order (index == <see cref="BlockType.BlockId"/>).</summary>
     public static IReadOnlyList<BlockType> All => palette;

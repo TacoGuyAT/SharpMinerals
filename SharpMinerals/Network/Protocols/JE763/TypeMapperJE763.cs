@@ -25,6 +25,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         ["chest"] = 2955, // minecraft:chest default block-state (facing north, single)
         ["wool"] = 2047,  // default = white_wool (colours handled by the override below)
         ["sand"] = 112,
+        ["red_sand"] = 117,
         ["gravel"] = 118,
     };
 
@@ -49,6 +50,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
         ["chest"] = 277,
         ["wool"] = 180, // default = white_wool item (colours: 180 + colour index)
         ["sand"] = 44,
+        ["red_sand"] = 47,
         ["gravel"] = 48,
         ["stick"] = 807,
     };
@@ -131,7 +133,7 @@ public sealed class TypeMapperJE763 : ITypeMapper {
     public int EntityTypeId(EntityType type) {
         var target = VanillaMapping.TargetOf(type.Id, type);
         if (target.Namespace == "minecraft") {
-        // 1.20.1 spawns players via Spawn Player, not Spawn Entity (players carry an entity type only from 1.20.2+).
+            // 1.20.1 spawns players via Spawn Player, not Spawn Entity (players carry an entity type only from 1.20.2+).
             if (target.Name == "player")
                 throw new NotSupportedException(
                     "JE763 spawns players via the dedicated Spawn Player packet, not Spawn Entity.");
