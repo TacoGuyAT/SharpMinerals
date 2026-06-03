@@ -126,14 +126,10 @@ public sealed partial class ModLoader {
     [RequiresDynamicCode(DynamicModLoading)]
     bool TryLoad(Assembly assembly) {
         var candidates = assembly.GetExportedTypes()
-            .Select(mod => {
-                if(mod.IsSubclassOf(typeof(Mod)) && !mod.IsAbstract && mod.GetCustomAttribute<ModInfoAttribute>() is ModInfoAttribute info) {
-                    return (mod, info);
-                }
-                return (mod, null);
-            })
-            .Where(x => x.mod is not null && x.info is not null)
-            .ToList();
+            .Where(t => t.IsSubclassOf(typeof(Mod)) && !t.IsAbstract)
+            .Select(t => (mod: t, info: t.GetCustomAttribute<ModInfoAttribute>()))
+            .Where(x => x.info is not null)
+            .Select(x => (x.mod, info: x.info!));
 
         var count = 0;
         foreach(var (m, info) in candidates) {
