@@ -10,7 +10,7 @@ namespace SharpMinerals.Vanilla;
 /// The vanilla content "mod": registers the default blocks and items that used to be hardcoded built-ins in the
 /// core registries. Because <see cref="ModLoader"/> sets <c>ModContent.CurrentNamespace = ModId</c> ("minecraft")
 /// around <see cref="OnInitialize"/>, every <c>BlockRegistry.Register</c>/<c>ItemRegistry.Register</c> call here
-/// lands in the <c>minecraft</c> namespace — no namespace forcing needed. The host must load this FIRST so its
+/// lands in the <c>minecraft</c> namespace - no namespace forcing needed. The host must load this FIRST so its
 /// blocks get the lowest palette ids right after the engine's air/missing.
 /// </summary>
 [ModInfo("minecraft", "1.0.0", ["SharpMinerals"], TargetServerVersion = "0.1.0")]
@@ -27,18 +27,18 @@ public sealed partial class VanillaMod : Mod {
         Sand        = BlockRegistry.Register("sand").DropSelf().Add(new FallingBlockDescriptor());
         Gravel      = BlockRegistry.Register("gravel").DropSelf().Add(new FallingBlockDescriptor());
         RedSand     = BlockRegistry.Register("red_sand").DropSelf();
-        // Red sand falls like sand — borrow the stateless falling behaviour (its drop stays its own, via DropSelf).
+        // Red sand falls like sand - borrow the stateless falling behaviour (its drop stays its own, via DropSelf).
         RedSand.Copy<FallingBlockDescriptor>(Sand);
 
         Stick       = ItemRegistry.Register("stick");
 
-        // Vanilla wire-id mappings (per protocol version) for the data-driven TypeMapper — the core knows no ids.
+        // Vanilla wire-id mappings (per protocol version) for the data-driven TypeMapper - the core knows no ids.
         WireMappings.Register();
     }
 }
 
 /// <summary>The registered vanilla flyweights, assigned during <see cref="VanillaMod.OnInitialize"/>. They are
-/// null until the mod loads — reference them only after the host/test bootstrap has loaded <see cref="VanillaMod"/>.</summary>
+/// null until the mod loads - reference them only after the host/test bootstrap has loaded <see cref="VanillaMod"/>.</summary>
 public sealed partial class VanillaMod {
     public static BlockType Bedrock { get; internal set; } = null!;
     public static BlockType Cobblestone { get; internal set; } = null!;

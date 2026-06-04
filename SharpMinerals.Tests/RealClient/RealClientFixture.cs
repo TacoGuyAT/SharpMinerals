@@ -18,8 +18,8 @@ using Xunit;
 namespace SharpMinerals.Tests.RealClient;
 
 /// <summary>
-/// Brings up a REAL in-process server (full TCP transport) and waits for an actual Minecraft client — the
-/// SharpTester mod — to connect. It launches nothing: you start a client on the host (or elsewhere) and point
+/// Brings up a REAL in-process server (full TCP transport) and waits for an actual Minecraft client - the
+/// SharpTester mod - to connect. It launches nothing: you start a client on the host (or elsewhere) and point
 /// it at the server. Tests then drive that client through the EXISTING <c>/test</c> command and assert on what
 /// the client reports back over the control channel. Each test runs in its own world; the previous one is
 /// unloaded. Gated by the <c>SHARPMINERALS_REALCLIENT</c> env var so a normal <c>dotnet test</c> never waits.
@@ -41,7 +41,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
     static int JoinTimeoutSec => int.TryParse(Environment.GetEnvironmentVariable("SHARPMINERALS_JOIN_TIMEOUT"), out var s) ? s : 180;
 
     public async Task InitializeAsync() {
-        if (!Enabled) return; // tests are skipped — don't stand up a server or wait for a client
+        if (!Enabled) return; // tests are skipped - don't stand up a server or wait for a client
 
         // Mirror the CLI's wiring: a real TCP transport so a real client can connect, feeding decoded packets
         // into the server and despawning players on drop.
@@ -66,7 +66,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
 
         // Register the real command set (so the client receives the full Declare Commands tree and can
         // tab-complete). The harness `/test` command used to drive scenarios now comes from the test-harness
-        // mod, loaded through the real ModLoader — so the fixture exercises the same mod path as the CLI.
+        // mod, loaded through the real ModLoader - so the fixture exercises the same mod path as the CLI.
         dispatcher.RegisterHelp().RegisterRun().RegisterTimeout().RegisterServer()
                   .RegisterSave().RegisterTp().RegisterWorld().RegisterClear().RegisterGive().RegisterSummon();
         var mods = new ModLoader();
@@ -78,7 +78,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
             if (pending.TryRemove(clientId, out var tcs)) tcs.TrySetResult(reply);
         };
 
-        // First join → capture the client and the world it landed in (the lobby we park it in between tests).
+        // First join -> capture the client and the world it landed in (the lobby we park it in between tests).
         var joined = new TaskCompletionSource<PlayerContext>(TaskCreationOptions.RunContinuationsAsynchronously);
         server.Events.Subscribe<PlayerJoined>(e => joined.TrySetResult(e.Context));
 
@@ -98,7 +98,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
     }
 
     public Task DisposeAsync() {
-        // We launched no client process, so there is nothing external to stop — only the in-process server.
+        // We launched no client process, so there is nothing external to stop - only the in-process server.
         if (previousWorld is not null) Server?.UnloadWorld(previousWorld);
         Server?.Stop();
         return Task.CompletedTask;

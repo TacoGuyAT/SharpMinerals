@@ -15,7 +15,7 @@ public sealed class RocksDbPlayerStore : IPlayerStore, IDisposable {
 
     /// <summary>Opens (creating if missing) a RocksDB database at <paramref name="path"/>.</summary>
     public RocksDbPlayerStore(string path) {
-        // RocksDB's CreateIfMissing makes the DB dir itself but not its parents — ensure the
+        // RocksDB's CreateIfMissing makes the DB dir itself but not its parents - ensure the
         // full path exists first (e.g. "<data>/world/players").
         Directory.CreateDirectory(path);
         var options = new DbOptions().SetCreateIfMissing(true);

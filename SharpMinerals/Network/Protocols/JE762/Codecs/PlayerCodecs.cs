@@ -4,7 +4,7 @@ using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
-// ── Clientbound ──────────────────────────────────────────────────────────────
+// -- Clientbound --------------------------------------------------------------
 
 internal sealed class PlayerInfoUpdateS2CCodec : ICodec<PlayerInfoUpdateS2C> {
     // Action bitmask: ADD_PLAYER(0x01) | UPDATE_GAME_MODE(0x04) | UPDATE_LISTED(0x08) | UPDATE_LATENCY(0x10).
@@ -129,7 +129,7 @@ internal sealed class EntityFlagsS2CCodec : ICodec<EntityFlagsS2C> {
 internal sealed class SetEquipmentS2CCodec : ICodec<SetEquipmentS2C> {
     public void Encode(MinecraftStream s, SetEquipmentS2C m) {
         s.WriteVarInt(m.EntityId);
-        s.WriteUByte((byte)m.Slot); // slot 0-5, top bit clear → last (and only) entry
+        s.WriteUByte((byte)m.Slot); // slot 0-5, top bit clear -> last (and only) entry
         SlotWire.WriteStack(s, m.Item);
     }
 
@@ -137,7 +137,7 @@ internal sealed class SetEquipmentS2CCodec : ICodec<SetEquipmentS2C> {
         throw new NotSupportedException("SetEquipmentS2C is clientbound only.");
 }
 
-// ── Serverbound ──────────────────────────────────────────────────────────────
+// -- Serverbound --------------------------------------------------------------
 
 internal sealed class SwingArmC2SCodec : ICodec<SwingArmC2S> {
     public void Encode(MinecraftStream s, SwingArmC2S m) =>

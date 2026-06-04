@@ -32,14 +32,14 @@ namespace SharpMinerals.Tests;
 
 /// <summary>
 /// In-process verification of the play state: flat generation, block break/place, item
-/// drops, codec round-trips, and the login → dig → place → container → pickup handler flow
+/// drops, codec round-trips, and the login -> dig -> place -> container -> pickup handler flow
 /// driven through an in-memory transport. Ported from the old <c>dotnet run -- selftest</c>.
 /// </summary>
 public class PlayStateTests {
     // The JE763 type mapper, now exposed per-protocol (was a static class).
     static readonly TypeMapper Types = new TypeMapper(typeof(ProtocolJE763));
 
-    // ── Flat generation ────────────────────────────────────────────────────
+    // -- Flat generation ----------------------------------------------------
     [Fact]
     public void FlatGeneration() {
         var gen = new World("gen", new FlatChunkGenerator());
@@ -50,7 +50,7 @@ public class PlayStateTests {
         Assert.True(gen.GetBlock(new Vector3i(-1, 0, -33)) == VanillaMod.Bedrock, "flat: works at negative coords");
     }
 
-    // ── Block break + drop, then placement ──────────────────────────────────
+    // -- Block break + drop, then placement ----------------------------------
     [Fact]
     public void BlockBreakPlaceAndDrops() {
         var gen = new World("gen", new FlatChunkGenerator());
@@ -67,7 +67,7 @@ public class PlayStateTests {
         Assert.True(!gen.PlaceBlock(new Vector3i(5, 5, 5), VanillaMod.Dirt), "place: into a solid fails");
     }
 
-    // ── Placement can't put a block inside a standing entity (player collision box) ──
+    // -- Placement can't put a block inside a standing entity (player collision box) --
     [Fact]
     public void BlockPlacementBlockedByStandingPlayer() {
         var world = new World("place_collision", new FlatChunkGenerator());
@@ -78,7 +78,7 @@ public class PlayStateTests {
         Assert.True(world.GetBlock(inside).IsAir, "nothing was placed");
 
         // The hitbox is the true 0.6-wide player box, not the larger pickup-reach collider, so the cell right
-        // next to the player (X [1,2] vs the player's [0.2,0.8]) is clear — you can build alongside yourself.
+        // next to the player (X [1,2] vs the player's [0.2,0.8]) is clear - you can build alongside yourself.
         var adjacent = new Vector3i(1, WorldDefaults.SurfaceY, 0);
         Assert.True(world.PlaceBlock(adjacent, VanillaMod.Dirt), "placing in the adjacent cell (clear of the hitbox) succeeds");
 
@@ -87,7 +87,7 @@ public class PlayStateTests {
         Assert.Equal(VanillaMod.Stone, world.GetBlock(clear));
     }
 
-    // ── A falling block (Physics | Placement) also blocks placement while it's mid-fall ──
+    // -- A falling block (Physics | Placement) also blocks placement while it's mid-fall --
     [Fact]
     public void FallingBlockBlocksPlacement() {
         var world = new World("falling_place", new VoidChunkGenerator());
@@ -98,7 +98,7 @@ public class PlayStateTests {
         Assert.True(world.PlaceBlock(new Vector3i(2, 10, 0), VanillaMod.Stone), "the cell beside it is clear");
     }
 
-    // ── Position packing ────────────────────────────────────────────────────
+    // -- Position packing ----------------------------------------------------
     [Fact]
     public void PositionPacking() {
         foreach (var p in new[] {
@@ -113,7 +113,7 @@ public class PlayStateTests {
         }
     }
 
-    // ── Codec round-trips ───────────────────────────────────────────────────
+    // -- Codec round-trips ---------------------------------------------------
     [Fact]
     public void CodecRoundTrips() {
         var protocol = new ProtocolJE763();
@@ -129,7 +129,7 @@ public class PlayStateTests {
             new KeepAliveC2S(123_456_789L)), "round-trip KeepAlive");
     }
 
-    // ── Block-state + item mapping (no server needed) ───────────────────────
+    // -- Block-state + item mapping (no server needed) -----------------------
     [Fact]
     public void StateAndItemMapping() {
         Assert.True(Types.StateId(new BlockState(VanillaMod.Chest).Set(State.Facing, "east")) == 2973,
@@ -137,7 +137,7 @@ public class PlayStateTests {
         Assert.True(Types.StateId(new BlockState(VanillaMod.Wool).Set(State.Color, "red")) == 2061,
             "state: wool colour override (red = 2047 + 14)");
         Assert.True(Types.FromVanillaItem(194).State?.Get(State.Color) == 14,
-            "item: vanilla wool id → coloured stack (red 194 → colour 14)");
+            "item: vanilla wool id -> coloured stack (red 194 -> colour 14)");
         Assert.True(Types.ItemId(Types.FromVanillaItem(194)) == 194,
             "item: coloured wool stack round-trips its vanilla id (red 194)");
         Assert.True(Types.FromVanillaItem(807).Type == VanillaMod.Stick && Types.FromVanillaItem(807).Type is not BlockType,
@@ -153,7 +153,7 @@ public class PlayStateTests {
         Assert.True(woolInv.Main(0).Count == 2 && woolInv.Main(1).Count == 1, "pickup: same wool colour stacks");
     }
 
-    // ── 1.19.4 (762) ⇄ 1.20.1 (763): same mapping logic, only the 1.20-shifted wire ids differ (inheritance delta) ──
+    // -- 1.19.4 (762) <-> 1.20.1 (763): same mapping logic, only the 1.20-shifted wire ids differ (inheritance delta) --
     [Fact]
     public void Je762IsJe763WithThe120IdDeltas() {
         var v762 = new TypeMapper(typeof(ProtocolJE762));
@@ -165,7 +165,7 @@ public class PlayStateTests {
             Assert.Equal(112, m.StateId(VanillaMod.Sand));
             Assert.Equal(117, m.StateId(VanillaMod.RedSand));
             Assert.Equal(43, m.ItemId(VanillaMod.Bedrock));
-            Assert.Equal(54, m.EntityTypeId(EntityRegistry.Item)); // entity ids unchanged 762→763
+            Assert.Equal(54, m.EntityTypeId(EntityRegistry.Item)); // entity ids unchanged 762->763
         }
 
         // Block-states the 1.20 content shifted up (incl. the chest facing layout + wool colour override).
@@ -197,7 +197,7 @@ public class PlayStateTests {
         Assert.IsType<TypeMapper>(new ProtocolJE763().Types);
     }
 
-    // ── The `missing` placeholder borrows stone's wire ids but must still read as custom (distinct, non-stacking) ──
+    // -- The `missing` placeholder borrows stone's wire ids but must still read as custom (distinct, non-stacking) --
     [Fact]
     public void MissingBlockBorrowsStoneWireIdsButReadsCustom() {
         var mapper = new TypeMapper(typeof(ProtocolJE763));
@@ -209,26 +209,26 @@ public class PlayStateTests {
         Assert.False(VanillaMod.Stone.IsCustom);
     }
 
-    // ── 762→763 packet-BODY deltas (ids are identical; three bodies the 1.20 update changed) ──
+    // -- 762->763 packet-BODY deltas (ids are identical; three bodies the 1.20 update changed) --
     [Fact]
     public void Je762PacketBodiesMatch119_4Shape() {
         var p762 = new ProtocolJE762();
         var p763 = new ProtocolJE763();
 
-        // Join Game + Respawn: 1.20 appended a portal-cooldown VarInt(0) ⇒ the 763 body is exactly 1 byte longer.
+        // Join Game + Respawn: 1.20 appended a portal-cooldown VarInt(0) => the 763 body is exactly 1 byte longer.
         var join = new JoinGameS2C(1, 0, "minecraft:overworld", 0L, 8, false);
         Assert.Equal(p762.EncodePayload(join).Length + 1, p763.EncodePayload(join).Length);
         var respawn = new RespawnS2C("minecraft:overworld", "minecraft:overworld", 0L, 0, true);
         Assert.Equal(p762.EncodePayload(respawn).Length + 1, p763.EncodePayload(respawn).Length);
 
-        // Chunk Data: 1.19.4 carries a trust-edges bool before the light section ⇒ the 762 payload is 1 byte longer.
+        // Chunk Data: 1.19.4 carries a trust-edges bool before the light section => the 762 payload is 1 byte longer.
         var world = new World("overworld", new FlatChunkGenerator());
         var c762 = ((ChunkDataS2C)p762.BuildChunk(world, 0, 0)).Payload;
         var c763 = ((ChunkDataS2C)p763.BuildChunk(world, 0, 0)).Payload;
         Assert.Equal(c763.Length + 1, c762.Length);
     }
 
-    // ── Handler flow over an in-memory transport ────────────────────────────
+    // -- Handler flow over an in-memory transport ----------------------------
     [Fact]
     public void HandlerFlow() {
         var protocol = new ProtocolJE763();
@@ -283,7 +283,7 @@ public class PlayStateTests {
             capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == placedAt && b.Block == VanillaMod.Stone),
             "place: BlockUpdate broadcast");
 
-        // ── Containers: open a chest, move an item in, sync to a second viewer ──
+        // -- Containers: open a chest, move an item in, sync to a second viewer --
         client.Sent.Clear();
         var chestEntity = new BlockEntity(new Vector3i(10, 5, 10), VanillaMod.Chest);
         server.DefaultWorld.SetBlockEntity(chestEntity);
@@ -308,7 +308,7 @@ public class PlayStateTests {
         Assert.True(viewer.Sent.OfType<SetContainerContentS2C>().Any(), "container: second viewer synced");
         server.RemovePlayer(viewer.Id);
 
-        // ── Item pickup: a dropped stack near the player is collected via collision ──
+        // -- Item pickup: a dropped stack near the player is collected via collision --
         var dropEntity = server.DefaultWorld.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(VanillaMod.Cobblestone, 1));
         server.DefaultWorld.Ecs.Get<VelocityEntityComponent>(dropEntity) = new VelocityEntityComponent(0, 0, 0); // pin it under the player (no random scatter)
         server.AnnounceSystems();                    // assign its network id (pickup ignores un-announced drops)
@@ -326,7 +326,7 @@ public class PlayStateTests {
             capture.Broadcasts.Any(m => m is CollectItemS2C c && c.CollectorEntityId == pickerNetId && c.PickupItemCount == 1),
             "pickup: collect-item animation broadcast (collector + count)");
 
-        // ── Block state: set + read a chest's facing; break clears it ──
+        // -- Block state: set + read a chest's facing; break clears it --
         var statePos = new Vector3i(7, 5, 7);
         server.DefaultWorld.SetBlock(statePos, VanillaMod.Chest);
         server.DefaultWorld.SetBlockState(statePos, new BlockState(VanillaMod.Chest).Set(State.Facing, "east"));
@@ -341,7 +341,7 @@ public class PlayStateTests {
         Assert.True(server.PlayerCount == 0, "disconnect: player despawned");
     }
 
-    // ── Drops: a self-dropping stateful block drops an ItemStack carrying its state ──
+    // -- Drops: a self-dropping stateful block drops an ItemStack carrying its state --
     [Fact]
     public void WoolDropsAsColouredStack() {
         var world = new World("drop", new FlatChunkGenerator());
@@ -358,7 +358,7 @@ public class PlayStateTests {
             "drop: wool drops as a coloured ItemStack");
     }
 
-    // ── Drops: the item's fresh pop velocity is delivered via Set Entity Velocity (announced pre-physics) ──
+    // -- Drops: the item's fresh pop velocity is delivered via Set Entity Velocity (announced pre-physics) --
     [Fact]
     public void DroppedItemSpawnCarriesPopVelocity() {
         var protocol = new ProtocolJE763();
@@ -370,14 +370,14 @@ public class PlayStateTests {
             NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
         });
 
-        // Break a block → drop spawns with the upward pop (DropVelocity Y = 0.2). Announce BEFORE any
+        // Break a block -> drop spawns with the upward pop (DropVelocity Y = 0.2). Announce BEFORE any
         // physics tick, so the velocity is the un-decayed spawn value.
         server.DefaultWorld.BreakBlock(new Vector3i(0, 4, 0));
         server.AnnounceSystems();
 
         // Velocity is delivered by the explicit Set Entity Velocity packet (the 1.20.1 client ignores
         // the spawn-packet velocity for items); the spawn packet's velocity is deliberately zeroed so it
-        // can't double-apply. 0.2 blocks/tick × 8000 = 1600.
+        // can't double-apply. 0.2 blocks/tick x 8000 = 1600.
         var spawn = capture.Broadcasts.OfType<SpawnEntityS2C>().First();
         Assert.Equal(0, spawn.VelocityY);
         var vel = capture.Broadcasts.OfType<SetEntityVelocityS2C>().First();
@@ -385,7 +385,7 @@ public class PlayStateTests {
         Assert.True(vel.VelocityY > 1000, $"item pop velocity sent (VelocityY={vel.VelocityY})");
     }
 
-    // ── Falling blocks: sand over air detaches into a falling_block entity, falls, and re-places ──
+    // -- Falling blocks: sand over air detaches into a falling_block entity, falls, and re-places --
     [Fact]
     public void SandFallsAndRePlacesOnLanding() {
         var protocol = new ProtocolJE763();
@@ -407,7 +407,7 @@ public class PlayStateTests {
 
         var fallingQuery = new QueryDescription().WithAll<FallingBlockEntityComponent>();
 
-        // Air beneath the sand → it detaches: the source cell clears and one falling entity appears.
+        // Air beneath the sand -> it detaches: the source cell clears and one falling entity appears.
         SharpMinerals.Level.Systems.FallingBlockSystem.TryStartFalling(server, world, sand);
         Assert.True(world.GetBlock(sand).IsAir, "fall: the sand's source cell is cleared");
         Assert.Equal(1, world.Ecs.CountEntities(in fallingQuery));
@@ -432,7 +432,7 @@ public class PlayStateTests {
         Assert.Contains(capture.Broadcasts.OfType<RemoveEntitiesS2C>(), r => r.EntityIds.Contains(spawn.EntityId));
     }
 
-    // ── Mods: the ModLoader discovers a compiled-in mod and its OnServerStarted registers a command ──
+    // -- Mods: the ModLoader discovers a compiled-in mod and its OnServerStarted registers a command --
     [Fact]
     public void ModLoaderLoadsTestModAndRegistersItsCommand() {
         var protocol = new ProtocolJE763();
@@ -444,7 +444,7 @@ public class PlayStateTests {
             NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
         });
 
-        // Discover the test-harness mod from its (compiled-in) assembly — the same LoadFrom path the CLI
+        // Discover the test-harness mod from its (compiled-in) assembly - the same LoadFrom path the CLI
         // and the real-client fixture use.
         var loader = new ModLoader();
         loader.LoadFrom(typeof(SharpMinerals.TestMod.TestMod).Assembly);
@@ -459,7 +459,7 @@ public class PlayStateTests {
 
     sealed class VersionProbeMod : Mod { }
 
-    // ── A mod is loaded only if its declared target server version is compatible (and its own is valid) ──
+    // -- A mod is loaded only if its declared target server version is compatible (and its own is valid) --
     [Fact]
     public void ModLoaderGatesOnTargetServerVersion() {
         var loader = new ModLoader { ServerVersion = SemanticVersion.Parse("0.1.0") };
@@ -474,11 +474,11 @@ public class PlayStateTests {
         Assert.Equal(SemanticVersion.Parse("1.0.0"), loader.Mods[0].Version); // parsed version exposed on the mod
     }
 
-    // ── Custom objects: a mod-added type renders as the fallback item but carries differentiating NBT ──
+    // -- Custom objects: a mod-added type renders as the fallback item but carries differentiating NBT --
     [Fact]
     public void CustomItemCarriesNameAndIdentityNbt() {
         // A minecraft-namespaced item is native by default; .Custom(true) overrides that (a server item with no
-        // vanilla equivalent). Real mods get custom for free (non-minecraft namespace) — see the gem test below.
+        // vanilla equivalent). Real mods get custom for free (non-minecraft namespace) - see the gem test below.
         var custom = ItemRegistry.Register("sm_custom_test").Custom(true);
         var mapper = new TypeMapper(typeof(ProtocolJE763));
         Assert.True(custom.IsCustom);
@@ -500,11 +500,11 @@ public class PlayStateTests {
         Assert.Contains("item.minecraft.sm_custom_test", customText);
         Assert.Contains("Sm Custom Test", customText);
         Assert.Contains("SharpMineralsType", customText);
-        // A vanilla item is a plain slot — no display name, no marker (so it stacks normally).
+        // A vanilla item is a plain slot - no display name, no marker (so it stacks normally).
         Assert.DoesNotContain("SharpMineralsType", stoneText);
     }
 
-    // ── Custom objects: the identity survives the wire round-trip when the client echoes the slot back ──
+    // -- Custom objects: the identity survives the wire round-trip when the client echoes the slot back --
     [Fact]
     public void CustomItemIdentitySurvivesSlotRoundTrip() {
         var custom = ItemRegistry.Register("sm_roundtrip_item").Custom(true);
@@ -512,7 +512,7 @@ public class PlayStateTests {
 
         using var ms = new System.IO.MemoryStream();
         var w = new MinecraftStream(ms, leaveOpen: true) { Types = mapper };
-        SlotWire.WriteStack(w, new ItemStack(custom, 3)); // server → client: fallback id + count + NBT marker
+        SlotWire.WriteStack(w, new ItemStack(custom, 3)); // server -> client: fallback id + count + NBT marker
 
         ms.Position = 0;
         var r = new MinecraftStream(ms, leaveOpen: true) { Types = mapper };
@@ -522,7 +522,7 @@ public class PlayStateTests {
         Assert.Equal(3, restored.Value.Count);
     }
 
-    // ── Namespaced identifiers: minecraft default, mod namespace, lookup normalization, persistence ──
+    // -- Namespaced identifiers: minecraft default, mod namespace, lookup normalization, persistence --
     [Fact]
     public void ItemBlockNamespacesResolveAndPersist() {
         // Built-ins live under the minecraft namespace; Id.Name is the path, Id.ToString() the full namespace:path.
@@ -542,7 +542,7 @@ public class PlayStateTests {
         ModContent.CurrentNamespace = "minecraft";
         Assert.Equal("ns_test_mod:gem", gem.Id.Full);
         Assert.Same(gem, ItemRegistry.FromName("ns_test_mod:gem"));
-        Assert.True(gem.IsCustom); // modded → not vanilla → falls back on the wire
+        Assert.True(gem.IsCustom); // modded -> not vanilla -> falls back on the wire
 
         // Persistence writes the full namespaced id and round-trips it (portable, collision-free).
         using var ms = new System.IO.MemoryStream();
@@ -553,15 +553,15 @@ public class PlayStateTests {
         Assert.Equal(5, back.Count);
     }
 
-    // ── A mod's wire mapping: VanillaMapping is the registration point; the mapper honours it (no hardcoded switch) ──
+    // -- A mod's wire mapping: VanillaMapping is the registration point; the mapper honours it (no hardcoded switch) --
     [Fact]
     public void ModdedTypeWithVanillaMappingResolvesToMappedWireIds() {
         ModContent.CurrentNamespace = "ns_map_test";
-        // Map to dirt (state 10 / item 15) — distinct from the stone fallback (1), so honouring is observable.
+        // Map to dirt (state 10 / item 15) - distinct from the stone fallback (1), so honouring is observable.
         var moddedBlock = BlockRegistry.Register("ruby_block").Add(new VanillaMapping(VanillaMod.Dirt));
         var copied = BlockRegistry.Register("ruby_ore").CopyMapping(moddedBlock); // borrows the same mapping
         var moddedEntity = EntityRegistry.Register("spark").Add(new VanillaMapping(EntityRegistry.Item));
-        var unmapped = BlockRegistry.Register("void_block"); // no mapping → stone fallback
+        var unmapped = BlockRegistry.Register("void_block"); // no mapping -> stone fallback
         ModContent.CurrentNamespace = "minecraft";
 
         // Constructed after registration so the precomputed block-state table includes the new blocks.
@@ -587,7 +587,7 @@ public class PlayStateTests {
         Assert.Throws<ArgumentOutOfRangeException>(() => mapper.EntityTypeId(ghost));
     }
 
-    // ── Red sand: built with the component Copy API — borrows Sand's falling behaviour, drops itself ──
+    // -- Red sand: built with the component Copy API - borrows Sand's falling behaviour, drops itself --
     [Fact]
     public void RedSandFallsLikeSandButDropsItself() {
         // The falling behaviour was copied from Sand (.Copy<FallingBlockDescriptor>), so it's a falling block...
@@ -605,7 +605,7 @@ public class PlayStateTests {
         Assert.Same(VanillaMod.RedSand, ItemRegistry.FromName("red_sand"));
     }
 
-    // ── Creative: an item this server can't represent is reported + corrected, honouring the cursor ──
+    // -- Creative: an item this server can't represent is reported + corrected, honouring the cursor --
     [Fact]
     public void CreativeSlotWithUnknownItemWarnsAndCorrectsClient() {
         var protocol = new ProtocolJE763();
@@ -616,7 +616,7 @@ public class PlayStateTests {
             w.WriteBool(true); w.WriteVarInt(999); w.WriteByte2(1); w.WriteUByte(0x00); // present, unknown id, no NBT
             ms.Position = 0;
             var r = new MinecraftStream(ms, leaveOpen: true) { Types = protocol.Types };
-            Assert.Null(SlotWire.ReadStack(r)); // unrepresentable → null
+            Assert.Null(SlotWire.ReadStack(r)); // unrepresentable -> null
         }
 
         var capture = new CaptureNetServer(protocol);
@@ -647,8 +647,8 @@ public class PlayStateTests {
         Assert.True(inv.Main(0).IsEmpty);                       // server agrees: the slot was emptied (item on cursor)
 
         // Into an EMPTY slot: just revert that slot, WITHOUT touching the cursor (a duplicate of the swap
-        // above must not wipe the grabbed item) — a single-slot correction, no content/cursor resync.
-        Assert.True(inv.Main(2).IsEmpty); // hotbar 2 starts empty (player spawns with items only in 0–1)
+        // above must not wipe the grabbed item) - a single-slot correction, no content/cursor resync.
+        Assert.True(inv.Main(2).IsEmpty); // hotbar 2 starts empty (player spawns with items only in 0-1)
         client.Sent.Clear();
         handler.Handle(client, new SetCreativeModeSlotC2S(38, null)); // window slot 38 = hotbar 2 (empty)
         server.Events.DrainDeferred();
@@ -658,8 +658,8 @@ public class PlayStateTests {
         Assert.DoesNotContain(client.Sent, m => m is SetContainerContentS2C); // cursor left alone
     }
 
-    // ── Regression: a creative Set-Creative-Slot decodes through the protocol (the type mapper must be ──
-    // available on the DECODE stream, not just encode — else ReadStack NRE'd on every creative add/clone). ──
+    // -- Regression: a creative Set-Creative-Slot decodes through the protocol (the type mapper must be --
+    // available on the DECODE stream, not just encode - else ReadStack NRE'd on every creative add/clone). --
     [Fact]
     public void CreativeSlotPacketDecodesThroughProtocol() {
         var protocol = new ProtocolJE763();
@@ -672,7 +672,7 @@ public class PlayStateTests {
         SlotWire.WriteStack(bw, new ItemStack(VanillaMod.Stone, 5));
         var body = bodyMs.ToArray();
 
-        // Frame it (VarInt length + body) and decode it through the protocol — the production path whose
+        // Frame it (VarInt length + body) and decode it through the protocol - the production path whose
         // stream had no Types on decode, so a creative add/clone crashed with NRE in SlotWire.ReadStack.
         using var frameMs = new System.IO.MemoryStream();
         var fw = new MinecraftStream(frameMs, leaveOpen: true);
@@ -689,12 +689,12 @@ public class PlayStateTests {
         Assert.Equal(5, creative.Stack.Value.Count);
     }
 
-    // ── Chunk streaming includes block entities (a chest renders on load, not only after an update) ──
+    // -- Chunk streaming includes block entities (a chest renders on load, not only after an update) --
     [Fact]
     public void ChunkPacketIncludesBlockEntities() {
         var world = new World("be", new FlatChunkGenerator());
         var pos = new Vector3i(3, 70, 5);
-        // Just the block — NO BlockEntity instance (an unopened chest). The packet entry is derived from the
+        // Just the block - NO BlockEntity instance (an unopened chest). The packet entry is derived from the
         // block state, so it must still be sent (this is exactly the "some chests don't render" case).
         world.SetBlock(pos, VanillaMod.Chest);
 
@@ -710,7 +710,7 @@ public class PlayStateTests {
         Assert.Equal(1, s.ReadVarInt());                          // minecraft:chest block-entity-type id
     }
 
-    // ── Tab-list header/footer (0x65) encodes as two JSON components and honours the audience predicate ──
+    // -- Tab-list header/footer (0x65) encodes as two JSON components and honours the audience predicate --
     [Fact]
     public void TabListHeaderFooterEncodesAndRespectsAudience() {
         var protocol = new ProtocolJE763();
@@ -742,7 +742,7 @@ public class PlayStateTests {
         Assert.Empty(c2.Sent.OfType<PlayerListHeaderFooterS2C>());
     }
 
-    // ── /clear empties the player's inventory and resyncs the window ──
+    // -- /clear empties the player's inventory and resyncs the window --
     [Fact]
     public void ClearCommandEmptiesInventoryAndResyncs() {
         var protocol = new ProtocolJE763();
@@ -776,7 +776,7 @@ public class PlayStateTests {
         Assert.True(resync.Carried.IsEmpty);
     }
 
-    // ── /give adds an item (by registry name) to the player's inventory and resyncs the window ──
+    // -- /give adds an item (by registry name) to the player's inventory and resyncs the window --
     [Fact]
     public void GiveCommandAddsItemAndResyncs() {
         var protocol = new ProtocolJE763();
@@ -805,7 +805,7 @@ public class PlayStateTests {
         Assert.Equal(10, total);                                              // the 10 cobblestone landed in the inventory
         Assert.NotEmpty(client.Sent.OfType<SetContainerContentS2C>());        // window resynced to the client
 
-        // A NAMESPACED id (with a colon) parses — Brigadier's word() chokes on the ':', so the give item argument
+        // A NAMESPACED id (with a colon) parses - Brigadier's word() chokes on the ':', so the give item argument
         // is a resource-location type. Now that content is namespaced (minecraft:wool), this is the common case.
         client.Sent.Clear();
         _ = server.CommandDispatcher.ExecuteAsync(sender, "give minecraft:wool 5", client);
@@ -820,7 +820,7 @@ public class PlayStateTests {
         Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
     }
 
-    // ── /summon spawns an entity of the named kind at coordinates (no per-entity data yet) ──
+    // -- /summon spawns an entity of the named kind at coordinates (no per-entity data yet) --
     [Fact]
     public void SummonCommandSpawnsEntityAtCoordinates() {
         var protocol = new ProtocolJE763();
@@ -857,25 +857,25 @@ public class PlayStateTests {
         Assert.Equal(2.0, t.Z, 3);
         Assert.Equal(BlockRegistry.Missing, server.DefaultWorld.Ecs.Get<FallingBlockEntityComponent>(spawned).Block);
 
-        // Players can't be summoned — the registry has the kind, but the command refuses it.
+        // Players can't be summoned - the registry has the kind, but the command refuses it.
         _ = server.CommandDispatcher.ExecuteAsync(sender, "summon sharpminerals:player 0 20 0", client);
         var playerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
         Assert.Equal(1, server.DefaultWorld.Ecs.CountEntities(in playerQuery)); // still just the joined Steve
     }
 
-    // ── InventoryComponent.Add splits a large count across slots, capped at the item's max stack size ──
+    // -- InventoryComponent.Add splits a large count across slots, capped at the item's max stack size --
     [Fact]
     public void InventoryAddRespectsMaxStackSize() {
         var inv = new InventoryComponent(InventoryEntityComponent.MainSize);
 
-        // 100 stone (max 64) → 64 + 36 across two slots, nothing left over (the old Add over-stuffed one slot).
+        // 100 stone (max 64) -> 64 + 36 across two slots, nothing left over (the old Add over-stuffed one slot).
         Assert.True(inv.Add(new ItemStack(VanillaMod.Stone, 100)).IsEmpty);
         Assert.Equal(64, inv[0].Count);
         Assert.Equal(36, inv[1].Count);
 
         // Adding more tops up the partial slot first, then spills into a fresh one.
         Assert.True(inv.Add(new ItemStack(VanillaMod.Stone, 30)).IsEmpty);
-        Assert.Equal(64, inv[1].Count); // 36 → 64
+        Assert.Equal(64, inv[1].Count); // 36 -> 64
         Assert.Equal(2, inv[2].Count);  // the remaining 2
 
         // When the range is full, the overflow is returned rather than over-stacked.
@@ -885,7 +885,7 @@ public class PlayStateTests {
         Assert.Equal(36, leftover.Count);
     }
 
-    // ── Equipment: held item syncs as Set Equipment; off-hand never reaches a legacy client ─────────
+    // -- Equipment: held item syncs as Set Equipment; off-hand never reaches a legacy client ---------
     [Fact]
     public void EquipmentSyncsAndOffhandSkipsLegacy() {
         var protocol = new ProtocolJE763();
@@ -916,14 +916,14 @@ public class PlayStateTests {
         Assert.Equal(EquipmentSlot.MainHand, held.Slot);
         Assert.Equal<ItemType>(VanillaMod.Cobblestone, held.Item.Type);
 
-        // A container click that moves the held item updates the hand for others — here, picking the held
+        // A container click that moves the held item updates the hand for others - here, picking the held
         // cobblestone up off hotbar slot 2 (chest-window slot 54 + 2) onto the cursor empties the hand.
         var chest = new BlockEntity(new Vector3i(10, 5, 10), VanillaMod.Chest);
         server.DefaultWorld.SetBlockEntity(chest);
         server.Containers.Open(server, client.Id, chest);
         int win = client.Sent.OfType<OpenScreenS2C>().Last().WindowId;
         capture.Broadcasts.Clear();
-        server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 0, 56, 0, 0)); // left-click held slot → cursor
+        server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 0, 56, 0, 0)); // left-click held slot -> cursor
         server.FlushSystems(); // equipment-visibility diff broadcasts the now-empty hand
         Assert.True(inv.Held.IsEmpty, "container: held item moved onto the cursor");
         var cleared = capture.Broadcasts.OfType<SetEquipmentS2C>().Single();
@@ -939,7 +939,7 @@ public class PlayStateTests {
             Assert.True(ms.ReadSlotLite() is { } slot && slot.Count == 1, "modern: item Slot encoded with count 1");
         }
 
-        // Legacy wire: 1.5.2 Entity Equipment 0x05 = int entity id, short slot (Helmet → 4), then a legacy Slot.
+        // Legacy wire: 1.5.2 Entity Equipment 0x05 = int entity id, short slot (Helmet -> 4), then a legacy Slot.
         var je61 = new ProtocolJE61();
         var framed = je61.Frame(new SetEquipmentS2C(eid, EquipmentSlot.Helmet, new ItemStack(VanillaMod.Cobblestone, 1)));
         Assert.Equal((byte)0x05, framed[0]);
@@ -950,7 +950,7 @@ public class PlayStateTests {
             Assert.True(id != -1 && count == 1, "legacy: item Slot encoded with count 1");
         }
 
-        // The legacy encoder genuinely cannot represent the off-hand (added in 1.9) — so it MUST be filtered.
+        // The legacy encoder genuinely cannot represent the off-hand (added in 1.9) - so it MUST be filtered.
         Assert.Throws<NotSupportedException>(() =>
             je61.Frame(new SetEquipmentS2C(eid, EquipmentSlot.OffHand, new ItemStack(VanillaMod.Cobblestone, 1))));
 
@@ -961,7 +961,7 @@ public class PlayStateTests {
         Assert.True(PlayerVisibility.CanSeeOffhand(modernClient), "modern client renders off-hand");
     }
 
-    // ── World switch: a connected player moves to another world, keeping inventory + network id ─────────
+    // -- World switch: a connected player moves to another world, keeping inventory + network id ---------
     [Fact]
     public void SwitchWorldMovesPlayerAndPreservesInventory() {
         var protocol = new ProtocolJE763();
@@ -997,7 +997,7 @@ public class PlayStateTests {
         var respawn = Assert.IsType<RespawnS2C>(client.Sent.First(m => m is RespawnS2C));
         Assert.Contains(client.Sent, m => m is ChunkDataS2C);
         // The Respawn must carry the TARGET world's key, and it must differ from the world the player came
-        // from — a same-key Respawn doesn't reload the 1.20.1 client, so the old world's entities would linger.
+        // from - a same-key Respawn doesn't reload the 1.20.1 client, so the old world's entities would linger.
         Assert.Equal(target.Name, respawn.WorldName);
         Assert.NotEqual(oldWorld.Name, respawn.WorldName);
         // Switching to the world it's already in is a no-op.
@@ -1006,7 +1006,7 @@ public class PlayStateTests {
         Assert.DoesNotContain(client.Sent, m => m is RespawnS2C);
     }
 
-    // ── Persistence: state survives a disconnect/reconnect (in-memory store) ────────
+    // -- Persistence: state survives a disconnect/reconnect (in-memory store) --------
     [Fact]
     public void EntityStatePersistsAcrossReconnect() {
         var protocol = new ProtocolJE763();
@@ -1030,7 +1030,7 @@ public class PlayStateTests {
         server.RemovePlayer(c1.Id);
         Assert.True(server.PlayerCount == 0, "disconnected");
 
-        // Reconnect with the SAME name → same offline UUID → restored state.
+        // Reconnect with the SAME name -> same offline UUID -> restored state.
         var c2 = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
         capture.Register(c2);
         handler.Handle(c2, new LoginStartC2S("Persist", Guid.Empty));
@@ -1043,7 +1043,7 @@ public class PlayStateTests {
             "inventory restored");
     }
 
-    // ── Persistence: the disk (RocksDB) serialization codec round-trips ─────────────
+    // -- Persistence: the disk (RocksDB) serialization codec round-trips -------------
     [Fact]
     public void PlayerStateCodecRoundTrips() {
         var inv = new InventoryEntityComponent { SelectedSlot = 3 };
@@ -1064,7 +1064,7 @@ public class PlayStateTests {
             "stack with carried state round-trips");
     }
 
-    // ── Persistence: world chunks (blocks, states, chest contents) survive a save/reload ──
+    // -- Persistence: world chunks (blocks, states, chest contents) survive a save/reload --
     [Fact]
     public void WorldChunksPersistThroughStore() {
         var store = new InMemoryWorldStore();
@@ -1094,7 +1094,7 @@ public class PlayStateTests {
             "chest block entity + contents persisted");
     }
 
-    // ── Persistence: a chunk only saves once it has been modified ──────────────────
+    // -- Persistence: a chunk only saves once it has been modified ------------------
     [Fact]
     public void OnlyModifiedChunksAreDirty() {
         var store = new InMemoryWorldStore();
@@ -1106,7 +1106,7 @@ public class PlayStateTests {
         Assert.True(world.Save() == 0, "saving clears the dirty flag");
     }
 
-    // ── Chunk streaming: the view follows the player across chunk boundaries ────────
+    // -- Chunk streaming: the view follows the player across chunk boundaries --------
     [Fact]
     public void ChunkStreamingFollowsPlayer() {
         var protocol = new ProtocolJE763();
@@ -1124,13 +1124,13 @@ public class PlayStateTests {
         Assert.True(client.Sent.OfType<ChunkDataS2C>().Any(), "initial view streamed on join");
         var joinTeleport = client.Sent.OfType<SynchronizePlayerPositionS2C>().First();
 
-        // Before confirming the join teleport, the client's position is stale → ignored (no stream).
+        // Before confirming the join teleport, the client's position is stale -> ignored (no stream).
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(40.0, WorldDefaults.SurfaceY, 0.5, true));
         server.FlushSystems(); // streaming is now a per-tick system, not synchronous on the move packet
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "position ignored while teleport unconfirmed");
 
-        // Confirm the teleport; now a move into a new column streams (spawn chunk 0,0; x=40 → chunk 2).
+        // Confirm the teleport; now a move into a new column streams (spawn chunk 0,0; x=40 -> chunk 2).
         handler.Handle(client, new ConfirmTeleportationC2S(joinTeleport.TeleportId));
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(40.0, WorldDefaults.SurfaceY, 0.5, true));
@@ -1146,7 +1146,7 @@ public class PlayStateTests {
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "no chunks while staying in a column");
     }
 
-    // ── EventBus: polymorphic dispatch (heavy-context + generic events together) ────
+    // -- EventBus: polymorphic dispatch (heavy-context + generic events together) ----
     [Fact]
     public void EventBusDispatchesToBaseTypesAndInterfaces() {
         var bus = new EventBus();
@@ -1168,7 +1168,7 @@ public class PlayStateTests {
         Assert.DoesNotContain(fired, f => f.StartsWith("zombie"));
     }
 
-    // ── EventBus: deferred publish only fires when the queue is drained ─────────────
+    // -- EventBus: deferred publish only fires when the queue is drained -------------
     [Fact]
     public void DeferredEventsProcessOnlyOnDrain() {
         var bus = new EventBus();
@@ -1185,7 +1185,7 @@ public class PlayStateTests {
         Assert.Equal(1, count); // nothing left to run
     }
 
-    // ── Async persistence: write-behind reads-after-write and flushes on dispose ────
+    // -- Async persistence: write-behind reads-after-write and flushes on dispose ----
     [Fact]
     public void AsyncPlayerStoreReadsAfterWriteThenFlushes() {
         var inner = new InMemoryPlayerStore();
@@ -1202,28 +1202,28 @@ public class PlayStateTests {
             "queued write was flushed to the inner store on dispose");
     }
 
-    // ── Chunk eviction: drop out-of-range chunks, saving dirty ones first ──────────
+    // -- Chunk eviction: drop out-of-range chunks, saving dirty ones first ----------
     [Fact]
     public void ChunkEvictionDropsAndSavesOutOfRangeChunks() {
         var store = new InMemoryWorldStore();
         var world = new World("evict", new FlatChunkGenerator(), store);
-        world.SetBlock(new Vector3i(1, 6, 1), VanillaMod.Stone); // chunk (0,0,0) — dirty
-        world.GetBlock(new Vector3i(1600, 4, 0));                   // chunk (100,0,0) — generated, clean
+        world.SetBlock(new Vector3i(1, 6, 1), VanillaMod.Stone); // chunk (0,0,0) - dirty
+        world.GetBlock(new Vector3i(1600, 4, 0));                   // chunk (100,0,0) - generated, clean
         int before = world.LoadedChunkCount;
         Assert.True(before >= 2, "two columns loaded");
 
-        // Keep only column (0,0) within radius 1 — the far column is dropped.
+        // Keep only column (0,0) within radius 1 - the far column is dropped.
         int evicted = world.EvictChunks(new List<(long, long)> { (0, 0) }, keepRadius: 1);
         Assert.True(evicted >= 1 && world.LoadedChunkCount < before, "far chunk evicted");
         Assert.True(world.GetChunk(new Vector3i(0, 0, 0)) is not null, "kept chunk still loaded");
 
-        // Evict everything (no centres) — the dirty near chunk must be saved before it goes.
+        // Evict everything (no centres) - the dirty near chunk must be saved before it goes.
         world.EvictChunks(new List<(long, long)>(), keepRadius: 1);
         Assert.True(store.TryLoadChunk("evict", new Vector3i(0, 0, 0), out _),
             "dirty chunk was saved on eviction");
     }
 
-    // ── Chunk eviction: never drops a dirty chunk when there's no store to save it ──
+    // -- Chunk eviction: never drops a dirty chunk when there's no store to save it --
     [Fact]
     public void ChunkEvictionKeepsDirtyChunkWithoutStore() {
         var world = new World("nostore", new FlatChunkGenerator()); // no store
@@ -1232,7 +1232,7 @@ public class PlayStateTests {
         Assert.True(evicted == 0 && world.LoadedChunkCount >= 1, "dirty chunk kept (no store to save to)");
     }
 
-    // ── TypeMapper abstraction: per-protocol mapper, and codecs map via the stream ─────
+    // -- TypeMapper abstraction: per-protocol mapper, and codecs map via the stream -----
     [Fact]
     public void ProtocolExposesMapperAndCodecsUseIt() {
         var protocol = new ProtocolJE763();
@@ -1240,7 +1240,7 @@ public class PlayStateTests {
         Assert.True(protocol.Types.StateId(VanillaMod.Stone) == 1, "protocol exposes its type mapper");
 
         // A container packet carries domain ItemStacks; the codec maps them via the mapper that
-        // EncodePayload sets on the stream — this would NullReference in SlotWire if the seam broke.
+        // EncodePayload sets on the stream - this would NullReference in SlotWire if the seam broke.
         var content = new SetContainerContentS2C(0, 0,
             new[] { new ItemStack(VanillaMod.Stone, 5), protocol.Types.FromVanillaItem(194) /* red wool */ },
             default);
@@ -1248,18 +1248,18 @@ public class PlayStateTests {
         Assert.True(bytes.Length > 0, "SetContainerContent encoded via the protocol's mapper");
     }
 
-    // ── Broadcast cache: a message is encoded once per protocol version ────────────
+    // -- Broadcast cache: a message is encoded once per protocol version ------------
     [Fact]
     public void BroadcastPacketEncodesOncePerVersion() {
         var protocol = new ProtocolJE763();
         var packet = new CachedPacket(new BlockUpdateS2C(new Vector3i(1, 2, 3), VanillaMod.Stone));
         var first = packet.Framed(protocol);
         var second = packet.Framed(protocol);
-        Assert.Same(first, second); // 2nd call hits the per-version cache — no re-encode
+        Assert.Same(first, second); // 2nd call hits the per-version cache - no re-encode
         Assert.True(first.Length > 0, "produced framed wire bytes");
     }
 
-    // ── Legacy (JE61 / 1.5.2) framing: detection + non-VarInt wire format ──────────
+    // -- Legacy (JE61 / 1.5.2) framing: detection + non-VarInt wire format ----------
     [Fact]
     public void LegacyProtocolDetectionAndFraming() {
         var registry = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());
@@ -1283,7 +1283,7 @@ public class PlayStateTests {
         using var back = new MinecraftStream(new MemoryStream(framed, writable: false));
         Assert.Equal(kick, je61.ReadMessage(back, ConnectionState.Handshaking, PacketDirection.Clientbound));
 
-        // An unknown legacy id can't be skipped (no length) → bail rather than desync.
+        // An unknown legacy id can't be skipped (no length) -> bail rather than desync.
         using var bad = new MinecraftStream(new MemoryStream(new byte[] { 0x99 }, writable: false));
         Assert.Throws<FormatException>(() =>
             je61.ReadMessage(bad, ConnectionState.Handshaking, PacketDirection.Serverbound));
@@ -1307,7 +1307,7 @@ public class PlayStateTests {
         Assert.Equal("§1\0hi", new MinecraftStream(ms).ReadString16());
     }
 
-    // ── Legacy login: AES/CFB8 transport + login codecs ───────────────────────────
+    // -- Legacy login: AES/CFB8 transport + login codecs ---------------------------
     [Fact]
     public void LegacyAesCfb8RoundTrips() {
         var key = new byte[16];
@@ -1315,7 +1315,7 @@ public class PlayStateTests {
         var plain = System.Text.Encoding.ASCII.GetBytes("The quick brown fox jumps over the lazy dog 0123456789!");
 
         var cipherMs = new MemoryStream();
-        new AesCfb8Stream(cipherMs, key).Write(plain, 0, plain.Length); // encrypt → cipherMs
+        new AesCfb8Stream(cipherMs, key).Write(plain, 0, plain.Length); // encrypt -> cipherMs
         byte[] cipher = cipherMs.ToArray();
         Assert.Equal(plain.Length, cipher.Length);  // CFB8 is a stream cipher (no padding)
         Assert.NotEqual(plain, cipher);              // actually encrypted
@@ -1367,7 +1367,7 @@ public class PlayStateTests {
         Assert.Equal(0, chunk.AddBitmap);
         Assert.True(chunk.GroundUpContinuous);
 
-        // Decompress; payload = present-section count × (blocks 4096 + 3 nibble arrays 2048) + biome 256.
+        // Decompress; payload = present-section count x (blocks 4096 + 3 nibble arrays 2048) + biome 256.
         using var inflated = new MemoryStream();
         using (var z = new System.IO.Compression.ZLibStream(
                    new MemoryStream(chunk.CompressedData), System.IO.Compression.CompressionMode.Decompress))
@@ -1378,12 +1378,12 @@ public class PlayStateTests {
         Assert.Equal((byte)0x33, je61.Frame(chunk)[0]); // single-byte id, no length prefix
     }
 
-    // ── Legacy chat (0x03): serverbound → generic; clientbound component → §-coded string ────
+    // -- Legacy chat (0x03): serverbound -> generic; clientbound component -> §-coded string ----
     [Fact]
     public void LegacyChatRoundTrips() {
         var je61 = new ProtocolJE61();
 
-        // Serverbound 0x03 Chat → generic ChatMessageC2S, raw text (keeps a leading '/').
+        // Serverbound 0x03 Chat -> generic ChatMessageC2S, raw text (keeps a leading '/').
         var ms = new MemoryStream();
         var w = new MinecraftStream(ms, leaveOpen: true);
         w.WriteUByte(0x03); w.WriteString16("/help");
@@ -1392,24 +1392,24 @@ public class PlayStateTests {
             je61.ReadMessage(new MinecraftStream(ms), ConnectionState.Handshaking, PacketDirection.Serverbound));
         Assert.Equal("/help", msg.Message);
 
-        // Clientbound SystemChatMessageS2C → 0x03 with a §-coded string (colour + formatting).
+        // Clientbound SystemChatMessageS2C -> 0x03 with a §-coded string (colour + formatting).
         var styled = new TextComponent("hi") { Color = "red", Bold = true };
         var framed = je61.Frame(new SystemChatMessageS2C(styled, Overlay: false));
         Assert.Equal((byte)0x03, framed[0]);
         Assert.Equal("§c§lhi", new MinecraftStream(new MemoryStream(framed[1..], writable: false)).ReadString16());
 
         // Nested Extra is concatenated; a modern hex colour quantizes to the nearest § colour.
-        var compound = new TextComponent("a") { Color = "#ff5555" };       // ≈ red → §c
-        compound.AddExtra(new TextComponent("b") { Color = "green" });      // → §a
+        var compound = new TextComponent("a") { Color = "#ff5555" };       // ~ red -> §c
+        compound.AddExtra(new TextComponent("b") { Color = "green" });      // -> §a
         var cf = je61.Frame(new SystemChatMessageS2C(compound, Overlay: false));
         Assert.Equal("§ca§ab", new MinecraftStream(new MemoryStream(cf[1..], writable: false)).ReadString16());
     }
 
-    // ── Chat JSON: a nested Extra component keeps its subclass fields (regression) ────
+    // -- Chat JSON: a nested Extra component keeps its subclass fields (regression) ----
     [Fact]
     public void ChatComponentSerializesNestedExtraFields() {
         // The crash: Extra is List<ChatComponent>, so STJ used to serialize each element against the base
-        // type and drop TextComponent.Text — the styled child collapsed to {"color":"dark_purple"}, which
+        // type and drop TextComponent.Text - the styled child collapsed to {"color":"dark_purple"}, which
         // the client rejected ("Don't know how to turn {...} into a Component"). The runtime-type dispatch
         // must now emit the child's text.
         var message = ChatComponent.Text("<")
@@ -1419,7 +1419,7 @@ public class PlayStateTests {
         Assert.Contains("\"color\":\"dark_purple\"", json);
         Assert.DoesNotContain("{\"color\":\"dark_purple\"}", json); // never a bare style-only child
 
-        // …and it round-trips back to the same tree, with subclass types preserved.
+        // ...and it round-trips back to the same tree, with subclass types preserved.
         var back = ChatComponent.FromJson(json);
         var root = Assert.IsType<TextComponent>(back);
         Assert.Equal("<", root.Text);
@@ -1429,23 +1429,23 @@ public class PlayStateTests {
         Assert.Equal("dark_purple", server.Color);
     }
 
-    // ── Block drops: keep item-identity state (colour), reset placement state (facing) ────
+    // -- Block drops: keep item-identity state (colour), reset placement state (facing) ----
     [Fact]
     public void DropStateKeepsColourResetsFacing() {
-        // A facing chest's drop resets facing to default → all-default → carries no state on the drop.
+        // A facing chest's drop resets facing to default -> all-default -> carries no state on the drop.
         var chest = new BlockState(VanillaMod.Chest).Set(State.Facing, "east");
         var chestDrop = chest.ForDrop();
         Assert.Equal(0, chestDrop.Get(State.Facing));
-        Assert.True(chestDrop.Matches(new BlockState(VanillaMod.Chest)), "facing-only state ⇒ stateless drop");
+        Assert.True(chestDrop.Matches(new BlockState(VanillaMod.Chest)), "facing-only state => stateless drop");
 
         // Red wool keeps its colour, so the drop carries it (a non-default, item-identity state).
         var wool = new BlockState(VanillaMod.Wool).Set(State.Color, "red");
         var woolDrop = wool.ForDrop();
         Assert.Equal(State.Color.IndexOf("red"), woolDrop.Get(State.Color));
-        Assert.False(woolDrop.Matches(new BlockState(VanillaMod.Wool)), "colour kept ⇒ stateful drop");
+        Assert.False(woolDrop.Matches(new BlockState(VanillaMod.Wool)), "colour kept => stateful drop");
     }
 
-    // ── Physics: a generic entity falls under gravity and rests on terrain ─────────
+    // -- Physics: a generic entity falls under gravity and rests on terrain ---------
     [Fact]
     public void DroppedItemFallsAndRestsOnGround() {
         var world = new World("physics", new FlatChunkGenerator());
@@ -1459,7 +1459,7 @@ public class PlayStateTests {
         Assert.True(System.Math.Abs(v.Y) < 1e-6, "vertical velocity settled to rest");
     }
 
-    // ── Physics: terrain collision stops horizontal motion at a wall ───────────────
+    // -- Physics: terrain collision stops horizontal motion at a wall ---------------
     [Fact]
     public void PhysicsStopsAtWalls() {
         var world = new World("walls", new FlatChunkGenerator());
@@ -1476,12 +1476,12 @@ public class PlayStateTests {
         Assert.True(t.X + hw <= 1.0 + 1e-3, $"item stopped at the wall (X={t.X}, hw={hw})");
     }
 
-    // ── Collision: a spawned player's CollisionFeedback is reliably constructed (no null list) ──
+    // -- Collision: a spawned player's CollisionFeedback is reliably constructed (no null list) --
     [Fact]
     public void PlayerCollisionFeedbackIsInitialized() {
         // The production NRE came from a parameterless struct ctor (bypassed under the Release JIT)
         // leaving Touching null. Player.Spawn now sets it via an object initializer, so it's always
-        // present — and the collision pass runs without dereferencing null.
+        // present - and the collision pass runs without dereferencing null.
         var world = new World("collide", new FlatChunkGenerator());
         var player = world.SpawnPlayer(1, "P", Guid.NewGuid(), 1);
 
@@ -1489,7 +1489,7 @@ public class PlayStateTests {
         Assert.Null(Record.Exception(() => world.Tick()));
     }
 
-    // ── Spatial index: chunk-bucketed lookups + incremental move/remove maintenance ────────
+    // -- Spatial index: chunk-bucketed lookups + incremental move/remove maintenance --------
     [Fact]
     public void SpatialIndexBucketsAndQueries() {
         var world = new World("idx", new FlatChunkGenerator());
@@ -1510,7 +1510,7 @@ public class PlayStateTests {
         Assert.Contains(a, idx.InChunk(new Vector3i(0, 0, 0)));
         Assert.Contains(b, idx.InChunk(new Vector3i(2, 0, 0)));
 
-        // Move 'a' across chunk boundaries → it re-buckets (the EntityMoved-driven path).
+        // Move 'a' across chunk boundaries -> it re-buckets (the EntityMoved-driven path).
         idx.Update(a, 200, 5, 2); // chunk-cube (12,0,0)
         Assert.DoesNotContain(a, idx.InChunk(new Vector3i(0, 0, 0)));
         Assert.Contains(a, idx.InChunk(new Vector3i(12, 0, 0)));
@@ -1520,11 +1520,11 @@ public class PlayStateTests {
         Assert.DoesNotContain(b, idx.InChunk(new Vector3i(2, 0, 0)));
     }
 
-    // ── Spatial index: spawn/despawn keep it consistent through the World lifecycle ─────────
+    // -- Spatial index: spawn/despawn keep it consistent through the World lifecycle ---------
     [Fact]
     public void SpawnAndDespawnMaintainSpatialIndex() {
         var world = new World("idxspawn", new FlatChunkGenerator());
-        var cell = new Vector3i(0, 0, 0); // block (5,6,5) → chunk-cube (0,0,0)
+        var cell = new Vector3i(0, 0, 0); // block (5,6,5) -> chunk-cube (0,0,0)
 
         var item = world.SpawnDroppedItem(new Vector3i(5, 6, 5), new ItemStack(VanillaMod.Stone, 1));
         Assert.Contains(item, world.Entities.InChunk(cell));
@@ -1533,7 +1533,7 @@ public class PlayStateTests {
         Assert.DoesNotContain(item, world.Entities.InChunk(cell));
     }
 
-    // ── Events: a non-player entity raises the generic EntityMoved when physics moves it ────
+    // -- Events: a non-player entity raises the generic EntityMoved when physics moves it ----
     [Fact]
     public void NonPlayerEntityRaisesEntityMoved() {
         var events = new EventBus();
@@ -1545,7 +1545,7 @@ public class PlayStateTests {
         var item = world.SpawnDroppedItem(new Vector3i(0, 12, 0), new ItemStack(VanillaMod.Stone, 1));
 
         for (int i = 0; i < 5; i++) { world.Tick(); events.DrainDeferred(); }
-        Assert.Contains(item, moved); // the falling item published EntityMoved (deferred → drained)
+        Assert.Contains(item, moved); // the falling item published EntityMoved (deferred -> drained)
 
         // Once it settles, the move events stop (MoveEpsilon rest cut-off).
         for (int i = 0; i < 60; i++) { world.Tick(); events.DrainDeferred(); }
@@ -1554,7 +1554,7 @@ public class PlayStateTests {
         Assert.Empty(moved); // at rest: no more move events
     }
 
-    // ── Ticking: a tickable block entity is ticked through World.Tick → Chunk.Tick ─────
+    // -- Ticking: a tickable block entity is ticked through World.Tick -> Chunk.Tick -----
     [Fact]
     public void TickableBlockEntityIsTickedByItsChunk() {
         var world = new World("betick", new FlatChunkGenerator());
@@ -1578,7 +1578,7 @@ public class PlayStateTests {
         public void Tick() => Ticks++;
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // -- Helpers -------------------------------------------------------------
     static int DropCount(World world) =>
         world.Ecs.CountEntities(in new QueryDescription().WithAll<PickupEntityComponent>());
 
@@ -1591,7 +1591,7 @@ public class PlayStateTests {
         return codec is not null && codec.Decode(ms).Equals(message);
     }
 
-    // ── Command parse cache: a player's parses are invalidated when their .Requires inputs change ──
+    // -- Command parse cache: a player's parses are invalidated when their .Requires inputs change --
     [Fact]
     public void CommandParseCacheInvalidatesPerPlayer() {
         var server = new Server(new ServerContext {
@@ -1608,7 +1608,7 @@ public class PlayStateTests {
         dispatcher.Register(l => l.Literal("secret").Requires(_ => allow)
             .Executes(c => { c.Source.Reply("ok"); return 1; }));
 
-        // Denied: the literal is pruned, so it parses as unknown — and that parse is cached for this player.
+        // Denied: the literal is pruned, so it parses as unknown - and that parse is cached for this player.
         _ = dispatcher.ExecuteAsync(sender, "secret", client); // synchronous-bodied; completes before returning
         Assert.DoesNotContain("ok", replies);
 
@@ -1634,7 +1634,7 @@ public class PlayStateTests {
             MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
         });
         server.CommandDispatcher.RegisterWorld();
-        // A player source (client != null) so .Requires(IsPlayer) passes — same as HandleSuggestions builds.
+        // A player source (client != null) so .Requires(IsPlayer) passes - same as HandleSuggestions builds.
         var client = new CaptureNetClient(1, new ProtocolJE763());
         var source = new SenderContext(new CaptureSender(new()), server.CommandDispatcher, client);
         var brig = server.CommandDispatcher.Brigadier;
@@ -1645,7 +1645,7 @@ public class PlayStateTests {
         Assert.Contains("nether", all);
     }
 
-    // ── Regression: the real client sends the leading '/' in the suggestion request (SharpTester didn't) ──
+    // -- Regression: the real client sends the leading '/' in the suggestion request (SharpTester didn't) --
     // The dispatcher must skip it for parsing yet keep the range in the client's coordinates, or ask_server
     // value suggestions (player/world) silently return nothing while client-side literals still work.
     [Fact]
@@ -1667,16 +1667,16 @@ public class PlayStateTests {
         Assert.Equal("/world ".Length, start);             // range start is at the arg in the client's input (index 7)
         Assert.Equal(0, length);
 
-        // And a partial with the slash: "/world over" → replaces "over" at index 7, length 4.
+        // And a partial with the slash: "/world over" -> replaces "over" at index 7, length 4.
         var (pStart, pLength, pMatches) = server.CommandDispatcher.Suggest(sender, "/world over", client);
         Assert.Contains("overworld", pMatches);
         Assert.Equal(7, pStart);
         Assert.Equal(4, pLength);
     }
 
-    // ── Declare Commands BYTES: the world/tp value args must reach the client flagged ask_server ──
+    // -- Declare Commands BYTES: the world/tp value args must reach the client flagged ask_server --
     // (in-process suggestion tests use the server's dispatcher; this is the only check on the actual wire
-    //  graph the client rebuilds its tree from — the gap behind "shows <arg> placeholder but no values".)
+    //  graph the client rebuilds its tree from - the gap behind "shows <arg> placeholder but no values".)
     [Fact]
     public void DeclareCommandsFlagsValueArgsAsAskServer() {
         var worlds = new ConcurrentDictionary<string, World> {
@@ -1759,7 +1759,7 @@ public class PlayStateTests {
             messages.Add(message is TextComponent t ? t.Text : message.ToString());
     }
 
-    // ── In-memory transport doubles ─────────────────────────────────────────
+    // -- In-memory transport doubles -----------------------------------------
     sealed class CaptureNetClient : NetClient {
         public readonly List<IMessage> Sent = new();
         public CaptureNetClient(ulong id, Protocol protocol) : base(id, protocol) { }

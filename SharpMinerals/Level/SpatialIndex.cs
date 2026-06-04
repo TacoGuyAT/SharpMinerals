@@ -10,9 +10,9 @@ namespace SharpMinerals.Level;
 /// here?" scans only the buckets overlapping the query region. Maintained incrementally via <see cref="Add"/>/
 /// <see cref="Remove"/>/<see cref="Update"/>. Concurrent: the lifecycle spans the tick and network threads.</summary>
 public sealed class SpatialIndex {
-    // chunk-cube coord → set of entities whose position falls in that cube.
+    // chunk-cube coord -> set of entities whose position falls in that cube.
     readonly ConcurrentDictionary<Vector3i, ConcurrentDictionary<ArchEntity, byte>> buckets = new();
-    // entity → the cube it's currently filed under, so Remove/Update need no caller-supplied old position.
+    // entity -> the cube it's currently filed under, so Remove/Update need no caller-supplied old position.
     readonly ConcurrentDictionary<ArchEntity, Vector3i> cellOf = new();
 
     readonly World world;
@@ -28,7 +28,7 @@ public sealed class SpatialIndex {
         (Mint)System.Math.Floor(z)
     ).ToChunk();
 
-    // ── Maintenance ───────────────────────────────────────────────────────────
+    // -- Maintenance -----------------------------------------------------------
     public void Add(ArchEntity entity, double x, double y, double z) {
         var cell = CellOf(x, y, z);
         Bucket(cell)[entity] = 0;
@@ -44,7 +44,7 @@ public sealed class SpatialIndex {
     public void Update(ArchEntity entity, double x, double y, double z) {
         var cell = CellOf(x, y, z);
         if (cellOf.TryGetValue(entity, out var old)) {
-            if (old == cell) return; // same cube — nothing to do
+            if (old == cell) return; // same cube - nothing to do
             if (buckets.TryGetValue(old, out var oldSet)) oldSet.TryRemove(entity, out _);
         }
         Bucket(cell)[entity] = 0;
@@ -54,8 +54,8 @@ public sealed class SpatialIndex {
     ConcurrentDictionary<ArchEntity, byte> Bucket(Vector3i cell) =>
         buckets.GetOrAdd(cell, static _ => new ConcurrentDictionary<ArchEntity, byte>());
 
-    // ── Queries ───────────────────────────────────────────────────────────────
-    /// <summary>The entities filed in one chunk-cube (the unit of per-chunk processing) — a snapshot.</summary>
+    // -- Queries ---------------------------------------------------------------
+    /// <summary>The entities filed in one chunk-cube (the unit of per-chunk processing) - a snapshot.</summary>
     public IReadOnlyCollection<ArchEntity> InChunk(Vector3i chunkCoord) =>
         buckets.TryGetValue(chunkCoord, out var set) ? set.Keys.ToArray() : System.Array.Empty<ArchEntity>();
 

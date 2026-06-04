@@ -4,7 +4,7 @@ using SharpMinerals.Components;
 namespace SharpMinerals.Items;
 
 /// <summary>A quantity of an item: an <see cref="ItemType"/> reference, an optional per-instance
-/// <see cref="Data"/> bag (NBT-like), and a count. A value type. Empty when the type is null or count ≤ 0.</summary>
+/// <see cref="Data"/> bag (NBT-like), and a count. A value type. Empty when the type is null or count <= 0.</summary>
 /// <remarks>Copying shares the same <see cref="Data"/> reference, so a stack carrying instance data must be
 /// cloned before independent mutation.</remarks>
 public struct ItemStack {

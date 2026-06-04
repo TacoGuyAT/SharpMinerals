@@ -19,7 +19,7 @@ public sealed class ChatComponentConverter : JsonConverter<ChatComponent> {
         using var doc = JsonDocument.ParseValue(ref reader);
         var root = doc.RootElement;
 
-        // …and an array, whose first element is the component and the rest are appended to its Extra.
+        // ...and an array, whose first element is the component and the rest are appended to its Extra.
         if (root.ValueKind == JsonValueKind.Array) {
             ChatComponent? head = null;
             foreach (var element in root.EnumerateArray()) {

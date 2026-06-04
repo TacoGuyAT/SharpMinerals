@@ -6,7 +6,7 @@ namespace SharpMinerals.Network.Messages;
 
 public sealed record PlayerListEntry(Guid Uuid, string Name, int GameMode, bool Listed, int Latency);
 
-// ── Clientbound: player presence & entity sync ───────────────────────────────
+// -- Clientbound: player presence & entity sync -------------------------------
 
 /// <summary>
 /// Player Info Update (0x3A): registers/updates player profiles for rendering + the tab list.
@@ -33,23 +33,23 @@ public enum EntityAnimation { SwingMainArm, SwingOffArm }
 
 public sealed record EntityAnimationS2C(int EntityId, EntityAnimation Animation) : IMessage;
 
-/// <summary>Entity Flags: an entity's shared-flags state changed (sneaking, sprinting, …); each protocol
+/// <summary>Entity Flags: an entity's shared-flags state changed (sneaking, sprinting, ...); each protocol
 /// maps it to its own entity-metadata form (modern flags byte + Pose; legacy flags byte only).</summary>
 public sealed record EntityFlagsS2C(int EntityId, EntityFlags Flags) : IMessage;
 
 /// <summary>An entity's equipment slots, ordered as 1.20.1's Set Equipment indices. The same packet that
-/// shows another player's held item also shows their armour — these are its slot ids.</summary>
+/// shows another player's held item also shows their armour - these are its slot ids.</summary>
 public enum EquipmentSlot { MainHand = 0, OffHand = 1, Boots = 2, Leggings = 3, Chestplate = 4, Helmet = 5 }
 
 /// <summary>Set Equipment (0x55): the item another entity holds/wears in ONE slot, so other clients
 /// render its held item and armour. Carries OUR <see cref="ItemStack"/>; the codec maps it to a wire Slot.
-/// One slot per message — modern writes a single-entry array; legacy 1.5.2's 0x05 is one slot per packet.</summary>
+/// One slot per message - modern writes a single-entry array; legacy 1.5.2's 0x05 is one slot per packet.</summary>
 public sealed record SetEquipmentS2C(int EntityId, EquipmentSlot Slot, ItemStack Item) : IMessage;
 
 /// <summary>Remove Entities (0x3E).</summary>
 public sealed record RemoveEntitiesS2C(IReadOnlyList<int> EntityIds) : IMessage;
 
-// ── Serverbound: movement & interaction ──────────────────────────────────────
+// -- Serverbound: movement & interaction --------------------------------------
 
 /// <summary>Set Player Position and Rotation (0x15).</summary>
 public sealed record SetPlayerPositionAndRotationC2S(double X, double Y, double Z, float Yaw, float Pitch, bool OnGround) : IMessage;

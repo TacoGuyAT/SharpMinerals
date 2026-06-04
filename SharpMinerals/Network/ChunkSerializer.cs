@@ -9,7 +9,7 @@ using SharpMinerals.Network.Nbt;
 namespace SharpMinerals.Network;
 
 /// <summary>
-/// Serializes one world column into the 1.20.1 "Chunk Data and Update Light" packet (16×384×16,
+/// Serializes one world column into the 1.20.1 "Chunk Data and Update Light" packet (16x384x16,
 /// 24 sections from y=-64), assembled on the fly from <see cref="World.GetBlock"/> and vanilla state ids.
 /// </summary>
 public static class ChunkSerializer {
@@ -56,7 +56,7 @@ public static class ChunkSerializer {
     }
 
     static void WriteHeightmaps(MinecraftStream s) {
-        // MOTION_BLOCKING: 256 entries of 9 bits, packed non-spanning (7 per long → 37 longs).
+        // MOTION_BLOCKING: 256 entries of 9 bits, packed non-spanning (7 per long -> 37 longs).
         // Flat surface sits on grass at GrassY, so the lowest motion-blocking air is GrassY+1.
         int height = WorldDefaults.GrassY + 1 - MinY;
         long[] packed = PackBits(Enumerable.Repeat(height, 256).ToArray(), 9);
@@ -72,7 +72,7 @@ public static class ChunkSerializer {
 
         var states = new int[16 * 16 * 16];
         for (int sy = 0; sy < SectionCount; sy++) {
-            // A vanilla section IS one server chunk cube — fetch it once and read cells directly, rather than
+            // A vanilla section IS one server chunk cube - fetch it once and read cells directly, rather than
             // a GetBlock/GetChunk dictionary lookup (+ Vector3i alloc) per cell.
             var cube = world.GetChunk(new Vector3i(chunkX, MinSectionY + sy, chunkZ));
             int sectionBaseY = (MinSectionY + sy) * 16;
@@ -81,7 +81,7 @@ public static class ChunkSerializer {
                 for (int z = 0; z < 16; z++) {
                     for (int x = 0; x < 16; x++) {
                         var block = cube.GetBlock(x, y, z);
-                        // Stateful blocks (chest facing, …) map via their stored state; the rest by type.
+                        // Stateful blocks (chest facing, ...) map via their stored state; the rest by type.
                         states[(y << 8) | (z << 4) | x] =
                             block.Has<StatesBlockDescriptor>() && cube.GetBlockState(x, y, z) is { } bs
                                 ? types.StateId(bs)
@@ -111,7 +111,7 @@ public static class ChunkSerializer {
         var palette = states.Distinct().ToArray();
 
         if (palette.Length == 1) {
-            s.WriteUByte(0);                  // 0 bits per entry → single value
+            s.WriteUByte(0);                  // 0 bits per entry -> single value
             s.WriteVarInt(palette[0]);
             s.WriteVarInt(0);                 // no data array
             return;
@@ -168,7 +168,7 @@ public static class ChunkSerializer {
         s.WriteLong(bits);
     }
 
-    // ── Bit packing (non-spanning: entries never cross a long boundary) ──────
+    // -- Bit packing (non-spanning: entries never cross a long boundary) ------
     static long[] PackBits(int[] values, int bitsPerEntry) {
         int perLong = 64 / bitsPerEntry;
         int longCount = (values.Length + perLong - 1) / perLong;

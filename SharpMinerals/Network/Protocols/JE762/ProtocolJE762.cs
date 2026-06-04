@@ -3,12 +3,12 @@ using SharpMinerals.Network.Protocols.JE762.Codecs;
 namespace SharpMinerals.Network.Protocols.JE762;
 
 /// <summary>
-/// Java Edition protocol 762 (Minecraft 1.19.4) — the base of the modern-Java delta chain. Packet ids in
+/// Java Edition protocol 762 (Minecraft 1.19.4) - the base of the modern-Java delta chain. Packet ids in
 /// <see cref="Cb"/>/<see cref="Sb"/> are shared by 1.19.4 AND 1.20.1 (the play packet table is byte-for-byte
 /// identical between 762 and 763); only the block/item wire ids differ, which live in the <see cref="ITypeMapper"/>.
 /// <see cref="ProtocolJE763"/> extends this and swaps in the 1.20.1 id deltas.
 /// </summary>
-// Not sealed: the modern-Java family is a delta chain — ProtocolJE763 (and a future ProtocolJE765) extend this.
+// Not sealed: the modern-Java family is a delta chain - ProtocolJE763 (and a future ProtocolJE765) extend this.
 public class ProtocolJE762 : ModernJavaProtocol {
     public override int Version => 762;
     public override string VersionName => "1.19.4";
@@ -93,21 +93,21 @@ public class ProtocolJE762 : ModernJavaProtocol {
     }
 
     public ProtocolJE762() {
-        // ── Handshaking ─────────────────────────────────────────────────────
+        // -- Handshaking -----------------------------------------------------
         Register(ConnectionState.Handshaking, PacketDirection.Serverbound, Sb.Handshake, new HandshakeC2SCodec());
 
-        // ── Status ──────────────────────────────────────────────────────────
+        // -- Status ----------------------------------------------------------
         Register(ConnectionState.Status, PacketDirection.Serverbound, Sb.StatusRequest, new StatusRequestC2SCodec());
         Register(ConnectionState.Status, PacketDirection.Clientbound, Cb.StatusResponse, new StatusResponseS2CCodec());
         Register(ConnectionState.Status, PacketDirection.Serverbound, Sb.PingRequest, new PingRequestC2SCodec());
         Register(ConnectionState.Status, PacketDirection.Clientbound, Cb.PongResponse, new PongResponseS2CCodec());
 
-        // ── Login ───────────────────────────────────────────────────────────
+        // -- Login -----------------------------------------------------------
         Register(ConnectionState.Login, PacketDirection.Serverbound, Sb.LoginStart, new LoginStartC2SCodec());
         Register(ConnectionState.Login, PacketDirection.Clientbound, Cb.LoginDisconnect, new LoginDisconnectS2CCodec());
         Register(ConnectionState.Login, PacketDirection.Clientbound, Cb.LoginSuccess, new LoginSuccessS2CCodec());
 
-        // ── Play: clientbound ───────────────────────────────────────────────
+        // -- Play: clientbound -----------------------------------------------
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.BundleDelimiter, new BundleDelimiterS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SpawnEntity, new SpawnEntityS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetEntityVelocity, new SetEntityVelocityS2CCodec());
@@ -146,7 +146,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.CloseContainer, new CloseContainerS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetHeldItem, new SetHeldItemS2CCodec());
 
-        // ── Play: serverbound ───────────────────────────────────────────────
+        // -- Play: serverbound -----------------------------------------------
 #if TEST_HARNESS
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.CustomPayload, new CustomPayloadC2SCodec());
 #endif

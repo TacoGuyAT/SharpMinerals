@@ -3,7 +3,7 @@ using SharpMinerals.Blocks;
 namespace SharpMinerals.Entities.Components;
 
 /// <summary>A block currently falling through the world (sand/gravel that lost its support). The
-/// falling-block-specific payload — the carried block + its network id — composed with
+/// falling-block-specific payload - the carried block + its network id - composed with
 /// <see cref="GravityEntityComponent"/> and <see cref="BlockCollisionEntityComponent"/>.</summary>
 [Component]
 public struct FallingBlockEntityComponent {

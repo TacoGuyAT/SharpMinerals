@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The vanilla content "mod" (ModId "minecraft"): registers the default blocks/items/generator that used to
-       be hardcoded built-ins in the core registries. It's an ordinary mod built against the core PUBLIC API —
+       be hardcoded built-ins in the core registries. It's an ordinary mod built against the core PUBLIC API -
        the core engine carries no vanilla content, only the `sharpminerals` engine primitives (air/missing +
        player/item/falling_block). Hosts that want vanilla content reference this and load it first. -->
   <PropertyGroup>

@@ -7,7 +7,7 @@ namespace SharpMinerals.Network;
 
 /// <summary>
 /// Builds a 1.5.2 (protocol 61) Chunk Data (0x33) column, the pre-Anvil "SMP map" format: up to sixteen
-/// 16³ sections by bitmask. Payload order across all present sections: block ids, metadata, block light,
+/// 16^3 sections by bitmask. Payload order across all present sections: block ids, metadata, block light,
 /// sky light, then a 256-byte biome array; whole payload zlib-compressed. Light is full-bright; metadata/add unmodeled.
 /// </summary>
 public static class LegacyChunkSerializer {
@@ -19,7 +19,7 @@ public static class LegacyChunkSerializer {
     public static LegacyChunkDataS2C Build(TypeMapper types, World world, int cx, int cz) {
         int baseX = cx << 4, baseZ = cz << 4;
 
-        var present = new List<byte[]>(); // block-id arrays for non-empty sections, low → high
+        var present = new List<byte[]>(); // block-id arrays for non-empty sections, low -> high
         int primaryBitmap = 0;
 
         for (int sy = 0; sy < Sections; sy++) {

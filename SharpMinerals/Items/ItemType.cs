@@ -4,9 +4,9 @@ using SharpMinerals.Items.Components;
 
 namespace SharpMinerals.Items;
 
-/// <summary>A registered item type — a flyweight definition (one shared instance per kind) assembled from
-/// components. Everything beyond identity (stack size, placement, …) lives in components.
-/// <see cref="BlockType"/> derives from this — every block is also an item.</summary>
+/// <summary>A registered item type - a flyweight definition (one shared instance per kind) assembled from
+/// components. Everything beyond identity (stack size, placement, ...) lives in components.
+/// <see cref="BlockType"/> derives from this - every block is also an item.</summary>
 public class ItemType : ComponentObject {
     internal int ItemId { get; }
 
@@ -22,7 +22,7 @@ public class ItemType : ComponentObject {
     /// <summary>Override for <see cref="IsCustom"/>; null = the namespace-based default. Set via <c>.Custom(bool)</c>.</summary>
     internal bool? CustomOverride { get; set; }
 
-    /// <summary>Whether the client needs a custom name + identity marker for this item — i.e. it is NOT native
+    /// <summary>Whether the client needs a custom name + identity marker for this item - i.e. it is NOT native
     /// vanilla content (so it shows its real name and doesn't stack with the vanilla item it renders as). Auto:
     /// non-<c>minecraft</c> content (engine placeholders like <c>missing</c>, mod items) is custom, <c>minecraft</c>
     /// content is native. Override per-type with the fluent <see cref="ItemTypes.Custom{T}"/>.</summary>
@@ -39,7 +39,7 @@ public class ItemType : ComponentObject {
 
 /// <summary>Fluent helpers for item/block types.</summary>
 public static class ItemTypes {
-    /// <summary>Overrides <see cref="ItemType.IsCustom"/> (vs the namespace-based default) — e.g. a mod item that
+    /// <summary>Overrides <see cref="ItemType.IsCustom"/> (vs the namespace-based default) - e.g. a mod item that
     /// should render as a plain vanilla item (<c>custom: false</c>), or vanilla content shown distinctly.</summary>
     public static T Custom<T>(this T self, bool custom = true) where T : ItemType {
         self.CustomOverride = custom;

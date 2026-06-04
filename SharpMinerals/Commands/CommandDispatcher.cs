@@ -101,7 +101,7 @@ public sealed class CommandDispatcher {
     /// </summary>
     public (int Start, int Length, IReadOnlyList<string> Matches) Suggest(ISender sender, string text, NetClient? client = null) {
         // The vanilla client sends the whole input including the leading '/', so skip it for parsing but keep
-        // the returned Start in the client's full-input coordinates — else it replaces the wrong span.
+        // the returned Start in the client's full-input coordinates - else it replaces the wrong span.
         int offset = 0;
         if (text.StartsWith('/')) { text = text[1..]; offset = 1; }
         var suggestions = brig

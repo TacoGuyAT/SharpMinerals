@@ -3,10 +3,10 @@ using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.Network.Protocols.JE61.Codecs;
 
-// The 1.5.2 login handshake (0x02 → 0xFD → 0xFC → empty 0xFC → 0xCD → 0x01). Strings are UTF-16BE
+// The 1.5.2 login handshake (0x02 -> 0xFD -> 0xFC -> empty 0xFC -> 0xCD -> 0x01). Strings are UTF-16BE
 // (string16); the encryption blobs are short-length-prefixed byte arrays.
 
-// ── Serverbound ───────────────────────────────────────────────────────────────
+// -- Serverbound ---------------------------------------------------------------
 
 internal sealed class LegacyHandshakeC2SCodec : ICodec<LegacyHandshakeC2S> {
     public void Encode(MinecraftStream s, LegacyHandshakeC2S m) =>
@@ -46,7 +46,7 @@ internal sealed class LegacyPluginMessageC2SCodec : ICodec<LegacyPluginMessageC2
     public LegacyPluginMessageC2S Decode(MinecraftStream s) => new(s.ReadString16(), s.ReadByteArray16());
 }
 
-// ── Clientbound ───────────────────────────────────────────────────────────────
+// -- Clientbound ---------------------------------------------------------------
 
 internal sealed class LegacyEncryptionRequestS2CCodec : ICodec<LegacyEncryptionRequestS2C> {
     public void Encode(MinecraftStream s, LegacyEncryptionRequestS2C m) {

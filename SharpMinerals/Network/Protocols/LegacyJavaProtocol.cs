@@ -4,7 +4,7 @@ using SharpMinerals.Network.Buffers;
 namespace SharpMinerals.Network.Protocols;
 
 /// <summary>
-/// Base for the legacy (pre-Netty, ≤1.6) Java protocol family. A packet is just <c>[1-byte id][fields]</c>
+/// Base for the legacy (pre-Netty, <=1.6) Java protocol family. A packet is just <c>[1-byte id][fields]</c>
 /// with no length prefix, no compression, and no state partitioning (global ids). So fields decode straight
 /// off the live stream, an unknown id is unrecoverable (the stream desyncs), and all codecs use one fixed state.
 /// </summary>
@@ -24,8 +24,8 @@ public abstract class LegacyJavaProtocol : Protocol {
         int id = stream.ReadUByte();
         var codec = CodecFor(LegacyState, direction, id);
         if (codec is null)
-            // No length prefix ⇒ we can't skip an unknown packet; the connection is desynced.
-            throw new FormatException($"Unknown legacy packet id 0x{id:X2} ({direction}) — cannot resync.");
+            // No length prefix => we can't skip an unknown packet; the connection is desynced.
+            throw new FormatException($"Unknown legacy packet id 0x{id:X2} ({direction}) - cannot resync.");
         return codec.Decode(stream); // decodes straight off the live stream
     }
 

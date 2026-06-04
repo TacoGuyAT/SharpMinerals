@@ -5,7 +5,7 @@ using SharpMinerals.Items.Components;
 
 namespace SharpMinerals.Blocks;
 
-/// <summary>A registered block type — a flyweight definition assembled from components, and (since it derives
+/// <summary>A registered block type - a flyweight definition assembled from components, and (since it derives
 /// from <see cref="ItemType"/>) also an item, registered in the one <see cref="ItemRegistry"/>. Its inherited
 /// <see cref="ItemType.ItemId"/> is the unified item id; <see cref="BlockId"/> is the separate dense palette id
 /// stored in chunks. A block places itself by default; drops are NOT automatic without a <see cref="DropBlockDescriptor"/>.</summary>

@@ -30,7 +30,7 @@ public static class Streaming {
     public static void Restream(PlayerContext context) => Stream(context, initial: false);
 
     /// <summary>Streams just the column the player stands in (recentering first), so the client can place the
-    /// player on loaded terrain immediately — its "Loading terrain" gate releases once it has this chunk + the
+    /// player on loaded terrain immediately - its "Loading terrain" gate releases once it has this chunk + the
     /// position. The surrounding columns follow via <see cref="StreamInitial"/>, which skips this one.</summary>
     public static void StreamSpawnColumn(PlayerContext context) {
         var ecs = context.World.Ecs;

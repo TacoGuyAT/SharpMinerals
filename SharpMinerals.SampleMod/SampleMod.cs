@@ -15,7 +15,7 @@ public sealed class SampleMod : Mod {
     }
 
     public override void OnServerStarted(Server server) {
-        server.MOTD = "A SharpMinerals server — now modded! §6[Sample]";
+        server.MOTD = "A SharpMinerals server - now modded! §6[Sample]";
 
         // Greet each joiner with a tab-list header/footer, sent only to them via the audience predicate.
         server.Events.Subscribe<PlayerJoined>(e =>

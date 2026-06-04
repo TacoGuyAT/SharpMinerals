@@ -1,10 +1,10 @@
 namespace SharpMinerals;
 
 /// <summary>
-/// A namespaced content identifier — Minecraft's <c>namespace:path</c> "resource location" as a value type.
+/// A namespaced content identifier - Minecraft's <c>namespace:path</c> "resource location" as a value type.
 /// <see cref="Namespace"/> is the owner (<c>minecraft</c> for built-ins, a mod's id for modded content) and
 /// <see cref="Name"/> is the path. The full <c>namespace:path</c> string is computed ONCE in the constructor and
-/// cached — it's the key used by registries, persistence, and vanilla wire mapping, so it's read often.
+/// cached - it's the key used by registries, persistence, and vanilla wire mapping, so it's read often.
 /// </summary>
 public readonly struct Identifier : IEquatable<Identifier> {
     /// <summary>The namespace a bare path defaults to.</summary>

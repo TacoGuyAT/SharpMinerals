@@ -1,6 +1,6 @@
 namespace SharpMinerals.Blocks;
 
-/// <summary>A block-state property — a named axis with an ordered set of values (e.g.
+/// <summary>A block-state property - a named axis with an ordered set of values (e.g.
 /// <c>facing = north|south|west|east</c>). Addressed by index; order matches vanilla so the network layer
 /// can map a state to its vanilla id.</summary>
 public sealed class State {
@@ -30,7 +30,7 @@ public sealed class State {
 
     public override string ToString() => Name;
 
-    // ── Reusable vanilla-aligned properties ──────────────────────────────────
+    // -- Reusable vanilla-aligned properties ----------------------------------
     public static readonly State Facing = new("facing", "north", "south", "west", "east");
     public static readonly State SlabType = new("type", "bottom", "top", "double");
     public static readonly State Axis = new("axis", "x", "y", "z");

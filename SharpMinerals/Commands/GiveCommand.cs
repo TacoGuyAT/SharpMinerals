@@ -10,7 +10,7 @@ using SharpMinerals.Network.Messages;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// <c>/give &lt;item&gt; [count]</c> — adds an item (by registry name, tab-completed) to the issuing player's
+/// <c>/give &lt;item&gt; [count]</c> - adds an item (by registry name, tab-completed) to the issuing player's
 /// inventory and resyncs the window; whatever doesn't fit is reported as not given. Player-only.
 /// </summary>
 public static class GiveCommand {

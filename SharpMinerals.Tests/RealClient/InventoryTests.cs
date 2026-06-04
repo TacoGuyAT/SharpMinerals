@@ -12,7 +12,7 @@ namespace SharpMinerals.Tests.RealClient;
 /// pass/fail hinged on the server and test sharing the same (possibly wrong) interpretation of those codes.
 /// <para/>
 /// Each test runs in its own fresh world (the fixture disposes the previous), and seeds the exact slots it
-/// needs with creative <c>set</c> — inventory persists across world switches, so tests don't assume a fresh
+/// needs with creative <c>set</c> - inventory persists across world switches, so tests don't assume a fresh
 /// starter kit.
 /// </summary>
 [Collection(RealClientCollection.Name)]
@@ -28,7 +28,7 @@ public sealed class InventoryTests {
         await Task.Delay(300);
         Assert.Equal(0, await f.CountItems());
 
-        await f.Send("drop");            // Q (drop one) — a real Player Action packet
+        await f.Send("drop");            // Q (drop one) - a real Player Action packet
         await Task.Delay(1500);          // server spawns + announces, client renders
         Assert.Contains("x63", await f.Send("held"));
         Assert.Equal(1, await f.CountItems());
@@ -51,12 +51,12 @@ public sealed class InventoryTests {
         await Task.Delay(300);
         Assert.Equal(0, await f.CountItems());
 
-        await f.Send("click 0 36 0 0");  // left-click hotbar 0 → stack onto the cursor
+        await f.Send("click 0 36 0 0");  // left-click hotbar 0 -> stack onto the cursor
         await Task.Delay(400);
         Assert.Contains("stone", await f.Send("cursor"));
         Assert.Contains("air", await f.Send("slot 36"));
 
-        await f.Send("click 0 5 0 0");   // left-click the helmet slot → place the stack there
+        await f.Send("click 0 5 0 0");   // left-click the helmet slot -> place the stack there
         await Task.Delay(400);
         Assert.Contains("stone", await f.Send("slot 5"));
 
@@ -80,7 +80,7 @@ public sealed class InventoryTests {
         await f.Send("click 0 9 1 5");    // paint slots 9, 10, 11
         await f.Send("click 0 10 1 5");
         await f.Send("click 0 11 1 5");
-        await f.Send("click 0 -999 2 5"); // end left-drag → 64/3 = 21 each, remainder 1 on the cursor
+        await f.Send("click 0 -999 2 5"); // end left-drag -> 64/3 = 21 each, remainder 1 on the cursor
         await Task.Delay(500);
 
         Assert.Contains("x21", await f.Send("slot 9"));
@@ -104,7 +104,7 @@ public sealed class InventoryTests {
         Assert.Contains("stone", await f.Send("slot 9"));
         Assert.Contains("air", await f.Send("slot 36"));
 
-        // Creative clone (mode 3, middle-click) hotbar 1 (slot 37) → a full stack onto the cursor.
+        // Creative clone (mode 3, middle-click) hotbar 1 (slot 37) -> a full stack onto the cursor.
         await f.Send("click 0 37 2 3");
         await Task.Delay(400);
         var cursor = await f.Send("cursor");

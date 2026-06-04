@@ -43,7 +43,7 @@ public sealed class ContainerManager {
 
     int NextWindowId() => nextWindowId = nextWindowId % 100 + 1; // cycle 1..100
 
-    // ── Public API ──────────────────────────────────────────────────────────
+    // -- Public API ----------------------------------------------------------
 
     /// <summary>Registers the player as a viewer of the chest.</summary>
     public void Open(Server server, ulong clientId, BlockEntity chest) {
@@ -78,7 +78,7 @@ public sealed class ContainerManager {
             if (pinv is null) return;
 
             if (msg.Mode == 5) {
-                // A drag's start/add events change nothing yet; only its end distributes — resync only then.
+                // A drag's start/add events change nothing yet; only its end distributes - resync only then.
                 if (!HandleDrag(clientId, msg, s => TryResolve(window, pinv, s, out var inv, out var i) ? (inv, i) : null, ref window.Cursor))
                     return;
             } else {
@@ -126,7 +126,7 @@ public sealed class ContainerManager {
         }
     }
 
-    // ── Click application ─────────────────────────────────────────────────────
+    // -- Click application -----------------------------------------------------
 
     void ApplyClick(Server server, OpenWindow w, InventoryEntityComponent pinv, ClickContainerC2S msg) {
         if (msg.Mode == 1) {                           // shift-move targets are window-specific
@@ -151,7 +151,7 @@ public sealed class ContainerManager {
         var cursor = playerCursor.GetValueOrDefault(clientId);
 
         if (msg.Mode == 5) {
-            // A drag's start/add events change nothing yet; only its end distributes — resync only then.
+            // A drag's start/add events change nothing yet; only its end distributes - resync only then.
             bool ended = HandleDrag(clientId, msg, s => TryPlayerWindowToStorage(s, out var i) ? (pinv.Storage, i) : null, ref cursor);
             playerCursor[clientId] = cursor;
             if (!ended) return;
@@ -182,7 +182,7 @@ public sealed class ContainerManager {
     }
 
     // Processes a mode-5 drag event (start/add/end). Returns true only on the END event, after distributing
-    // the cursor across the painted slots — the caller resyncs then (start/add change nothing visible yet).
+    // the cursor across the painted slots - the caller resyncs then (start/add change nothing visible yet).
     bool HandleDrag(ulong clientId, ClickContainerC2S msg, Func<int, (InventoryComponent Inv, int Index)?> resolve, ref ItemStack cursor) {
         switch (msg.Button) {
             case 0 or 4 or 8:                                    // start: left / right / middle
@@ -244,7 +244,7 @@ public sealed class ContainerManager {
 
     static void Swap(ref ItemStack a, ref ItemStack b) => (a, b) = (b, a);
 
-    // Number-key (mode 2) swap target → backing storage slot: button 0-8 = that hotbar slot, 40 = off-hand.
+    // Number-key (mode 2) swap target -> backing storage slot: button 0-8 = that hotbar slot, 40 = off-hand.
     static bool HotbarSwapTarget(int button, out int storageIndex) {
         if (button is >= 0 and <= 8) { storageIndex = button; return true; }
         if (button == OffhandButton) { storageIndex = InventoryEntityComponent.MainSize + InventoryEntityComponent.ArmorSize; return true; }
@@ -268,15 +268,15 @@ public sealed class ContainerManager {
             ctx.World.TossItem(ctx.World.Ecs.Get<TransformEntityComponent>(ctx.Entity), dropped);
     }
 
-    // Shift-click in the player's own inventory: hotbar↔main, and armour/off-hand → main+hotbar.
+    // Shift-click in the player's own inventory: hotbar<->main, and armour/off-hand -> main+hotbar.
     static void PlayerShiftMove(InventoryEntityComponent pinv, int idx) {
         ref var src = ref pinv.Storage[idx];
         if (src.IsEmpty) return;
-        if (idx is >= 9 and <= 35)        // main storage → hotbar
+        if (idx is >= 9 and <= 35)        // main storage -> hotbar
             MoveWithinStorage(pinv.Storage, ref src, 0, 9);
-        else if (idx is >= 0 and <= 8)    // hotbar → main storage
+        else if (idx is >= 0 and <= 8)    // hotbar -> main storage
             MoveWithinStorage(pinv.Storage, ref src, 9, 36);
-        else                               // armour / off-hand → main + hotbar
+        else                               // armour / off-hand -> main + hotbar
             MoveWithinStorage(pinv.Storage, ref src, 0, 36);
     }
 
@@ -355,7 +355,7 @@ public sealed class ContainerManager {
     // Returns the cursor to the player's inventory; anything that doesn't fit is dropped for v1.
     static void PutIntoInventory(InventoryEntityComponent pinv, ref ItemStack stack) => stack = pinv.Add(stack);
 
-    // ── Slot layout (chest window): 0-26 chest, 27-53 player main(9-35), 54-62 hotbar(0-8) ──
+    // -- Slot layout (chest window): 0-26 chest, 27-53 player main(9-35), 54-62 hotbar(0-8) --
     static bool TryResolve(OpenWindow w, InventoryEntityComponent pinv, int windowSlot, out InventoryComponent inv, out int index) {
         if (windowSlot is >= 0 and < ChestSize) { inv = w.ChestInv; index = windowSlot; return true; }
         if (windowSlot is >= ChestSize and < ChestSize + 27) { inv = pinv.Storage; index = 9 + (windowSlot - ChestSize); return true; } // 27-53 -> storage 9-35
@@ -363,7 +363,7 @@ public sealed class ContainerManager {
         inv = null!; index = 0; return false;
     }
 
-    // ── Sending ───────────────────────────────────────────────────────────────
+    // -- Sending ---------------------------------------------------------------
 
     void SendContent(Server server, OpenWindow w, InventoryEntityComponent pinv) {
         var slots = new ItemStack[ChestWindowSlots];
@@ -380,7 +380,7 @@ public sealed class ContainerManager {
             }
     }
 
-    // ── Player inventory window (id 0): 0-4 crafting, 5-8 armor, 9-35 main, 36-44 hotbar, 45 offhand ──
+    // -- Player inventory window (id 0): 0-4 crafting, 5-8 armor, 9-35 main, 36-44 hotbar, 45 offhand --
     public const int PlayerWindowSlots = 46;
 
     /// <summary>Window id 0.</summary>
@@ -407,7 +407,7 @@ public sealed class ContainerManager {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // -- Helpers -------------------------------------------------------------
 
     static InventoryEntityComponent? PlayerInv(Server server, ulong clientId) =>
         server.TryGetPlayer(clientId, out var h) && h.World.Ecs.IsAlive(h.Entity)

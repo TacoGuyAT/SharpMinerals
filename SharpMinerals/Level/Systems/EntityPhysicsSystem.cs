@@ -16,7 +16,7 @@ public sealed class EntityPhysicsSystem : ITickable {
     const double Drag = 0.98;
     const double GroundFriction = 0.6;
     const double CollisionEpsilon = 1e-4;
-    // Below this per-tick displacement an entity is at rest — no move event (else a settling item spams it).
+    // Below this per-tick displacement an entity is at rest - no move event (else a settling item spams it).
     const double MoveEpsilon = 1e-3;
 
     static readonly QueryDescription PhysicsQuery =

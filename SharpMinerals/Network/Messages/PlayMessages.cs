@@ -5,7 +5,7 @@ using SharpMinerals.Math;
 
 namespace SharpMinerals.Network.Messages;
 
-// ── Play: clientbound ───────────────────────────────────────────────────────
+// -- Play: clientbound -------------------------------------------------------
 
 /// <summary>Bundle delimiter (0x00): brackets a group of packets the client must apply together in one tick.</summary>
 public sealed record BundleDelimiterS2C : IMessage;
@@ -25,7 +25,7 @@ public sealed record JoinGameS2C(
 /// </summary>
 public sealed record RespawnS2C(string DimensionType, string WorldName, long HashedSeed, byte GameMode, bool IsFlat) : IMessage;
 
-/// <summary>Server → client liveness probe; the client echoes the id back.</summary>
+/// <summary>Server -> client liveness probe; the client echoes the id back.</summary>
 public sealed record KeepAliveS2C(long Id) : IMessage;
 
 public sealed record SetHealthS2C(float Health, int Food, float Saturation) : IMessage;
@@ -71,14 +71,14 @@ public sealed record SpawnEntityS2C(
     BlockType? BlockData = null) : IMessage;
 
 /// <summary>Set Entity Velocity (0x54): an entity's velocity in units of 1/8000 of a block per tick.
-/// The client applies this explicitly — more reliable than the velocity carried by Spawn Entity.</summary>
+/// The client applies this explicitly - more reliable than the velocity carried by Spawn Entity.</summary>
 public sealed record SetEntityVelocityS2C(int EntityId, short VelocityX, short VelocityY, short VelocityZ) : IMessage;
 
 /// <summary>Collect Item (0x67): plays the "item flies into the collector" pickup animation. Purely
-/// cosmetic — the item entity is still removed separately (Remove Entities) or its count updated.</summary>
+/// cosmetic - the item entity is still removed separately (Remove Entities) or its count updated.</summary>
 public sealed record CollectItemS2C(int CollectedEntityId, int CollectorEntityId, int PickupItemCount) : IMessage;
 
-// ── Play: serverbound ───────────────────────────────────────────────────────
+// -- Play: serverbound -------------------------------------------------------
 
 public sealed record KeepAliveC2S(long Id) : IMessage;
 

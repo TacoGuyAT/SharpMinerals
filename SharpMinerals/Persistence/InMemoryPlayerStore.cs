@@ -4,7 +4,7 @@ using SharpMinerals.Entities;
 namespace SharpMinerals.Persistence;
 
 /// <summary>Default <see cref="IPlayerStore"/>: keeps state in a dictionary for the process lifetime
-/// (survives reconnects, not restarts). Holds live snapshots directly — no serialization.</summary>
+/// (survives reconnects, not restarts). Holds live snapshots directly - no serialization.</summary>
 public sealed class InMemoryPlayerStore : IPlayerStore {
     readonly ConcurrentDictionary<Guid, PlayerState> byUuid = new();
 

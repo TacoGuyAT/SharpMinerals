@@ -35,7 +35,7 @@ public abstract class ModernJavaProtocol : Protocol {
 
         var codec = CodecFor(state, direction, id);
         if (codec is null) {
-            Log.LogDebug("unknown packet 0x{Id:X2} in {State} — ignored", id, state);
+            Log.LogDebug("unknown packet 0x{Id:X2} in {State} - ignored", id, state);
             return null;
         }
         return codec.Decode(payload);

@@ -27,7 +27,7 @@ public interface IOnLand { void OnLand(in BlockContext ctx); }
 public interface IRedstoneActivated { void OnRedstoneActivated(in BlockContext ctx); }
 
 /// <summary>A descriptor for a block that carries a block entity (a "tile entity": a chest's contents, a sign's
-/// text, …). Drives <see cref="BlockType.IsBlockEntity"/> (so the chunk packet lists the block even before its
+/// text, ...). Drives <see cref="BlockType.IsBlockEntity"/> (so the chunk packet lists the block even before its
 /// instance exists), and <see cref="Initialize"/> sets up a freshly-created <see cref="BlockEntity"/>'s components
 /// (e.g. a container's inventory). Instances are materialized lazily through the one funnel
 /// <see cref="Level.World.GetOrCreateBlockEntity"/>, so the initializer runs exactly once per instance.</summary>

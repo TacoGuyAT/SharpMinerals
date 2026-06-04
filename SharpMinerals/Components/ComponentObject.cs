@@ -6,7 +6,7 @@ namespace SharpMinerals.Components;
 public class ComponentObject {
     readonly Dictionary<Type, object> components = new();
 
-    /// <summary>The component of type <typeparamref name="T"/> (throws if absent — guard with <see cref="Has{T}"/>/<see cref="TryGet{T}"/>).</summary>
+    /// <summary>The component of type <typeparamref name="T"/> (throws if absent - guard with <see cref="Has{T}"/>/<see cref="TryGet{T}"/>).</summary>
     public T Get<T>() => (T)components[typeof(T)];
 
     public bool Has<T>() => components.ContainsKey(typeof(T));
@@ -20,7 +20,7 @@ public class ComponentObject {
         return false;
     }
 
-    /// <summary>Every component assignable to <typeparamref name="T"/> — used to dispatch a behavior to all
+    /// <summary>Every component assignable to <typeparamref name="T"/> - used to dispatch a behavior to all
     /// components implementing its interface. Matches by assignability, not the exact-type key of <see cref="Get{T}"/>.</summary>
     public IEnumerable<T> GetAll<T>() => components.Values.OfType<T>();
 
@@ -51,7 +51,7 @@ public static class ComponentObjects {
     }
 
     /// <summary>Copies the <typeparamref name="TComponent"/> component from <paramref name="source"/> onto
-    /// <paramref name="self"/> (the shared flyweight instance, by reference), if present — a no-op otherwise.
+    /// <paramref name="self"/> (the shared flyweight instance, by reference), if present - a no-op otherwise.
     /// Lets a definition borrow one behavior from another (e.g. <c>.Copy&lt;Stackable&gt;(otherItem)</c>). Returns
     /// <paramref name="self"/>; specifying the component type explicitly means the self type isn't preserved, so
     /// chain it after the self-typed calls or use it as a statement.</summary>

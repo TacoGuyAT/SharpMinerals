@@ -63,7 +63,7 @@ public sealed class ServerPacketHandler {
                 HandleLegacyPing(client);
                 break;
 
-            // Legacy (1.5.2) login handshake: 0x02 → 0xFD → 0xFC → enable AES → 0xCD → 0x01.
+            // Legacy (1.5.2) login handshake: 0x02 -> 0xFD -> 0xFC -> enable AES -> 0xCD -> 0x01.
             case LegacyHandshakeC2S hs:
                 HandleLegacyHandshake(client, hs);
                 break;
@@ -94,7 +94,7 @@ public sealed class ServerPacketHandler {
         string name = Disambiguate(requestedName);
         client.PlayerName = name;
         var uuid = OfflineUuid(name);
-        Log.LogInformation("Login (offline) for {Name} → {Uuid}", name, uuid);
+        Log.LogInformation("Login (offline) for {Name} -> {Uuid}", name, uuid);
 
         client.Send(new LoginSuccessS2C(uuid, name));
         client.State = ConnectionState.Play;
@@ -155,7 +155,7 @@ public sealed class ServerPacketHandler {
             server.PlayerCount.ToString(), server.MaxPlayers.ToString());
         Log.LogInformation("#{Client} legacy ({Version}) server-list ping", client.Id, p.VersionName);
         client.Send(new LegacyKickS2C(status));
-        // Do NOT close: 1.5.2 clients race — closing right after 0xFF resets the connection before they read it.
+        // Do NOT close: 1.5.2 clients race - closing right after 0xFF resets the connection before they read it.
         // Let the client close on receipt; the receive loop ends on EOF.
     }
 

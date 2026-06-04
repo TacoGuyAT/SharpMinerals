@@ -18,7 +18,7 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     readonly World world;
     // Collected during the query, processed after (mutating inventories/despawning mid-iteration is unsafe).
     readonly List<(ArchEntity Collector, ArchEntity Drop)> pending = new();
-    readonly List<(ArchEntity Collector, int NetId, int Count, ItemStack Leftover)> collected = new(); // Tick → Flush hand-off
+    readonly List<(ArchEntity Collector, int NetId, int Count, ItemStack Leftover)> collected = new(); // Tick -> Flush hand-off
 
     public ItemPickupSystem(World world) => this.world = world;
 
@@ -40,13 +40,13 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
             int original = pickup.Stack.Count;
             var leftover = inventory.Add(pickup.Stack);
             int picked = original - leftover.Count;
-            if (picked <= 0) continue; // inventory full — nothing taken
+            if (picked <= 0) continue; // inventory full - nothing taken
 
             int netId = pickup.EntityId;
             if (leftover.IsEmpty)
                 world.DestroyEntity(drop);
             else
-                pickup.Stack = leftover; // partial pickup — the rest stays on the ground
+                pickup.Stack = leftover; // partial pickup - the rest stays on the ground
 
             collected.Add((collector, netId, picked, leftover));
         }

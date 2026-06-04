@@ -13,7 +13,7 @@ namespace SharpMinerals.Level.Systems;
 /// <summary>Owns falling blocks (sand/gravel) end to end: detects when one rests on the ground and fires its
 /// <see cref="IOnLand"/> reaction (re-place, pop as an item, or whatever the block type defines), and projects
 /// the spawn + landing to clients via <see cref="INetworkSystem"/>. Because sim and its client view live in the
-/// one class, the landing hand-off is just a field — no ECS tag or extra query.</summary>
+/// one class, the landing hand-off is just a field - no ECS tag or extra query.</summary>
 public sealed class FallingBlockSystem : ITickable, INetworkSystem {
     static readonly QueryDescription LiveQuery =
         new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent>();
@@ -25,23 +25,23 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
 
     readonly World world;
     readonly List<(ArchEntity Entity, BlockType Block, Vector3i Cell)> grounded = new();
-    readonly List<(int NetId, Vector3i Cell)> landed = new(); // Tick → Flush hand-off (sequential phases, same instance)
+    readonly List<(int NetId, Vector3i Cell)> landed = new(); // Tick -> Flush hand-off (sequential phases, same instance)
 
     public FallingBlockSystem(World world) => this.world = world;
 
     /// <summary>If the block at <paramref name="pos"/> is gravity-bound with air beneath it, detaches it into a
     /// falling-block entity (clearing + broadcasting the cell) and walks up the column so a whole stack detaches
-    /// at once. Called from placement/break, not the tick — hence static, taking the server + world directly.</summary>
+    /// at once. Called from placement/break, not the tick - hence static, taking the server + world directly.</summary>
     public static void TryStartFalling(Server server, World world, Vector3i pos) {
         var block = world.GetBlock(pos);
         if (!block.Has<FallingBlockDescriptor>()) return;
-        if (!world.GetBlock(pos + Down).IsAir) return; // still supported — stays put
+        if (!world.GetBlock(pos + Down).IsAir) return; // still supported - stays put
 
         world.SetBlock(pos, BlockRegistry.Air);
         server.BroadcastInRange(world, pos.X + 0.5, pos.Z + 0.5, new BlockUpdateS2C(pos, BlockRegistry.Air));
         world.SpawnFallingBlock(pos, block);
 
-        TryStartFalling(server, world, pos + Up); // the block above lost its support too — propagate up
+        TryStartFalling(server, world, pos + Up); // the block above lost its support too - propagate up
     }
 
     public void Tick() {

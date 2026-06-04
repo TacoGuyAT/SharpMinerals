@@ -10,7 +10,7 @@ namespace SharpMinerals.Tests.RealClient;
 /// Real-client movement + chunk-streaming. Drives the SharpTester client's Baritone <c>goto</c> across chunk
 /// boundaries: the client can only path forward if the server streams the terrain ahead as it moves, so a
 /// player that actually arrives several chunks away proves both movement handling and chunk streaming. Runs in
-/// the flat lobby world (walkable terrain). This is the baseline before the PlayerMoved→systems conversion.
+/// the flat lobby world (walkable terrain). This is the baseline before the PlayerMoved->systems conversion.
 /// </summary>
 [Collection(RealClientCollection.Name)]
 [TestCaseOrderer(OrderedTestCaseOrderer.Type, OrderedTestCaseOrderer.Assembly)]
@@ -18,7 +18,7 @@ public sealed class MovementTests {
     readonly RealClientFixture f;
     public MovementTests(RealClientFixture f) => this.f = f;
 
-    // "pos 0.50 65.00 0.50 yaw 0.0 pitch 0.0" → the X / Y coordinate.
+    // "pos 0.50 65.00 0.50 yaw 0.0 pitch 0.0" -> the X / Y coordinate.
     static double PosX(string reply) => double.Parse(reply.Split(' ')[1], CultureInfo.InvariantCulture);
     static double PosY(string reply) => double.Parse(reply.Split(' ')[2], CultureInfo.InvariantCulture);
 
@@ -26,7 +26,7 @@ public sealed class MovementTests {
     public async Task SpawnsOnTheSurface() {
         var pos = await f.Send("pos");
         Assert.True(System.Math.Abs(PosY(pos) - WorldDefaults.SurfaceY) < 1.5,
-            $"player should spawn on the flat surface (Y≈{WorldDefaults.SurfaceY}), got '{pos}'");
+            $"player should spawn on the flat surface (Y~{WorldDefaults.SurfaceY}), got '{pos}'");
     }
 
     [RealClientFact, Order(2)]

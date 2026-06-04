@@ -22,7 +22,7 @@ public abstract class Protocol {
 
     TypeMapper? typeMapper;
 
-    /// <summary>This version's block/item ⇆ wire-id mapper — the single data-driven <see cref="TypeMapper"/>
+    /// <summary>This version's block/item <-> wire-id mapper - the single data-driven <see cref="TypeMapper"/>
     /// resolved for THIS protocol type from the registered mappings. Codecs read it off the stream during encode.</summary>
     public TypeMapper Types => typeMapper ??= new TypeMapper(GetType());
 

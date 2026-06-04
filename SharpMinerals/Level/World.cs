@@ -53,13 +53,13 @@ public class World : ITickable {
             new Systems.FallingBlockSystem(this),       // lands falling blocks using that ground-contact feedback
             new Systems.CollisionFeedbackSystem(this),  // entity-vs-entity overlap, on settled positions
             new Systems.ItemPickupSystem(this),         // collects overlapped drops into player inventories
-            new Systems.EquipmentVisibilitySystem(this),// diffs each player's equipment → others (post-tick)
-            new Systems.PlayerMovementSystem(this),     // relays each player's movement → others (post-tick)
+            new Systems.EquipmentVisibilitySystem(this),// diffs each player's equipment -> others (post-tick)
+            new Systems.PlayerMovementSystem(this),     // relays each player's movement -> others (post-tick)
             new Systems.ChunkStreamingSystem(this),     // streams columns as a player crosses chunks (post-tick)
         };
     }
 
-    // ── Chunks ──────────────────────────────────────────────────────────────
+    // -- Chunks --------------------------------------------------------------
     /// <summary>Gets a chunk by chunk coordinate, loading it from the store (or generating) on first access.</summary>
     public Chunk GetChunk(Vector3i chunkPosition) =>
         loadedChunks.GetOrAdd(chunkPosition, LoadOrGenerate);
@@ -96,7 +96,7 @@ public class World : ITickable {
             if (IsKept(pos.X, pos.Z, keptCenters, keepRadius))
                 continue;
             if (chunk.Dirty) {
-                if (store is null) continue; // no backend — keep it rather than lose the edit
+                if (store is null) continue; // no backend - keep it rather than lose the edit
                 store.SaveChunk(Name, pos, ChunkCodec.Serialize(chunk));
             }
             loadedChunks.TryRemove(pos, out _);
@@ -105,7 +105,7 @@ public class World : ITickable {
         return evicted;
 
         static bool IsKept(long cx, long cz, IReadOnlyList<(long X, long Z)>? centers, int radius) {
-            if (centers is null) return false; // no viewers in this world → evict everything
+            if (centers is null) return false; // no viewers in this world -> evict everything
             foreach (var c in centers)
                 if (System.Math.Abs(cx - c.X) <= radius && System.Math.Abs(cz - c.Z) <= radius)
                     return true;
@@ -113,7 +113,7 @@ public class World : ITickable {
         }
     }
 
-    // ── Blocks ──────────────────────────────────────────────────────────────
+    // -- Blocks --------------------------------------------------------------
     public BlockType GetBlock(Vector3i pos) {
         var chunk = GetChunk(pos.ToChunk());
         pos = pos.ToLocal();
@@ -132,7 +132,7 @@ public class World : ITickable {
     public bool RemoveBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).RemoveBlockEntity(pos);
 
     /// <summary>The block entity at <paramref name="pos"/>, creating and initializing one (via the block's
-    /// <see cref="IBlockEntityDescriptor"/>) if the block carries a block entity but none exists yet — the one
+    /// <see cref="IBlockEntityDescriptor"/>) if the block carries a block entity but none exists yet - the one
     /// funnel for materializing instances, so the initializer runs exactly once. Null if the block at
     /// <paramref name="pos"/> carries no block entity.</summary>
     public BlockEntity? GetOrCreateBlockEntity(Vector3i pos) {
@@ -184,7 +184,7 @@ public class World : ITickable {
     }
 
     /// <summary>Places a block at <paramref name="pos"/> if the space is air AND no solid entity is standing in
-    /// it — like vanilla, you can't place a block inside a player's (or mob's) collision box.</summary>
+    /// it - like vanilla, you can't place a block inside a player's (or mob's) collision box.</summary>
     public bool PlaceBlock(Vector3i pos, BlockType block) {
         if (!GetBlock(pos).IsAir)
             return false;
@@ -201,7 +201,7 @@ public class World : ITickable {
 
     /// <summary>Whether an entity whose hitbox declares <see cref="CollisionUsage.Placement"/> overlaps the unit
     /// cube at <paramref name="pos"/>. Any such entity (players, future mobs) blocks placement; entities without
-    /// the flag (dropped items, falling blocks) don't — no per-type special-casing.</summary>
+    /// the flag (dropped items, falling blocks) don't - no per-type special-casing.</summary>
     bool IsObstructedByEntity(Vector3i pos) {
         double bx = pos.X, by = pos.Y, bz = pos.Z; // block cube spans [b, b+1] on each axis
         var candidates = new List<ArchEntity>();
@@ -212,7 +212,7 @@ public class World : ITickable {
             if (!box.Usage.HasFlag(CollisionUsage.Placement)) continue;
             var t = Ecs.Get<TransformEntityComponent>(e);
             double hw = box.HalfWidth, h = box.Height, tx = t.X, ty = t.Y, tz = t.Z;
-            // AABB overlap between the entity hitbox [X±hw]×[Y,Y+h]×[Z±hw] and the block cube.
+            // AABB overlap between the entity hitbox [X+/-hw]x[Y,Y+h]x[Z+/-hw] and the block cube.
             if (tx - hw < bx + 1 && tx + hw > bx &&
                 ty      < by + 1 && ty + h   > by &&
                 tz - hw < bz + 1 && tz + hw > bz)
@@ -221,12 +221,12 @@ public class World : ITickable {
         return false;
     }
 
-    // ── Entities ────────────────────────────────────────────────────────────
+    // -- Entities ------------------------------------------------------------
     public SpatialIndex Entities { get; }
 
     /// <summary>Materialises an entity of <paramref name="type"/> from its blueprint at <paramref name="transform"/>:
     /// creates and type-tags it (<see cref="EntityType.Create"/>), sets its transform, and registers it in the spatial
-    /// index. Callers then assign any per-instance components via <c>Ecs.Get&lt;T&gt;(e) = …</c>. This is the single
+    /// index. Callers then assign any per-instance components via <c>Ecs.Get&lt;T&gt;(e) = ...</c>. This is the single
     /// path every spawn flows through, so the spatial-index registration can never be forgotten.</summary>
     public ArchEntity Spawn(EntityType type, TransformEntityComponent transform) {
         var entity = type.Create(Ecs);
@@ -247,7 +247,7 @@ public class World : ITickable {
     }
 
     /// <summary>Spawns a dropped-item entity at an explicit world position with an explicit velocity and
-    /// pickup delay — the primitive behind both block-break drops and player tosses.</summary>
+    /// pickup delay - the primitive behind both block-break drops and player tosses.</summary>
     public ArchEntity SpawnItem(double x, double y, double z, VelocityEntityComponent velocity, ItemStack stack, int pickupDelay) {
         var entity = Spawn(EntityRegistry.Item, new TransformEntityComponent(x, y, z));
         Ecs.Get<VelocityEntityComponent>(entity) = velocity;
@@ -292,7 +292,7 @@ public class World : ITickable {
     public int PlayerCount => Ecs.CountEntities(in PlayerQuery);
 
     /// <summary>Tears the world down: stops ticking, releases loaded chunks, and frees the ECS storage.
-    /// Not idempotent — the world must not be used afterwards.</summary>
+    /// Not idempotent - the world must not be used afterwards.</summary>
     public void Unload() {
         IsActive = false;
         loadedChunks.Clear();
@@ -305,7 +305,7 @@ public class World : ITickable {
         foreach (var system in systems)
             system.Tick();
 
-        // Block entities (furnaces, …) per loaded chunk.
+        // Block entities (furnaces, ...) per loaded chunk.
         foreach (var chunk in loadedChunks.Values)
             chunk.Tick();
     }

@@ -8,7 +8,7 @@ using SharpMinerals.Network.Buffers;
 namespace SharpMinerals.Persistence;
 
 /// <summary>Serializes a <see cref="Chunk"/> to a self-describing <c>byte[]</c>. Uses a chunk-local palette
-/// header (distinct block NAMES written once, then each cell references a palette index — compact and
+/// header (distinct block NAMES written once, then each cell references a palette index - compact and
 /// id-shift safe), followed by sparse per-cell states and block entities.</summary>
 public static class ChunkCodec {
     const byte Version = 1;
@@ -19,7 +19,7 @@ public static class ChunkCodec {
         var s = new MinecraftStream(ms);
         s.WriteUByte(Version);
 
-        // Palette header: distinct block ids → names, in first-seen order.
+        // Palette header: distinct block ids -> names, in first-seen order.
         var raw = chunk.RawStates;
         var indexOf = new Dictionary<ushort, int>();
         var names = new List<string>();
@@ -31,7 +31,7 @@ public static class ChunkCodec {
 
         foreach (var id in raw) s.WriteVarInt(indexOf[id]); // dense cells as palette indices
 
-        // Sparse per-cell block states (chest facing, wool colour, …).
+        // Sparse per-cell block states (chest facing, wool colour, ...).
         s.WriteVarInt(chunk.CellStates.Count);
         foreach (var (cell, state) in chunk.CellStates) {
             s.WriteVarInt(cell);
@@ -58,7 +58,7 @@ public static class ChunkCodec {
         int paletteCount = s.ReadVarInt();
         var palette = new ushort[paletteCount];
         for (int i = 0; i < paletteCount; i++)
-            palette[i] = (ushort)(BlockRegistry.FromName(s.ReadString())?.BlockId ?? 0); // dropped block → air
+            palette[i] = (ushort)(BlockRegistry.FromName(s.ReadString())?.BlockId ?? 0); // dropped block -> air
         for (int i = 0; i < Volume; i++)
             raw[i] = palette[s.ReadVarInt()];
 
@@ -76,7 +76,7 @@ public static class ChunkCodec {
         for (int i = 0; i < entityCount; i++)
             chunk.SetBlockEntity(ReadEntity(s));
 
-        chunk.ClearDirty(); // freshly loaded — the baseline, not a pending change
+        chunk.ClearDirty(); // freshly loaded - the baseline, not a pending change
         return chunk;
     }
 

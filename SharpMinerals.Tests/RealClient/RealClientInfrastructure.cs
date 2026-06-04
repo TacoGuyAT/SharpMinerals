@@ -8,7 +8,7 @@ using Xunit.Sdk;
 namespace SharpMinerals.Tests.RealClient;
 
 /// <summary>The single collection that shares one <see cref="RealClientFixture"/> (one server, one connected
-/// client) and runs its tests serially — there is only one client to drive.</summary>
+/// client) and runs its tests serially - there is only one client to drive.</summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class RealClientCollection : ICollectionFixture<RealClientFixture> {
     public const string Name = "RealClient";

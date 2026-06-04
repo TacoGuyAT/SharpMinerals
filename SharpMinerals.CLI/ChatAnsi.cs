@@ -37,7 +37,7 @@ static class ChatAnsi {
         return s;
     }
 
-    // Vanilla colour name → nearest ANSI colour (dark_* to non-bright); a hex #rrggbb renders as truecolor.
+    // Vanilla colour name -> nearest ANSI colour (dark_* to non-bright); a hex #rrggbb renders as truecolor.
     static AnsiStyle ApplyColour(AnsiStyle s, string name) => name switch {
         "black" => s.Black,
         "dark_blue" => s.Blue,

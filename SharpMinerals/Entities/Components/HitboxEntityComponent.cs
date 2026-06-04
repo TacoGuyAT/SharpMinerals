@@ -8,13 +8,13 @@ public enum CollisionUsage : byte {
     None = 0,
     /// <summary>Swept against terrain by the physics step (gravity-driven items, falling blocks).</summary>
     Physics = 1 << 0,
-    /// <summary>Obstructs block placement — a player/mob standing in the target cell prevents it.</summary>
+    /// <summary>Obstructs block placement - a player/mob standing in the target cell prevents it.</summary>
     Placement = 1 << 1,
 }
 
 /// <summary>An entity's true physical collision box: axis-aligned, centred on its transform in X/Z, rising
 /// <see cref="Height"/> from its feet. <see cref="Usage"/> declares which interactions it takes part in. This is
-/// the REAL hitbox (e.g. a player is 0.6×1.8) — distinct from <see cref="InteractionReachEntityComponent"/>, the
+/// the REAL hitbox (e.g. a player is 0.6x1.8) - distinct from <see cref="InteractionReachEntityComponent"/>, the
 /// larger proximity box used for nearby interactions like item pickup.</summary>
 [Component]
 public struct HitboxEntityComponent {

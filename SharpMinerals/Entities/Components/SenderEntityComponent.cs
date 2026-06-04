@@ -11,7 +11,7 @@ namespace SharpMinerals.Entities.Components;
 public struct SenderEntityComponent : ISender {
     public string SenderName;
     /// <summary>The backing connection (chat delivery + the command source's player identity), injected when
-    /// the entity is added. Null for a non-client sender (e.g. a mob), or before wiring — a safe no-op then.</summary>
+    /// the entity is added. Null for a non-client sender (e.g. a mob), or before wiring - a safe no-op then.</summary>
     public NetClient? Client;
 
     public readonly string Name => SenderName;

@@ -10,10 +10,10 @@ namespace SharpMinerals.Modding;
 /// Base class for a SharpMinerals mod, subclassed with <see cref="ModInfoAttribute"/> and driven by the
 /// <see cref="ModLoader"/>. Lifecycle, in order:
 /// <list type="number">
-/// <item><see cref="OnInitialize"/> — register content and apply Harmony patches; runs before the server and
+/// <item><see cref="OnInitialize"/> - register content and apply Harmony patches; runs before the server and
 /// protocols are built.</item>
-/// <item><see cref="OnServerStarted"/> — server is running: register commands, subscribe to events, etc.</item>
-/// <item><see cref="OnServerStopping"/> — server is shutting down: release mod-owned resources.</item>
+/// <item><see cref="OnServerStarted"/> - server is running: register commands, subscribe to events, etc.</item>
+/// <item><see cref="OnServerStopping"/> - server is shutting down: release mod-owned resources.</item>
 /// </list>
 /// </summary>
 public abstract class Mod {
@@ -24,7 +24,7 @@ public abstract class Mod {
 
 #if !AOT
     /// <summary>A Harmony instance scoped to this mod (id = <see cref="ModInfoAttribute.ModId"/>). Call
-    /// <c>PatchAll()</c> from <see cref="OnInitialize"/> to apply the mod's patches. JIT builds only — runtime
+    /// <c>PatchAll()</c> from <see cref="OnInitialize"/> to apply the mod's patches. JIT builds only - runtime
     /// patching is unavailable under Native AOT.</summary>
     public Harmony Harmony { get; internal set; } = null!;
 #endif

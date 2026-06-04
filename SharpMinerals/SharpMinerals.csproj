@@ -15,14 +15,14 @@
        from $(AOT); HarmonyX below and the host's RocksDb references gate on the same property. -->
 
   <!-- The test project is allowed white-box access to internals (capture doubles, etc.);
-       host apps are NOT — they must use the public API only, which keeps it embeddable. -->
+       host apps are NOT - they must use the public API only, which keeps it embeddable. -->
   <ItemGroup>
     <InternalsVisibleTo Include="SharpMinerals.Tests" />
   </ItemGroup>
 
-  <!-- Test/diagnostic seams (the self-test + dump CLIs, the server→client control channel, the in-process
+  <!-- Test/diagnostic seams (the self-test + dump CLIs, the server->client control channel, the in-process
        harness's reply event) are guarded by TEST_HARNESS. Defined in every configuration so the real-client
-       test project — which references these seams — compiles in Release as well as Debug. (The CLI keeps its
+       test project - which references these seams - compiles in Release as well as Debug. (The CLI keeps its
        own Debug-only gating, so the shipped server still excludes the /test command and dump entry points.) -->
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
@@ -39,7 +39,7 @@
 
   <ItemGroup>
     <PackageReference Include="Arch" Version="2.1.0" />
-    <!-- Abstractions ONLY — the concrete logging backend (ZLogger) lives in the host (SharpMinerals.CLI). -->
+    <!-- Abstractions ONLY - the concrete logging backend (ZLogger) lives in the host (SharpMinerals.CLI). -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
     <!-- Brigadier.NET: the command tree/parser (official Brigadier API), which also powers tab-completion.
          FastCache: caches parsed commands (the parse step is the costly one). Both live in core with the

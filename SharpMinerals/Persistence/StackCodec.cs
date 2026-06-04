@@ -5,7 +5,7 @@ using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Persistence;
 
-/// <summary>Shared <see cref="ItemStack"/> ⇆ bytes for the persistence codecs. Items are written by registry
+/// <summary>Shared <see cref="ItemStack"/> <-> bytes for the persistence codecs. Items are written by registry
 /// NAME (not flyweight identity) and any carried state by property values, so a stack resolves to the same
 /// definition on load even as internal ids shift.</summary>
 internal static class StackCodec {
@@ -29,7 +29,7 @@ internal static class StackCodec {
         var type = Resolve(s.ReadString());
         var stack = new ItemStack(type, s.ReadVarInt());
 
-        // State present iff the type is a stateful block — mirrors what Write emitted.
+        // State present iff the type is a stateful block - mirrors what Write emitted.
         if (s.ReadBool() && type is BlockType bt && bt.TryGet<StatesBlockDescriptor>(out var sp)) {
             var bs = new BlockState(bt);
             foreach (var property in sp.States) bs.Set(property, s.ReadVarInt());

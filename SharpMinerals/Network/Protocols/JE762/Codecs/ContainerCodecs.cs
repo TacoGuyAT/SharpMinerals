@@ -12,7 +12,7 @@ internal static class SlotWire {
             s.WriteEmptySlot();
             return;
         }
-        int id = s.Types!.ItemId(stack); // stack-aware (wool colour, …)
+        int id = s.Types!.ItemId(stack); // stack-aware (wool colour, ...)
 
         // A mod-added type renders as the fallback item; attach NBT (custom name + identity marker) so the
         // client tells it apart and won't stack it with the fallback or other customs. Vanilla types write a plain slot.
@@ -27,10 +27,10 @@ internal static class SlotWire {
     }
 
     /// <summary>Reads a wire Slot back into our <see cref="ItemStack"/> (inverse of <see cref="WriteStack"/>),
-    /// preferring the custom-type NBT marker. Not-present → empty stack (clear); a present unmappable item → null.</summary>
+    /// preferring the custom-type NBT marker. Not-present -> empty stack (clear); a present unmappable item -> null.</summary>
     public static ItemStack? ReadStack(MinecraftStream s) {
         if (!s.ReadBool())
-            return default(ItemStack); // not present — a deliberately empty slot
+            return default(ItemStack); // not present - a deliberately empty slot
         int id = s.ReadVarInt();
         int count = s.ReadByte2();
         var nbt = NbtReader.ReadItemNbt(s);
@@ -51,7 +51,7 @@ internal static class SlotWire {
         var display = new NbtCompound().Put("Name", CustomNameJson(type));
         return new NbtCompound()
             .Put("display", display)
-            // Distinct per custom type → the client won't merge customs/fallback into one stack, and the
+            // Distinct per custom type -> the client won't merge customs/fallback into one stack, and the
             // server recovers the exact type (its full namespaced id) when the client sends the slot back.
             .Put(CustomTypeKey, type.Id.Full);
     }
@@ -69,7 +69,7 @@ internal static class SlotWire {
     static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }
 
-// ── Clientbound ───────────────────────────────────────────────────────────────
+// -- Clientbound ---------------------------------------------------------------
 
 internal sealed class OpenScreenS2CCodec : ICodec<OpenScreenS2C> {
     public void Encode(MinecraftStream s, OpenScreenS2C m) {
@@ -119,7 +119,7 @@ internal sealed class SetHeldItemS2CCodec : ICodec<SetHeldItemS2C> {
         throw new NotSupportedException("SetHeldItemS2C is clientbound only.");
 }
 
-// ── Serverbound ───────────────────────────────────────────────────────────────
+// -- Serverbound ---------------------------------------------------------------
 
 internal sealed class ClickContainerC2SCodec : ICodec<ClickContainerC2S> {
     public void Encode(MinecraftStream s, ClickContainerC2S m) =>

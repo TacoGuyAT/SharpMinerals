@@ -3,7 +3,7 @@ using SharpMinerals.Math;
 
 namespace SharpMinerals.Level;
 
-/// <summary>A cuboid 16×16×16 section of the world, addressed by a 3D <see cref="Vector3i"/> chunk
+/// <summary>A cuboid 16x16x16 section of the world, addressed by a 3D <see cref="Vector3i"/> chunk
 /// coordinate (uniform cubes, not vanilla's tall columns). Block states are stored densely as ids into
 /// the <see cref="BlockRegistry"/> (0 = air).</summary>
 public class Chunk : ITickable {
@@ -26,7 +26,7 @@ public class Chunk : ITickable {
 
     public Chunk(Vector3i position) => Position = position;
 
-    /// <summary>Marks the chunk clean — its current contents are the persisted baseline.</summary>
+    /// <summary>Marks the chunk clean - its current contents are the persisted baseline.</summary>
     public void ClearDirty() => Dirty = false;
 
     static Mint Index(Mint x, Mint y, Mint z) => x + z * Size + y * Size * Size;
@@ -34,7 +34,7 @@ public class Chunk : ITickable {
     public ushort GetState(Mint x, Mint y, Mint z) => states[Index(x, y, z)];
     public void SetState(Mint x, Mint y, Mint z, ushort state) { states[Index(x, y, z)] = state; Dirty = true; }
 
-    // ── Serialization access (same-assembly persistence codec) ───────────────
+    // -- Serialization access (same-assembly persistence codec) ---------------
     internal ushort[] RawStates => states;
     internal IReadOnlyDictionary<int, BlockState> CellStates => blockStates;
     internal void PutCellState(int cellIndex, BlockState state) => blockStates[cellIndex] = state;

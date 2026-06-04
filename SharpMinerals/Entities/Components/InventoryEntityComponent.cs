@@ -42,7 +42,7 @@ public sealed class InventoryEntityComponent {
 
     public ref ItemStack Offhand => ref Storage[OffhandStart];
 
-    /// <summary>Adds a stack to the main inventory (slots 0–35; armor and off-hand are never auto-filled)
+    /// <summary>Adds a stack to the main inventory (slots 0-35; armor and off-hand are never auto-filled)
     /// and returns whatever didn't fit.</summary>
     public ItemStack Add(ItemStack stack) => Storage.Add(stack, 0, MainSize);
 }

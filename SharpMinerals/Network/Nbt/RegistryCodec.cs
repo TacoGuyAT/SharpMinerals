@@ -17,7 +17,7 @@ public static class RegistryCodec {
         .Put("minecraft:trim_pattern", EmptyRegistry("minecraft:trim_pattern"))
         .Put("minecraft:trim_material", EmptyRegistry("minecraft:trim_material"));
 
-    // ── Generic registry shape: { type, value: [ { name, id, element } ] } ──
+    // -- Generic registry shape: { type, value: [ { name, id, element } ] } --
     static NbtCompound Registry(string type, NbtList value) =>
         new NbtCompound().Put("type", type).Put("value", value);
 
@@ -33,7 +33,7 @@ public static class RegistryCodec {
         return list;
     }
 
-    // ── minecraft:dimension_type ────────────────────────────────────────────
+    // -- minecraft:dimension_type --------------------------------------------
     static NbtCompound DimensionTypeRegistry() {
         var value = new NbtList(NbtTagType.Compound);
         value.Add(Entry("minecraft:overworld", 0, Overworld()));
@@ -62,8 +62,8 @@ public static class RegistryCodec {
         .Put("ultrawarm", false)
         .Put("has_ceiling", false);
 
-    // ── minecraft:worldgen/biome ────────────────────────────────────────────
-    // Badlands at id 0 (ChunkSerializer.BiomeId); plains MUST also exist — the client uses it as the
+    // -- minecraft:worldgen/biome --------------------------------------------
+    // Badlands at id 0 (ChunkSerializer.BiomeId); plains MUST also exist - the client uses it as the
     // empty-chunk default biome (getOrThrow, or world construction fails).
     static NbtCompound BiomeRegistry() {
         var value = new NbtList(NbtTagType.Compound);
@@ -87,7 +87,7 @@ public static class RegistryCodec {
                 .Put("sound", "minecraft:ambient.cave")
                 .Put("block_search_extent", 8)));
 
-    // ── minecraft:chat_type ─────────────────────────────────────────────────
+    // -- minecraft:chat_type -------------------------------------------------
     static NbtCompound ChatTypeRegistry() {
         var value = new NbtList(NbtTagType.Compound);
         value.Add(Entry("minecraft:chat", 0, ChatType()));
@@ -102,7 +102,7 @@ public static class RegistryCodec {
             .Put("translation_key", "chat.type.text.narrate")
             .Put("parameters", StringList("sender", "content")));
 
-    // ── minecraft:damage_type ───────────────────────────────────────────────
+    // -- minecraft:damage_type -----------------------------------------------
     // The client builds a source for EVERY vanilla damage type with getOrThrow(), so all keys must exist
     // (a generic element suffices).
     static NbtCompound DamageTypeRegistry() {

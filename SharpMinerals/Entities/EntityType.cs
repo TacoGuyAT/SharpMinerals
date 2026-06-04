@@ -5,11 +5,11 @@ using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Entities;
 
-/// <summary>A registered entity kind — a flyweight definition (one shared instance per kind) assembled from
+/// <summary>A registered entity kind - a flyweight definition (one shared instance per kind) assembled from
 /// components, like <see cref="Items.ItemType"/>/<see cref="Blocks.BlockType"/>. The wire id is a per-version
 /// concern resolved by <see cref="Network.TypeMapper.EntityTypeId"/>, not stored here; reference identity holds.
-/// A kind also carries a BLUEPRINT (set via <see cref="Blueprint"/>) — the recipe for its ECS components — so
-/// <see cref="Create"/> is the single source of truth for "what makes a <c>player</c>/<c>item</c>/…".</summary>
+/// A kind also carries a BLUEPRINT (set via <see cref="Blueprint"/>) - the recipe for its ECS components - so
+/// <see cref="Create"/> is the single source of truth for "what makes a <c>player</c>/<c>item</c>/...".</summary>
 public sealed class EntityType : ComponentObject {
     internal int TypeId { get; }
 
@@ -26,7 +26,7 @@ public sealed class EntityType : ComponentObject {
     /// <summary>Max health from a <see cref="HealthEntityDescriptor"/> component (0 if this kind isn't living, e.g. an item).</summary>
     public float MaxHealth => TryGet<HealthEntityDescriptor>(out var l) ? l.MaxHealth : 0f;
 
-    /// <summary>Sets the recipe for this kind's ECS components — a typed <c>ecs.Create(...)</c> of the entity's OWN
+    /// <summary>Sets the recipe for this kind's ECS components - a typed <c>ecs.Create(...)</c> of the entity's OWN
     /// components (NOT the <see cref="TypeEntityDescriptor"/> tag, which <see cref="Create"/> adds). Reference-bearing
     /// components must be constructed fresh here (the delegate runs once per spawn). Returns the type for chaining.</summary>
     public EntityType Blueprint(Func<ArchWorld, ArchEntity> create) {
@@ -36,7 +36,7 @@ public sealed class EntityType : ComponentObject {
 
     /// <summary>Creates an ECS entity of this kind from its <see cref="Blueprint"/>, tagged with its
     /// <see cref="TypeEntityDescriptor"/>. The caller (typically <see cref="Level.World.Spawn"/>) then sets the
-    /// per-instance components (transform, …) and registers it in the spatial index.</summary>
+    /// per-instance components (transform, ...) and registers it in the spatial index.</summary>
     public ArchEntity Create(ArchWorld ecs) {
         var create = blueprint ?? throw new InvalidOperationException($"Entity type \"{Id.Full}\" has no blueprint.");
         var entity = create(ecs);

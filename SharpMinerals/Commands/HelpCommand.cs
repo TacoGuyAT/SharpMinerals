@@ -3,7 +3,7 @@ using Brigadier.NET.Builder;
 
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/help [command]</c> — lists command usages (or one command's), filtered to what the source
+/// <summary><c>/help [command]</c> - lists command usages (or one command's), filtered to what the source
 /// is allowed to run.</summary>
 public static class HelpCommand {
     public static CommandDispatcher RegisterHelp(this CommandDispatcher d) => d.Register(l => l

@@ -32,20 +32,20 @@ public sealed class SuggestionTests {
     [RealClientFact, Order(2)]
     public async Task ServerLiteralSubcommandCompletesOnTheClient() {
         await f.EnterFreshWorld("test_tree_sub");
-        // `server`'s children are literals — the client completes them locally from the tree. "server t" → tps.
+        // `server`'s children are literals - the client completes them locally from the tree. "server t" -> tps.
         var reply = await f.Send("suggest server t");
         Assert.Contains("tps", reply);
-        Assert.Contains("range=7+1", reply); // replaces the "t" at index 7 of "server t" — the span the UI shows at
+        Assert.Contains("range=7+1", reply); // replaces the "t" at index 7 of "server t" - the span the UI shows at
     }
 
     [RealClientFact, Order(3)]
     public async Task WorldArgumentSuggestsExistingWorldsViaAskServer() {
         await f.EnterFreshWorld("test_suggest_world");
         // `/world <name>` is ask_server: typing "world test" makes the client request, and the server answers
-        // with its loaded world keys matching "test" — which includes this test's fresh world. Proves 0x09/0x0F.
+        // with its loaded world keys matching "test" - which includes this test's fresh world. Proves 0x09/0x0F.
         var reply = await f.Send("suggest world test");
         Assert.Contains("test_suggest_world", reply);
-        Assert.Contains("range=6+4", reply); // replaces the "test" token at index 6 — wrong range => UI shows nothing
+        Assert.Contains("range=6+4", reply); // replaces the "test" token at index 6 - wrong range => UI shows nothing
     }
 
     [RealClientFact, Order(4)]

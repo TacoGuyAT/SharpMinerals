@@ -18,7 +18,7 @@ public struct ServerContext {
     public double TicksPerSecond;
 
     /// <summary>
-    /// Backend for cross-session player persistence. Null ⇒ the server uses an in-memory store
+    /// Backend for cross-session player persistence. Null => the server uses an in-memory store
     /// (survives reconnects, not restarts); a host can supply a disk-backed one (RocksDB).
     /// </summary>
     public IPlayerStore? PlayerStore;

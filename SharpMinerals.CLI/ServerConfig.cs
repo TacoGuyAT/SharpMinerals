@@ -11,7 +11,7 @@ enum LogLevel { Trace, Debug, Info, Warn, Error }
 /// <summary>
 /// Host configuration, loaded from <c>server.json</c> (defaults written on first run): listen endpoint, MOTD,
 /// player/tick limits, the main world and its data directory, and the log directory. Relative paths resolve
-/// against the working directory — keep them outside <c>bin/</c> so the world survives rebuilds.
+/// against the working directory - keep them outside <c>bin/</c> so the world survives rebuilds.
 /// </summary>
 sealed record ServerConfig {
     public string Host { get; init; } = "0.0.0.0";
@@ -44,7 +44,7 @@ sealed record ServerConfig {
                 var config = JsonSerializer.Deserialize(File.ReadAllText(path), ConfigInfo) ?? new ServerConfig();
                 return new LoadResult(config, null, false);
             } catch (Exception ex) {
-                return new LoadResult(new ServerConfig(), $"failed to read {path}: {ex.Message} — using defaults", true);
+                return new LoadResult(new ServerConfig(), $"failed to read {path}: {ex.Message} - using defaults", true);
             }
         }
 
@@ -61,7 +61,7 @@ sealed record ServerConfig {
 /// <summary>Reads <see cref="LogLevel"/> from its config string (case-insensitive, a few aliases);
 /// missing/null/unrecognized resolves to <see cref="LogLevel.Info"/>. Writes the lowercase enum name.</summary>
 sealed class LogLevelJsonConverter : JsonConverter<LogLevel> {
-    public override bool HandleNull => true; // null/missing → the default, not an error
+    public override bool HandleNull => true; // null/missing -> the default, not an error
 
     public override LogLevel Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
         (reader.TokenType == JsonTokenType.String ? reader.GetString() : null)?.Trim().ToLowerInvariant() switch {

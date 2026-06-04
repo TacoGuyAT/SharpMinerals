@@ -5,7 +5,7 @@ using SharpMinerals.Modding;
 
 namespace SharpMinerals.Items;
 
-/// <summary>The single registry of every item-type — plain items AND blocks (a <see cref="BlockType"/> is an
+/// <summary>The single registry of every item-type - plain items AND blocks (a <see cref="BlockType"/> is an
 /// item too). Holds the unified item-id space and the name lookup; blocks additionally carry a separate palette
 /// id in <see cref="BlockRegistry"/>. Ids are assigned in registration order.</summary>
 public static class ItemRegistry {
@@ -20,7 +20,7 @@ public static class ItemRegistry {
     internal static T Add<T>(string ns, string name, Func<int, Identifier, T> create) where T : ItemType {
         if (frozen)
             throw new InvalidOperationException(
-                $"ItemRegistry is frozen — register \"{name}\" during mod OnInitialize.");
+                $"ItemRegistry is frozen - register \"{name}\" during mod OnInitialize.");
         var identifier = new Identifier(ns, name);
         string key = identifier.Full;
         if (byIdentifier.ContainsKey(key))
@@ -31,13 +31,13 @@ public static class ItemRegistry {
         return type;
     }
 
-    /// <summary>Registers a new (non-block) item, returning it for fluent composition. For mods — call from
+    /// <summary>Registers a new (non-block) item, returning it for fluent composition. For mods - call from
     /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. Namespaced under the
     /// loading mod's id. Wire id falls back to stone until a type-mapping component is added.</summary>
     public static ItemType Register(string name, int maxStackSize = 64) =>
         Add(ModContent.CurrentNamespace, name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
 
-    /// <summary>Seals the registry — the host calls this after mods init, before protocols are built.</summary>
+    /// <summary>Seals the registry - the host calls this after mods init, before protocols are built.</summary>
     public static void Freeze() => frozen = true;
 
     public static IReadOnlyList<ItemType> All => byId;
@@ -48,7 +48,7 @@ public static class ItemRegistry {
     /// input work unprefixed.</summary>
     internal static string Normalize(string id) => id.IndexOf(':') >= 0 ? id : $"{Identifier.MinecraftNamespace}:{id}";
 
-    /// <summary>The item-type (item or block) for <paramref name="id"/> — a bare path (defaults to
-    /// <c>minecraft:</c>) or a full <c>namespace:path</c> — or null if unregistered.</summary>
+    /// <summary>The item-type (item or block) for <paramref name="id"/> - a bare path (defaults to
+    /// <c>minecraft:</c>) or a full <c>namespace:path</c> - or null if unregistered.</summary>
     public static ItemType? FromName(string id) => byIdentifier.GetValueOrDefault(Normalize(id));
 }

@@ -2,7 +2,7 @@ using SharpMinerals.Items;
 
 namespace SharpMinerals.Components;
 
-/// <summary>A fixed-size container of <see cref="ItemStack"/>s — the backing storage any inventory is built
+/// <summary>A fixed-size container of <see cref="ItemStack"/>s - the backing storage any inventory is built
 /// on. Slot count is set at construction and never changes.</summary>
 public class InventoryComponent {
     readonly ItemStack[] slots;

@@ -5,7 +5,7 @@ using SharpMinerals.Network.Nbt;
 
 namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 
-// ── Clientbound ──────────────────────────────────────────────────────────────
+// -- Clientbound --------------------------------------------------------------
 
 internal sealed class BundleDelimiterS2CCodec : ICodec<BundleDelimiterS2C> {
     public void Encode(MinecraftStream s, BundleDelimiterS2C m) { } // no payload
@@ -42,7 +42,7 @@ internal sealed class JoinGameS2CCodec : ICodec<JoinGameS2C> {
         if (portalCooldown) s.WriteVarInt(0);     // portal cooldown (added in 1.20; absent in 1.19.4)
     }
 
-    // Clientbound only — decoding would require an NBT reader, which the server
+    // Clientbound only - decoding would require an NBT reader, which the server
     // never needs (it only ever sends this packet).
     public JoinGameS2C Decode(MinecraftStream s) =>
         throw new NotSupportedException("JoinGameS2C is clientbound only.");
@@ -130,11 +130,11 @@ internal sealed class SynchronizePlayerPositionS2CCodec : ICodec<SynchronizePlay
 internal sealed class BlockUpdateS2CCodec : ICodec<BlockUpdateS2C> {
     public void Encode(MinecraftStream s, BlockUpdateS2C m) {
         s.WritePosition(m.Position.X, m.Position.Y, m.Position.Z);
-        // mapper set by Protocol.EncodePayload; no state override → the block's default state id.
+        // mapper set by Protocol.EncodePayload; no state override -> the block's default state id.
         s.WriteVarInt(m.State is { } st ? s.Types!.StateId(st) : s.Types!.StateId(m.Block));
     }
 
-    // Clientbound only — there is no reverse map from a wire state id back to our BlockState.
+    // Clientbound only - there is no reverse map from a wire state id back to our BlockState.
     public BlockUpdateS2C Decode(MinecraftStream s) =>
         throw new NotSupportedException("BlockUpdateS2C is clientbound only.");
 }
@@ -160,7 +160,7 @@ internal sealed class SetItemEntityMetadataS2CCodec : ICodec<SetItemEntityMetada
         s.WriteVarInt(m.EntityId);
         s.WriteUByte(ItemDataIndex);
         s.WriteVarInt(SlotMetadataType);
-        SlotWire.WriteStack(s, m.Stack); // maps our ItemStack → wire Slot via s.Types
+        SlotWire.WriteStack(s, m.Stack); // maps our ItemStack -> wire Slot via s.Types
         s.WriteUByte(MetadataEnd);
     }
 
@@ -186,7 +186,7 @@ internal sealed class SpawnEntityS2CCodec : ICodec<SpawnEntityS2C> {
         s.WriteShort(m.VelocityZ);
     }
 
-    // Clientbound only — there is no reverse map from a wire entity-type id back to our EntityType.
+    // Clientbound only - there is no reverse map from a wire entity-type id back to our EntityType.
     public SpawnEntityS2C Decode(MinecraftStream s) =>
         throw new NotSupportedException("SpawnEntityS2C is clientbound only.");
 }
@@ -214,7 +214,7 @@ internal sealed class CollectItemS2CCodec : ICodec<CollectItemS2C> {
         throw new NotSupportedException("CollectItemS2C is clientbound only.");
 }
 
-// ── Serverbound ──────────────────────────────────────────────────────────────
+// -- Serverbound --------------------------------------------------------------
 
 internal sealed class KeepAliveC2SCodec : ICodec<KeepAliveC2S> {
     public void Encode(MinecraftStream s, KeepAliveC2S m) => s.WriteLong(m.Id);

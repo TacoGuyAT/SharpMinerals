@@ -10,8 +10,8 @@ using NuGet.Versioning;
 namespace SharpMinerals.Modding;
 
 /// <summary>
-/// Discovers and drives mods. A host feeds it mods — already-loaded assemblies (<see cref="LoadFrom"/>) or a
-/// directory of <c>*.dll</c> files (<see cref="LoadDirectory"/>) — which calls each mod's
+/// Discovers and drives mods. A host feeds it mods - already-loaded assemblies (<see cref="LoadFrom"/>) or a
+/// directory of <c>*.dll</c> files (<see cref="LoadDirectory"/>) - which calls each mod's
 /// <see cref="Mod.OnInitialize"/>; the host then freezes the registries and builds the server, and later calls
 /// <see cref="StartAll"/> / <see cref="StopAll"/>.
 /// </summary>
@@ -37,7 +37,7 @@ public sealed partial class ModLoader {
     }
 
 #if !AOT
-    // Reflection over assembly types — the mod-discovery boundary. Declared (not suppressed) so the requirement
+    // Reflection over assembly types - the mod-discovery boundary. Declared (not suppressed) so the requirement
     // propagates to hosts. Compiled out of AOT builds entirely (the AOT symbol); use the type-safe TryLoad<T>
     // for compiled-in mods there.
     const string DynamicModLoading = "Discovers mods by scanning assembly types via reflection and instantiating "
@@ -55,7 +55,7 @@ public sealed partial class ModLoader {
 
     public bool TryLoad(Mod mod, ModInfoAttribute info) {
         if(!ModIdPattern.IsMatch(info.ModId)) {
-            log.LogError("Mod id \"{Id}\" is invalid — use letters, digits, and _ - . only.", info.ModId);
+            log.LogError("Mod id \"{Id}\" is invalid - use letters, digits, and _ - . only.", info.ModId);
             return false;
         }
         if(!SemanticVersion.TryParse(info.Version, out _)) {
@@ -69,13 +69,13 @@ public sealed partial class ModLoader {
                 return false;
             }
             if(!ServerVersion.Supports(target)) {
-                log.LogWarning("Mod \"{Id}\" targets server {Target}, but this server is {Server} — skipping (incompatible).",
+                log.LogWarning("Mod \"{Id}\" targets server {Target}, but this server is {Server} - skipping (incompatible).",
                     info.ModId, target, ServerVersion);
                 return false;
             }
         }
         if(!ids.Add(info.ModId)) {
-            log.LogError("Duplicate mod id \"{Id}\" ({Assembly}) — skipping.", info.ModId, mod.GetType().Assembly);
+            log.LogError("Duplicate mod id \"{Id}\" ({Assembly}) - skipping.", info.ModId, mod.GetType().Assembly);
             return false;
         }
 
@@ -93,7 +93,7 @@ public sealed partial class ModLoader {
         try {
             mod.OnInitialize();
         } catch(Exception ex) {
-            log.LogError(ex, "Mod \"{Id}\" OnInitialize threw — the mod may be partially loaded.", info.ModId);
+            log.LogError(ex, "Mod \"{Id}\" OnInitialize threw - the mod may be partially loaded.", info.ModId);
             // Best-effort: keep the mod so OnServerStarted still runs, rather than aborting the whole server.
         } finally {
             ModContent.CurrentNamespace = "minecraft";

@@ -1,6 +1,6 @@
 namespace SharpMinerals.Blocks.Descriptors;
 
-/// <summary>The state properties a block has (chest <c>facing</c>, slab <c>type</c>, …). Order matters —
+/// <summary>The state properties a block has (chest <c>facing</c>, slab <c>type</c>, ...). Order matters -
 /// it matches vanilla so the network layer can flatten a state to a vanilla state id.</summary>
 public sealed class StatesBlockDescriptor {
     public IReadOnlyList<State> States { get; }

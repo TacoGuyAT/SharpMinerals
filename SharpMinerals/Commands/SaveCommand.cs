@@ -3,7 +3,7 @@ using Brigadier.NET.Builder;
 
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/save</c> — flushes modified world chunks and online players to the store. Deferred to the
+/// <summary><c>/save</c> - flushes modified world chunks and online players to the store. Deferred to the
 /// tick thread (the single writer) so serialization can't race a concurrent edit; the reply comes next tick.</summary>
 public static class SaveCommand {
     public static CommandDispatcher RegisterSave(this CommandDispatcher d) => d.Register(l => l

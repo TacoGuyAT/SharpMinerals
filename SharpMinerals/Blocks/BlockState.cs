@@ -27,7 +27,7 @@ public sealed class BlockState {
     /// <summary>Sets a property's value by name; fluent.</summary>
     public BlockState Set(State property, string value) => Set(property, property.IndexOf(value));
 
-    /// <summary>A deep copy (independent value array) — for handing a block's state to an item and back.</summary>
+    /// <summary>A deep copy (independent value array) - for handing a block's state to an item and back.</summary>
     public BlockState Clone() {
         var copy = new BlockState(Type);
         System.Array.Copy(values, copy.values, values.Length);

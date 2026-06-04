@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The test-harness commands (/test …) packaged as a SharpMinerals mod. Loaded via the mod system
+  <!-- The test-harness commands (/test ...) packaged as a SharpMinerals mod. Loaded via the mod system
        only in test/debug environments (the CLI references it under Debug; the test fixture loads it
        through the real ModLoader). Uses only the core PUBLIC API, like any third-party mod. -->
   <PropertyGroup>

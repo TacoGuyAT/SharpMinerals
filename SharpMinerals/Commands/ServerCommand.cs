@@ -3,7 +3,7 @@ using SharpMinerals.Entities.Components;
 
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/server tps|players|stop</c> — server info and management (nested literal subcommands).</summary>
+/// <summary><c>/server tps|players|stop</c> - server info and management (nested literal subcommands).</summary>
 public static class ServerCommand {
     public static CommandDispatcher RegisterServer(this CommandDispatcher d) => d.Register(l => l
         .Literal("server")

@@ -8,7 +8,7 @@ namespace SharpMinerals.Level.Systems;
 
 /// <summary>Relays each player's movement to the other clients. Each tick it diffs the live transform against
 /// the last one broadcast (<see cref="SyncedTransformEntityComponent"/>); on a change it sends Teleport Entity
-/// + head rotation to everyone else and records the new transform. Replaces the old PlayerMoved event — the
+/// + head rotation to everyone else and records the new transform. Replaces the old PlayerMoved event - the
 /// per-tick diff coalesces a burst of movement packets into one broadcast and costs nothing while idle.</summary>
 public sealed class PlayerMovementSystem : ITickable, INetworkSystem {
     static readonly QueryDescription PlayerQuery =

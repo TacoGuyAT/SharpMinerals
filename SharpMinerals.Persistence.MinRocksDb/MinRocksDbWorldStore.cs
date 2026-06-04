@@ -1,6 +1,6 @@
 using System.Text;
 using SharpMinerals.Math;
-// Aliased through global:: — the enclosing namespace ends in ".MinRocksDb", which would otherwise shadow it.
+// Aliased through global:: - the enclosing namespace ends in ".MinRocksDb", which would otherwise shadow it.
 using RocksDbKv = global::MinRocksDb.RocksDbKv;
 
 namespace SharpMinerals.Persistence.MinRocksDb;

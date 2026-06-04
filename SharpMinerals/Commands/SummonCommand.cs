@@ -8,10 +8,10 @@ using SharpMinerals.Level;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// <c>/summon &lt;entity&gt; [&lt;x&gt; &lt;y&gt; &lt;z&gt;]</c> — spawns an entity of the given kind (by registry
+/// <c>/summon &lt;entity&gt; [&lt;x&gt; &lt;y&gt; &lt;z&gt;]</c> - spawns an entity of the given kind (by registry
 /// name, tab-completed) at the supplied coordinates, or at the issuing player's feet when they're omitted. Carries
 /// NO per-entity data yet (no item stack, carried block, or NBT), so data-bearing kinds spawn with their blueprint
-/// defaults — data handling is a later addition. Players can't be summoned (they need a connection).
+/// defaults - data handling is a later addition. Players can't be summoned (they need a connection).
 /// </summary>
 public static class SummonCommand {
     const double Limit = 3e7; // ~world border; the coordinate bound Brigadier validates against

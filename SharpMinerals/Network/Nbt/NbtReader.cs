@@ -17,7 +17,7 @@ public static class NbtReader {
         if (type == (byte)NbtTagType.End) return null;
         if (type != (byte)NbtTagType.Compound)
             throw new FormatException($"Item NBT root must be a compound (10), got tag {type}.");
-        ReadName(s); // root name — empty in 1.20.1's named form
+        ReadName(s); // root name - empty in 1.20.1's named form
         return ReadCompound(s);
     }
 
@@ -52,7 +52,7 @@ public static class NbtReader {
         var elementType = (NbtTagType)s.ReadUByte();
         int count = s.ReadInt();
         var list = new NbtList(elementType);
-        if (elementType == NbtTagType.End) return list; // empty list — no element payloads follow
+        if (elementType == NbtTagType.End) return list; // empty list - no element payloads follow
         for (int i = 0; i < count; i++)
             list.Add(ReadPayload(s, elementType));
         return list;

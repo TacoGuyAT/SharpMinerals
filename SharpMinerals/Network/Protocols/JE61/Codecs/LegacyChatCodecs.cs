@@ -8,17 +8,17 @@ namespace SharpMinerals.Network.Protocols.JE61.Codecs;
 
 // 1.5.2 chat is a single string16 (no JSON components) on packet 0x03, two-way. Serverbound it decodes
 // into the GENERIC chat message (so the protocol-agnostic handler routes chat vs '/command' the same as
-// modern); clientbound the modern component is flattened to a §-coded string — the only form the
+// modern); clientbound the modern component is flattened to a §-coded string - the only form the
 // pre-1.7 client understands.
 
-/// <summary>0x03 Chat (serverbound) → generic <see cref="ChatMessageC2S"/>. The raw text keeps any leading
+/// <summary>0x03 Chat (serverbound) -> generic <see cref="ChatMessageC2S"/>. The raw text keeps any leading
 /// '/', so <c>SubmitChat</c>/the dispatcher treat it as a command exactly like a modern client's input.</summary>
 internal sealed class LegacyChatToGenericCodec : ICodec<ChatMessageC2S> {
     public void Encode(MinecraftStream s, ChatMessageC2S m) => throw LegacySb.Outbound(nameof(ChatMessageC2S));
     public ChatMessageC2S Decode(MinecraftStream s) => new(s.ReadString16());
 }
 
-/// <summary>GENERIC <see cref="SystemChatMessageS2C"/> → legacy 0x03 Chat (flattened to a §-coded string;
+/// <summary>GENERIC <see cref="SystemChatMessageS2C"/> -> legacy 0x03 Chat (flattened to a §-coded string;
 /// 1.5.2 has no overlay/action-bar, so <c>Overlay</c> messages just show in chat).</summary>
 internal sealed class LegacyChatS2CMapper : ICodec<SystemChatMessageS2C> {
     public void Encode(MinecraftStream s, SystemChatMessageS2C m) => s.WriteString16(LegacyText.Flatten(m.Content));
@@ -27,7 +27,7 @@ internal sealed class LegacyChatS2CMapper : ICodec<SystemChatMessageS2C> {
 
 /// <summary>Flattens a modern <see cref="ChatComponent"/> tree to a 1.5.2 §-coded string. Colour + styles
 /// map to § codes (a colour code resets styles in 1.5.2, so it goes first); nested <c>Extra</c> is
-/// concatenated. Non-text components (translatable/keybind/…) have no legacy form and contribute nothing.</summary>
+/// concatenated. Non-text components (translatable/keybind/...) have no legacy form and contribute nothing.</summary>
 static class LegacyText {
     public static string Flatten(ChatComponent component) {
         var sb = new StringBuilder();
@@ -49,7 +49,7 @@ static class LegacyText {
             foreach (var child in extra) Append(child, sb);
     }
 
-    // Vanilla colour name → 1.5.2 § colour code; a modern hex colour (#rrggbb) maps to the nearest of
+    // Vanilla colour name -> 1.5.2 § colour code; a modern hex colour (#rrggbb) maps to the nearest of
     // the 16 so custom colours still show coloured rather than being dropped.
     static char? ColorCode(string name) {
         char? named = name switch {
@@ -66,13 +66,13 @@ static class LegacyText {
         return null;
     }
 
-    // The 16 § colours form a cube: index = (bright<<3) | (R<<2) | (G<<1) | B, each channel a bit (≥128),
+    // The 16 § colours form a cube: index = (bright<<3) | (R<<2) | (G<<1) | B, each channel a bit (>=128),
     // bright when the strongest channel is near-max. So a hex colour quantizes directly (approximate, but
     // only the rare custom-colour case; our own chat uses named colours).
     static char Quantize(int rgb) {
         int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
         int idx = (r >> 7 << 2) | (g >> 7 << 1) | (b >> 7);
-        if (System.Math.Max(r, System.Math.Max(g, b)) >= 213) idx |= 0b1000; // bright variant (§8–§f)
+        if (System.Math.Max(r, System.Math.Max(g, b)) >= 213) idx |= 0b1000; // bright variant (§8-§f)
         return "0123456789abcdef"[idx];
     }
 }

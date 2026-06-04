@@ -29,25 +29,25 @@ internal sealed class LegacyPlayerC2SCodec : ICodec<LegacyPlayerC2S> {
 }
 
 // Movement/digging decode straight into the GENERIC (intermediary) messages, so the protocol-agnostic
-// handlers (MovePlayer/HandleDigging) serve legacy and modern alike — no legacy-specific handler path.
+// handlers (MovePlayer/HandleDigging) serve legacy and modern alike - no legacy-specific handler path.
 
-/// <summary>0x0B Player Position → generic <see cref="SetPlayerPositionC2S"/> (drops the 1.5.2 Stance).</summary>
+/// <summary>0x0B Player Position -> generic <see cref="SetPlayerPositionC2S"/> (drops the 1.5.2 Stance).</summary>
 internal sealed class LegacyPositionToGenericCodec : ICodec<SetPlayerPositionC2S> {
     public void Encode(MinecraftStream s, SetPlayerPositionC2S m) => throw LegacySb.Outbound(nameof(SetPlayerPositionC2S));
     public SetPlayerPositionC2S Decode(MinecraftStream s) {
         double x = s.ReadDouble(), y = s.ReadDouble();
-        s.ReadDouble(); // stance (eye Y) — not modeled
+        s.ReadDouble(); // stance (eye Y) - not modeled
         return new(x, y, s.ReadDouble(), s.ReadBool());
     }
 }
 
-/// <summary>0x0C Player Look → generic <see cref="SetPlayerRotationC2S"/>.</summary>
+/// <summary>0x0C Player Look -> generic <see cref="SetPlayerRotationC2S"/>.</summary>
 internal sealed class LegacyLookToGenericCodec : ICodec<SetPlayerRotationC2S> {
     public void Encode(MinecraftStream s, SetPlayerRotationC2S m) => throw LegacySb.Outbound(nameof(SetPlayerRotationC2S));
     public SetPlayerRotationC2S Decode(MinecraftStream s) => new(s.ReadFloat(), s.ReadFloat(), s.ReadBool());
 }
 
-/// <summary>0x0D Player Position and Look → generic <see cref="SetPlayerPositionAndRotationC2S"/>.</summary>
+/// <summary>0x0D Player Position and Look -> generic <see cref="SetPlayerPositionAndRotationC2S"/>.</summary>
 internal sealed class LegacyPositionLookToGenericCodec : ICodec<SetPlayerPositionAndRotationC2S> {
     public void Encode(MinecraftStream s, SetPlayerPositionAndRotationC2S m) => throw LegacySb.Outbound(nameof(SetPlayerPositionAndRotationC2S));
     public SetPlayerPositionAndRotationC2S Decode(MinecraftStream s) {
@@ -58,7 +58,7 @@ internal sealed class LegacyPositionLookToGenericCodec : ICodec<SetPlayerPositio
     }
 }
 
-/// <summary>0x0E Player Digging → generic <see cref="PlayerActionC2S"/> (no Sequence in 1.5.2 → 0).</summary>
+/// <summary>0x0E Player Digging -> generic <see cref="PlayerActionC2S"/> (no Sequence in 1.5.2 -> 0).</summary>
 internal sealed class LegacyDiggingToGenericCodec : ICodec<PlayerActionC2S> {
     public void Encode(MinecraftStream s, PlayerActionC2S m) => throw LegacySb.Outbound(nameof(PlayerActionC2S));
     public PlayerActionC2S Decode(MinecraftStream s) {
@@ -82,7 +82,7 @@ internal sealed class LegacyHeldItemChangeC2SCodec : ICodec<LegacyHeldItemChange
     public LegacyHeldItemChangeC2S Decode(MinecraftStream s) => new(s.ReadShort());
 }
 
-/// <summary>0x12 Animation (the client's own arm swing) → generic <see cref="SwingArmC2S"/>; the EID
+/// <summary>0x12 Animation (the client's own arm swing) -> generic <see cref="SwingArmC2S"/>; the EID
 /// it carries is the client's own and is ignored (the server resolves the player from the connection).</summary>
 internal sealed class LegacySwingToGenericCodec : ICodec<SwingArmC2S> {
     public void Encode(MinecraftStream s, SwingArmC2S m) => throw LegacySb.Outbound(nameof(SwingArmC2S));
@@ -93,7 +93,7 @@ internal sealed class LegacySwingToGenericCodec : ICodec<SwingArmC2S> {
     }
 }
 
-/// <summary>0x13 Entity Action (the client toggling sneak/sprint) → generic <see cref="EntityActionC2S"/>;
+/// <summary>0x13 Entity Action (the client toggling sneak/sprint) -> generic <see cref="EntityActionC2S"/>;
 /// the EID it carries is the client's own and is ignored.</summary>
 internal sealed class LegacyEntityActionToGenericCodec : ICodec<EntityActionC2S> {
     public void Encode(MinecraftStream s, EntityActionC2S m) => throw LegacySb.Outbound(nameof(EntityActionC2S));

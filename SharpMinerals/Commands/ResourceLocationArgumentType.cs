@@ -4,7 +4,7 @@ using Brigadier.NET.ArgumentTypes;
 namespace SharpMinerals.Commands;
 
 /// <summary>
-/// A command argument that reads a namespaced id token (e.g. <c>minecraft:stone</c>, <c>sample:ruby_block</c>) —
+/// A command argument that reads a namespaced id token (e.g. <c>minecraft:stone</c>, <c>sample:ruby_block</c>) -
 /// like Brigadier's <c>word()</c> but also allowing <c>:</c> and <c>/</c>, which a resource location needs.
 /// <c>word()</c> stops at the colon, so <c>/give minecraft:stone</c> would otherwise fail to parse. A bare path
 /// (<c>stone</c>) still parses and resolves to the <c>minecraft</c> namespace downstream.

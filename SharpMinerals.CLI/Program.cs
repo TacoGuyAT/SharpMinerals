@@ -39,7 +39,7 @@ if (loaded.Notice is { } notice) {
     else log.LogInformation("{Notice}", notice);
 }
 
-// ── Mods ────────────────────────────────────────────────────────────────────
+// -- Mods --------------------------------------------------------------------
 // Initialise mods before the protocols snapshot the palette (OnInitialize registers content). File mods are
 // `mods/*.dll`; the test/sample mods are compiled in and loaded only on the matching build flags.
 var modLoader = new ModLoader();
@@ -56,8 +56,8 @@ modLoader.TryLoad(new SampleMod());
 #if !AOT
 modLoader.LoadDirectory(Path.Combine(Directory.GetCurrentDirectory(), "mods")); // dynamic mod loading is JIT-only
 #endif
-ModContent.Freeze();  // seal the palette — no block/item/entity may register past this point
-TypeMapper.Freeze();  // seal the wire mappings — protocols build their TypeMapper from them on demand
+ModContent.Freeze();  // seal the palette - no block/item/entity may register past this point
+TypeMapper.Freeze();  // seal the wire mappings - protocols build their TypeMapper from them on demand
 
 // Supported protocols; each connection picks one (see ProtocolRegistry.Detect).
 var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());
@@ -112,7 +112,7 @@ Console.CancelKeyPress += (_, e) => {
 
 server.Start();
 
-// ── Commands ────────────────────────────────────────────────────────────────
+// -- Commands ----------------------------------------------------------------
 server.CommandDispatcher
     .RegisterHelp()
     .RegisterRun()

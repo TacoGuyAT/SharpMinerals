@@ -8,6 +8,6 @@ public struct NetPlayerEntityComponent {
     public Guid Uuid;
     /// <summary>The network entity id other clients use to refer to this player.</summary>
     public int EntityId;
-    /// <summary>The player's shared-flags state (sneaking, sprinting, …) — replayed to joiners as entity metadata.</summary>
+    /// <summary>The player's shared-flags state (sneaking, sprinting, ...) - replayed to joiners as entity metadata.</summary>
     public EntityFlags Flags;
 }

@@ -17,7 +17,7 @@ public static class Player {
         var entity = world.Spawn(EntityRegistry.Player, transform);
 
         // The blueprint (EntityRegistry.Player) laid down every component with placeholder defaults; here we set
-        // only the ones that are per-instance. Everything else (hitbox, reach, collision list, …) is already correct.
+        // only the ones that are per-instance. Everything else (hitbox, reach, collision list, ...) is already correct.
         var ecs = world.Ecs;
         // Seed the movement-relay baseline to spawn, so a freshly-joined player doesn't re-broadcast it.
         ecs.Get<SyncedTransformEntityComponent>(entity) = new SyncedTransformEntityComponent {
@@ -30,7 +30,7 @@ public static class Player {
     }
 
     static InventoryEntityComponent NewInventory() {
-        // Starter kit is vanilla content (registered by the minecraft mod) — resolve by name so the core doesn't
+        // Starter kit is vanilla content (registered by the minecraft mod) - resolve by name so the core doesn't
         // depend on the mod, and a server without vanilla content just spawns players empty-handed.
         var inventory = new InventoryEntityComponent();
         if (ItemRegistry.FromName("minecraft:stone") is { } stone) inventory.Main(0) = new ItemStack(stone, 64);

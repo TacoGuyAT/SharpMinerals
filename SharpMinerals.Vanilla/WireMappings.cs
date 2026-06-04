@@ -9,14 +9,14 @@ namespace SharpMinerals.Vanilla;
 /// <summary>
 /// Registers the vanilla wire mappings (block-state / item / entity ids per protocol version) with the data-driven
 /// <see cref="TypeMapper"/>. This is the wire-side counterpart to the content registration in <see cref="VanillaMod"/>
-/// — the core engine knows no vanilla ids; they all live here. Ranges use the protocol inheritance chain: a
+/// - the core engine knows no vanilla ids; they all live here. Ranges use the protocol inheritance chain: a
 /// <c>Map&lt;ProtocolJE762&gt;</c> applies to 762 AND 763 (onwards), and a <c>Map&lt;ProtocolJE763&gt;</c> delta
 /// overrides it per facet for 763+.
 /// </summary>
 internal static class WireMappings {
     public static void Register() {
-        // ── Modern Java (1.19.4 / protocol 762 onwards) ─────────────────────────────────────────
-        // Engine primitives — their wire ids are vanilla facts (air=0, missing→stone, the entity type ids).
+        // -- Modern Java (1.19.4 / protocol 762 onwards) -----------------------------------------
+        // Engine primitives - their wire ids are vanilla facts (air=0, missing->stone, the entity type ids).
         TypeMapper.Map<ProtocolJE762>("sharpminerals:air").State(0);
         TypeMapper.Map<ProtocolJE762>("sharpminerals:missing").State(1).Item(1);
         TypeMapper.Map<ProtocolJE762>("sharpminerals:item").Entity(54);
@@ -36,7 +36,7 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE762>("minecraft:wool").State(2043, (State.Color, 1)).Item(179, (State.Color, 1));
         TypeMapper.Map<ProtocolJE762>("minecraft:stick").Item(803);
 
-        // 1.20.1 (protocol 763) deltas — the 1.20 additions shifted these ids. Unspecified facets inherit from 762
+        // 1.20.1 (protocol 763) deltas - the 1.20 additions shifted these ids. Unspecified facets inherit from 762
         // (chest keeps its BlockEntity, red_sand/gravel keep their State).
         TypeMapper.Map<ProtocolJE763>("minecraft:chest").State(2955, (State.Facing, 6)).Item(277);
         TypeMapper.Map<ProtocolJE763>("minecraft:wool").State(2047, (State.Color, 1)).Item(180, (State.Color, 1));
@@ -44,7 +44,7 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE763>("minecraft:gravel").Item(48);
         TypeMapper.Map<ProtocolJE763>("minecraft:stick").Item(807);
 
-        // ── Legacy Java (1.5.2 / protocol 61): flat ids, state == item; colour/metadata not modeled; no entities. ──
+        // -- Legacy Java (1.5.2 / protocol 61): flat ids, state == item; colour/metadata not modeled; no entities. --
         TypeMapper.Map<ProtocolJE61>("sharpminerals:air").State(0);
         TypeMapper.Map<ProtocolJE61>("sharpminerals:missing").State(1).Item(1);
         TypeMapper.Map<ProtocolJE61>("minecraft:stone").State(1).Item(1);

@@ -7,7 +7,7 @@ namespace SharpMinerals.Tests.RealClient;
 /// <summary>
 /// Real-client item-drop scenarios. Each runs in its own fresh world (the fixture switches the client in and
 /// unloads the previous world), so a test seeing 0 items at the start is itself the proof that per-test world
-/// isolation + unload works — the prior test's dropped item is gone.
+/// isolation + unload works - the prior test's dropped item is gone.
 /// </summary>
 [Collection(RealClientCollection.Name)]
 [TestCaseOrderer(OrderedTestCaseOrderer.Type, OrderedTestCaseOrderer.Assembly)]
@@ -26,7 +26,7 @@ public sealed class DropTests {
     [RealClientFact, Order(2)]
     public async Task DroppingAStack_SpawnsOneItem_InAFreshWorld() {
         await f.EnterFreshWorld("test_drop_stack");
-        Assert.Equal(0, await f.CountItems()); // fresh world ⇒ the previous test's item is gone (isolation)
+        Assert.Equal(0, await f.CountItems()); // fresh world => the previous test's item is gone (isolation)
         await f.Send("drop all");
         Assert.Equal(1, await PollItems(1));
     }

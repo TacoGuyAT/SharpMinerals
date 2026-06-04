@@ -67,7 +67,7 @@ public sealed class MinecraftStream : Stream {
         ? ms.ToArray()
         : throw new InvalidOperationException("ToArray() requires a MemoryStream-backed MinecraftStream.");
 
-    // ── Primitive reads ─────────────────────────────────────────────────────
+    // -- Primitive reads -----------------------------------------------------
     public byte ReadUByte() {
         if (pushback >= 0) { byte p = (byte)pushback; pushback = -1; return p; }
         int b = inner.ReadByte();
@@ -76,7 +76,7 @@ public sealed class MinecraftStream : Stream {
     }
 
     /// <summary>
-    /// Reads one byte but leaves it to be returned again by the next read — used to sniff a new
+    /// Reads one byte but leaves it to be returned again by the next read - used to sniff a new
     /// connection's framing (legacy pre-Netty clients open with a raw packet id, not a VarInt frame).
     /// </summary>
     public byte PeekUByte() {
@@ -94,7 +94,7 @@ public sealed class MinecraftStream : Stream {
         return buf;
     }
 
-    /// <summary>Reads everything left in the (length-bounded) buffer — e.g. a Custom Payload's data.</summary>
+    /// <summary>Reads everything left in the (length-bounded) buffer - e.g. a Custom Payload's data.</summary>
     public byte[] ReadRemaining() => ReadBytes((int)(Length - Position));
 
     public ushort ReadUShort() {
@@ -195,7 +195,7 @@ public sealed class MinecraftStream : Stream {
         return UuidFromMsbLsb(msb, lsb);
     }
 
-    // ── Primitive writes ────────────────────────────────────────────────────
+    // -- Primitive writes ----------------------------------------------------
     public void WriteUByte(byte value) => inner.WriteByte(value);
     public void WriteByte2(sbyte value) => inner.WriteByte((byte)value);
     public void WriteBool(bool value) => inner.WriteByte(value ? (byte)1 : (byte)0);
@@ -276,11 +276,11 @@ public sealed class MinecraftStream : Stream {
         inner.Write(b);
     }
 
-    // ── Angle: a rotation in degrees packed into one byte (1/256 of a turn) ──
+    // -- Angle: a rotation in degrees packed into one byte (1/256 of a turn) --
     public void WriteAngle(float degrees) => WriteUByte((byte)(int)MathF.Floor(degrees * 256f / 360f));
     public float ReadAngle() => ReadUByte() * 360f / 256f;
 
-    // ── Slot (an item stack on the wire) ────────────────────────────────────
+    // -- Slot (an item stack on the wire) ------------------------------------
     // present(bool); if present: VarInt item id, byte count, NBT (0x00 = none).
     public void WriteEmptySlot() => WriteBool(false);
 
@@ -291,11 +291,11 @@ public sealed class MinecraftStream : Stream {
         WriteUByte(0x00); // empty NBT (TAG_End)
     }
 
-    /// <summary>Writes a 1.5.2 Slot: short item id (-1 = empty → stop); else byte count, short damage, and
+    /// <summary>Writes a 1.5.2 Slot: short item id (-1 = empty -> stop); else byte count, short damage, and
     /// short NBT length -1 (no gzip NBT). Mirrors <see cref="ReadLegacySlot"/>.</summary>
     public void WriteLegacySlot(short itemId, byte count, short damage) {
         WriteShort(itemId);
-        if (itemId < 0) return; // empty slot — nothing follows
+        if (itemId < 0) return; // empty slot - nothing follows
         WriteUByte(count);
         WriteShort(damage);
         WriteShort(-1); // no NBT
@@ -309,7 +309,7 @@ public sealed class MinecraftStream : Stream {
         return (id, count);
     }
 
-    // ── Position (block coordinate packed into a long) ──────────────────────
+    // -- Position (block coordinate packed into a long) ----------------------
     // Layout: x (26 bits) | z (26 bits) | y (12 bits), most-significant first.
     // https://minecraft.wiki/w/Java_Edition_protocol#Position
     public void WritePosition(long x, long y, long z) =>
@@ -324,7 +324,7 @@ public sealed class MinecraftStream : Stream {
         return (x, y, z);
     }
 
-    // ── VarInt size helper (needed for packet framing) ──────────────────────
+    // -- VarInt size helper (needed for packet framing) ----------------------
     public static int VarIntSize(int value) {
         uint v = (uint)value;
         int size = 1;
@@ -340,7 +340,7 @@ public sealed class MinecraftStream : Stream {
         return UuidFromMsbLsb(msb, lsb);
     }
 
-    // ── UUID <-> (msb, lsb) using Java's big-endian byte ordering ───────────
+    // -- UUID <-> (msb, lsb) using Java's big-endian byte ordering -----------
     static Guid UuidFromMsbLsb(long msb, long lsb) {
         Span<byte> b = stackalloc byte[16];
         BinaryPrimitives.WriteInt64BigEndian(b[..8], msb);

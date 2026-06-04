@@ -9,6 +9,6 @@ public sealed class FallingBlockDescriptor : IOnLand {
         if (ctx.World.GetBlock(ctx.Position).IsAir)
             ctx.World.SetBlock(ctx.Position, ctx.Block);
         else
-            ctx.World.SpawnDroppedItem(ctx.Position, new ItemStack(ctx.Block)); // cell occupied — pop as an item
+            ctx.World.SpawnDroppedItem(ctx.Position, new ItemStack(ctx.Block)); // cell occupied - pop as an item
     }
 }

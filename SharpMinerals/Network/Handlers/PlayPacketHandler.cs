@@ -41,7 +41,7 @@ public sealed class PlayPacketHandler {
     public void Handle(NetClient client, IMessage message) {
         switch (message) {
             // World-mutating packets are deferred to the tick's single-writer drain phase so chunk edits
-            // never race the simulation or autosave (≤1 tick of latency).
+            // never race the simulation or autosave (<=1 tick of latency).
             case PlayerActionC2S action:
                 server.Events.Defer(() => HandleDigging(client, action));
                 break;
@@ -243,7 +243,7 @@ public sealed class PlayPacketHandler {
         }
         if (state is not null)
             context.World.SetBlockState(target, state);
-        BroadcastBlockChange(context.World, new BlockUpdateS2C(target, block, state)); // null state ⇒ block default
+        BroadcastBlockChange(context.World, new BlockUpdateS2C(target, block, state)); // null state => block default
 
         FallingBlockSystem.TryStartFalling(server, context.World, target); // sand/gravel placed over air falls
     }
@@ -367,7 +367,7 @@ public sealed class PlayPacketHandler {
             return;
         }
         if (!ContainerManager.TryPlayerWindowToStorage(creative.Slot, out int index))
-            return; // crafting slot — ignored
+            return; // crafting slot - ignored
         var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
         inventory.Storage[index] = stack; // an empty (non-null) stack here is a deliberate clear
     }

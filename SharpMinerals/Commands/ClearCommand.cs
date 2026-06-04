@@ -7,7 +7,7 @@ using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.Commands;
 
-/// <summary><c>/clear</c> — empties the issuing player's whole inventory (main, armor, off-hand) and resyncs
+/// <summary><c>/clear</c> - empties the issuing player's whole inventory (main, armor, off-hand) and resyncs
 /// the window. Player-only.</summary>
 public static class ClearCommand {
     public static CommandDispatcher RegisterClear(this CommandDispatcher d) => d.Register(l => l
