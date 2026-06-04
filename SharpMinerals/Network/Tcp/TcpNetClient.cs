@@ -17,7 +17,7 @@ namespace SharpMinerals.Network.Tcp;
 /// per-lane ordering for free, with no lock.</para>
 /// </summary>
 public sealed class TcpNetClient : NetClient {
-    static readonly ILogger Log = Logging.For<TcpNetClient>();
+    static readonly ILogger Log = Logging.For("Net.Tcp");
 
     // A client whose queue grows past this (not draining its socket) is disconnected rather than buffered forever.
     const int MaxQueued = 8192;

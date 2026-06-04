@@ -25,7 +25,7 @@ namespace SharpMinerals.Network.Handlers;
 /// the seam where wire messages drive the ECS world. Block changes are broadcast to all in-game clients.
 /// </summary>
 public sealed class PlayPacketHandler {
-    static readonly ILogger Log = Logging.For<PlayPacketHandler>();
+    static readonly ILogger Log = Logging.For("Play");
 
     // Player Action status codes (PlayerActionC2S.Status).
     const int DiggingStarted = 0;   // creative / instant break

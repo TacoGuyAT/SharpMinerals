@@ -11,7 +11,7 @@ namespace SharpMinerals.Network.Protocols;
 /// Framing-only; concrete versions add codecs, ids, and a type mapper.
 /// </summary>
 public abstract class ModernJavaProtocol : Protocol {
-    static readonly ILogger Log = Logging.For<ModernJavaProtocol>();
+    static readonly ILogger Log = Logging.For("Net.Protocol");
 
     public override byte[] Frame(IMessage message) {
         byte[] payload = EncodePayload(message); // VarInt id + codec body

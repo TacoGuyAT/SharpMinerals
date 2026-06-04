@@ -9,7 +9,7 @@ namespace SharpMinerals.Events;
 /// Dispatch is polymorphic: publishing an event invokes handlers for its runtime type and every base type and
 /// interface (so a derived event reaches base-type handlers). Events are reference types (use <c>record</c>).</summary>
 public sealed class EventBus {
-    static readonly ILogger Log = Logging.For<EventBus>();
+    static readonly ILogger Log = Logging.For("Events");
 
     readonly object gate = new();
     volatile Dictionary<Type, Action<object>[]> handlers = new();

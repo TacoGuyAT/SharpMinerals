@@ -21,7 +21,7 @@ namespace SharpMinerals.Network.Handlers;
 public sealed class ServerPacketHandler {
     const byte CreativeMode = 1;
 
-    readonly ILogger Log = Logging.For<ServerPacketHandler>();
+    readonly ILogger Log = Logging.For("Play");
 
     readonly Server server;
     readonly PlayPacketHandler play;
