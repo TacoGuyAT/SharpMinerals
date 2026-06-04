@@ -444,10 +444,14 @@ public class PlayStateTests {
             NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
         });
 
-        // Discover the test-harness mod from its (compiled-in) assembly - the same LoadFrom path the CLI
-        // and the real-client fixture use.
+        // Load the test-harness mod. Under AOT (no reflection mod-discovery) use the type-safe TryLoad<T> - the same
+        // compiled-in path the CLI uses; otherwise exercise the reflection-based LoadFrom (the dynamic-discovery path).
         var loader = new ModLoader();
+#if AOT
+        loader.TryLoad(new SharpMinerals.TestMod.TestMod());
+#else
         loader.LoadFrom(typeof(SharpMinerals.TestMod.TestMod).Assembly);
+#endif
         Assert.Single(loader.Mods);
         Assert.Equal("sharpminerals_test", loader.Mods[0].Info.ModId);
 

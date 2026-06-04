@@ -70,7 +70,11 @@ public sealed class RealClientFixture : IAsyncLifetime {
         dispatcher.RegisterHelp().RegisterRun().RegisterTimeout().RegisterServer()
                   .RegisterSave().RegisterTp().RegisterWorld().RegisterClear().RegisterGive().RegisterSummon();
         var mods = new ModLoader();
+#if AOT
+        mods.TryLoad(new SharpMinerals.TestMod.TestMod()); // AOT has no reflection LoadFrom; load the compiled-in mod directly
+#else
         mods.LoadFrom(typeof(SharpMinerals.TestMod.TestMod).Assembly);
+#endif
         mods.StartAll(server);
 
         // A client's control-channel reply completes the matching pending request (one outstanding per client).
