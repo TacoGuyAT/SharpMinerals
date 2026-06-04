@@ -6,7 +6,7 @@ using SharpMinerals.Modding;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
 using SharpMinerals.Level;
-using SharpMinerals.Minecraft;
+using SharpMinerals.Vanilla;
 using SharpMinerals.Network;
 using SharpMinerals.Network.Handlers;
 using SharpMinerals.Network.Protocols.JE61;

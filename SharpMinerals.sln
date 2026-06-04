@@ -19,7 +19,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMinerals.TestMod", "Sh
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMinerals.SampleMod", "SharpMinerals.SampleMod\SharpMinerals.SampleMod.csproj", "{E17B2251-5E1B-4A18-A71F-DB2AB92B1364}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMinerals.Minecraft", "SharpMinerals.Minecraft\SharpMinerals.Minecraft.csproj", "{B2C3D4E5-6F70-4A8B-9C1D-2E3F4A5B6C7D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMinerals.Vanilla", "SharpMinerals.Vanilla\SharpMinerals.Vanilla.csproj", "{B2C3D4E5-6F70-4A8B-9C1D-2E3F4A5B6C7D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MinRocksDb", "..\MinRocksDb\MinRocksDb.csproj", "{5B1A0421-F514-4787-AB4D-C540F5588F7A}"
 EndProject
@@ -170,5 +170,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A84A152B-4757-4AF2-B028-1A7ABCE5D139}
 	EndGlobalSection
 EndGlobal

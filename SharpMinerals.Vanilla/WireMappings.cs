@@ -4,11 +4,11 @@ using SharpMinerals.Network.Protocols.JE61;
 using SharpMinerals.Network.Protocols.JE762;
 using SharpMinerals.Network.Protocols.JE763;
 
-namespace SharpMinerals.Minecraft;
+namespace SharpMinerals.Vanilla;
 
 /// <summary>
 /// Registers the vanilla wire mappings (block-state / item / entity ids per protocol version) with the data-driven
-/// <see cref="TypeMapper"/>. This is the wire-side counterpart to the content registration in <see cref="MinecraftMod"/>
+/// <see cref="TypeMapper"/>. This is the wire-side counterpart to the content registration in <see cref="VanillaMod"/>
 /// — the core engine knows no vanilla ids; they all live here. Ranges use the protocol inheritance chain: a
 /// <c>Map&lt;ProtocolJE762&gt;</c> applies to 762 AND 763 (onwards), and a <c>Map&lt;ProtocolJE763&gt;</c> delta
 /// overrides it per facet for 763+.

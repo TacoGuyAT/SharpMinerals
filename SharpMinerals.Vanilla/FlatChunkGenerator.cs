@@ -2,7 +2,7 @@ using SharpMinerals.Blocks;
 using SharpMinerals.Level;
 using SharpMinerals.Math;
 
-namespace SharpMinerals.Minecraft;
+namespace SharpMinerals.Vanilla;
 
 /// <summary>A classic superflat generator: bedrock, three layers of dirt, and a grass surface, air elsewhere. The
 /// surface sits at <see cref="WorldDefaults.SurfaceY"/>. Lives in the vanilla mod because it builds vanilla blocks;
@@ -26,9 +26,9 @@ public sealed class FlatChunkGenerator : IChunkGenerator {
     }
 
     static BlockType LayerAt(long worldY) => worldY switch {
-        0 => Vanilla.Bedrock,
-        >= 1 and <= 3 => Vanilla.Dirt,
-        WorldDefaults.GrassY => Vanilla.GrassBlock,
+        0 => VanillaMod.Bedrock,
+        >= 1 and <= 3 => VanillaMod.Dirt,
+        WorldDefaults.GrassY => VanillaMod.GrassBlock,
         _ => BlockRegistry.Air,
     };
 }

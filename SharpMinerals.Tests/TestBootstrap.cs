@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using SharpMinerals.Blocks;
-using SharpMinerals.Minecraft;
+using SharpMinerals.Vanilla;
 using SharpMinerals.Modding;
 
 namespace SharpMinerals.Tests;
@@ -12,6 +12,6 @@ internal static class TestBootstrap {
     [ModuleInitializer]
     internal static void Init() {
         _ = BlockRegistry.Air;                       // engine blocks first (air id 0, missing id 1)
-        new ModLoader().TryLoad(new MinecraftMod()); // minecraft:* content + Vanilla.* fields
+        new ModLoader().TryLoad(new VanillaMod()); // minecraft:* content + Vanilla.* fields
     }
 }
