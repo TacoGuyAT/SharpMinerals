@@ -31,7 +31,9 @@ using System.Net;
 
 var loaded = ServerConfig.Load(Path.Combine(Directory.GetCurrentDirectory(), "server.json"));
 var config = loaded.Config;
-LoggingSetup.Configure(config.LogsDir, config.LogLevel);
+// The console owns stdout; logging routes its interactive console sink through it (so logs never corrupt the prompt).
+var console = new ConsoleRenderer();
+LoggingSetup.Configure(console, config.LogsDir, config.LogLevel);
 var log = Logging.For("Bootstrap");
 
 if (loaded.Notice is { } notice) {
@@ -128,9 +130,10 @@ server.CommandDispatcher
 // Mods run OnServerStarted now (server up, core commands registered): they layer on their own commands, etc.
 modLoader.StartAll(server);
 
-// Console: the server owns the sender (shared with tests); the CLI wires its stdin loop and logs replies.
-var console = new ConsoleInput(server.Sender);
-console.Start();
+// Console: the server owns the sender (shared with tests); the renderer wires its stdin loop and logs replies.
+// On an interactive TTY, offer Brigadier completions as gray ghost text (mods' commands are registered by now).
+console.Suggester = new CommandSuggestionProvider(server.CommandDispatcher, server.Sender);
+console.Start(server.Sender);
 
 // Optionally run a startup script.
 if (!string.IsNullOrEmpty(config.Startup))

@@ -16,9 +16,10 @@ static class LoggingSetup {
     /// <summary>
     /// Configures logging and installs it on <see cref="Logging.Factory"/>: console plus a daily
     /// rolling file in <paramref name="logsDir"/> (null/empty = console only). <paramref name="level"/>
-    /// is the configured minimum. Call once at startup before constructing the server.
+    /// is the configured minimum. The interactive console sink is routed through <paramref name="renderer"/>.
+    /// Call once at startup before constructing the server.
     /// </summary>
-    public static void Configure(string? logsDir, LogLevel level) {
+    public static void Configure(ConsoleRenderer renderer, string? logsDir, LogLevel level) {
         bool toFile = !string.IsNullOrWhiteSpace(logsDir);
         if (toFile) Directory.CreateDirectory(logsDir!);
 
@@ -26,7 +27,13 @@ static class LoggingSetup {
             builder.SetMinimumLevel(ToMs(level));
 
             // Console gets the coloured layout (plain when stdout is redirected); the file gets the plain one.
-            builder.AddZLoggerConsole(options => options.UsePlainTextFormatter(FormatColoured));
+            // On an interactive TTY, route the console sink through the renderer so log lines repaint around the
+            // input prompt instead of corrupting it. When redirected (the piped `tail | server` harness, a file, CI),
+            // there's no live prompt to protect: keep the standard console sink byte-for-byte unchanged.
+            if (renderer.IsInteractive)
+                builder.AddZLoggerStream(renderer.LogStream, options => options.UsePlainTextFormatter(FormatColoured));
+            else
+                builder.AddZLoggerConsole(options => options.UsePlainTextFormatter(FormatColoured));
 
             if (toFile) {
                 // One file per run: the start time is stamped into the name once, so a restart never appends to
@@ -116,8 +123,8 @@ static class LoggingSetup {
             else StripCsi(span, writer);
         }
 
-        // Copy src to dst, dropping CSI sequences: ESC '[' , parameter/intermediate bytes (0x20–0x3F),
-        // then one final byte (0x40–0x7E). A lone ESC (not followed by '[') is left as-is.
+        // Copy src to dst, dropping CSI sequences: ESC '[' , parameter/intermediate bytes (0x20-0x3F),
+        // then one final byte (0x40-0x7E). A lone ESC (not followed by '[') is left as-is.
         static void StripCsi(ReadOnlySpan<byte> src, IBufferWriter<byte> dst) {
             int i = 0, runStart = 0;
             while (i < src.Length) {

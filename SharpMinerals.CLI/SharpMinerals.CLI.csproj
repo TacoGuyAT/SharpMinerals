@@ -8,14 +8,21 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks> <!-- [LibraryImport] (ConsoleRenderer's VT-enable P/Invoke) needs it -->
     <AssemblyName>SharpMinerals.CLI</AssemblyName>
     <RootNamespace>SharpMinerals.CLI</RootNamespace>
-    <ApplicationIcon>icon_temp.ico</ApplicationIcon>
+  </PropertyGroup>
 
   <!-- The control-channel test harness + diagnostic dump commands compile in only on Debug,
        matching the core library's TEST_HARNESS gating. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DefineConstants>$(DefineConstants);TEST_HARNESS</DefineConstants>
+  </PropertyGroup>
+
+  <!-- ConsoleRenderer's VT-enable kernel32 P/Invoke compiles in only when building on Windows (#if WINDOWS);
+       other platforms' terminals interpret ANSI escapes natively, so the code is dropped entirely there. -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <!-- AOT flavor ($(AOT), defaulted in Directory.Build.props): the AOT symbol drops dynamic mod loading +
@@ -25,17 +32,17 @@
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
-  <ItemGroup>
-    <Content Include="icon_temp.ico" />
-  </ItemGroup>
 
-  <!-- The logging backend lives here, in the host — the core library only references the abstractions. -->
+  <!-- The logging backend lives here, in the host - the core library only references the abstractions. -->
   <ItemGroup>
     <PackageReference Include="Kokuban" Version="0.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="ZLogger" Version="2.5.10" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
-    <!-- Vanilla content (blocks/items/generator) is a normal mod, loaded first by Program.cs — needed in all configs. -->
+    <!-- Vanilla content (blocks/items/generator) is a normal mod, loaded first by Program.cs - needed in all configs. -->
     <ProjectReference Include="..\SharpMinerals.Vanilla\SharpMinerals.Vanilla.csproj" />
   </ItemGroup>
 
