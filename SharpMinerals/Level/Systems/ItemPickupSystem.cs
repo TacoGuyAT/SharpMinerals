@@ -18,7 +18,7 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     readonly World world;
     // Collected during the query, processed after (mutating inventories/despawning mid-iteration is unsafe).
     readonly List<(ArchEntity Collector, ArchEntity Drop)> pending = new();
-    readonly List<(ArchEntity Collector, int NetId, int Count, ItemStack Leftover)> collected = new(); // Tick -> Flush hand-off
+    readonly List<(ArchEntity Collector, ArchEntity Drop, int NetId, int Count, ItemStack Leftover)> collected = new(); // Tick -> Flush hand-off
 
     public ItemPickupSystem(World world) => this.world = world;
 
@@ -42,13 +42,12 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
             int picked = original - leftover.Count;
             if (picked <= 0) continue; // inventory full - nothing taken
 
+            // Claim the drop now (emptied on a full pickup, shrunk on a partial) so a second collector this tick
+            // skips it - but DON'T despawn it yet: the entity tracker despawns synchronously on DestroyEntity, and
+            // the collect animation must reach the client BEFORE the removal. The destroy happens in Flush.
             int netId = pickup.EntityId;
-            if (leftover.IsEmpty)
-                world.DestroyEntity(drop);
-            else
-                pickup.Stack = leftover; // partial pickup - the rest stays on the ground
-
-            collected.Add((collector, netId, picked, leftover));
+            pickup.Stack = leftover;
+            collected.Add((collector, drop, netId, picked, leftover));
         }
     }
 
@@ -57,17 +56,20 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     public void Flush(Server server) {
         if (collected.Count == 0) return;
         var ecs = world.Ecs;
-        foreach (var (collector, netId, count, leftover) in collected) {
-            if (!ecs.IsAlive(collector)) continue;
-            int collectorNetId = ecs.Get<NetPlayerEntityComponent>(collector).EntityId;
+        foreach (var (collector, drop, netId, count, leftover) in collected) {
+            // Collect animation (item flies to the collector) - sent FIRST, while the client still has the entity.
+            if (ecs.IsAlive(collector))
+                Broadcast(server, new CollectItemS2C(netId, ecs.Get<NetPlayerEntityComponent>(collector).EntityId, count));
 
-            // Collect animation (item flies to the collector). On a FULL pickup the drop was destroyed in Tick, so
-            // the entity tracker despawns it for each viewer this same flush; only a PARTIAL pickup needs a count update.
-            Broadcast(server, new CollectItemS2C(netId, collectorNetId, count));
-            if (!leftover.IsEmpty)
+            // Then update the ground stack: a full pickup despawns the drop (the tracker's RemoveEntities now follows
+            // the collect animation); a partial one just pushes the new count.
+            if (leftover.IsEmpty) {
+                if (ecs.IsAlive(drop)) world.DestroyEntity(drop);
+            } else {
                 Broadcast(server, new SetItemEntityMetadataS2C(netId, leftover));
+            }
 
-            if (ecs.Get<SenderEntityComponent>(collector).Client is { } client) {
+            if (ecs.IsAlive(collector) && ecs.Get<SenderEntityComponent>(collector).Client is { } client) {
                 var inventory = ecs.Get<InventoryEntityComponent>(collector);
                 server.NetServer.Send(client.Id, new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
             }

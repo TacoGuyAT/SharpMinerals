@@ -1336,6 +1336,37 @@ public class PlayStateTests {
         Assert.Contains(client.Sent, m => m is SpawnEntityS2C s && s.Type == EntityRegistry.Item);
     }
 
+    // -- Item pickup: the collect animation must reach the viewer BEFORE the entity is removed, or the item
+    //    just vanishes with no fly-to-player animation. (Regression: the event-driven tracker despawns on
+    //    DestroyEntity synchronously, so the pickup must destroy the drop only AFTER broadcasting the collect.) --
+    [Fact]
+    public void ItemPickupCollectAnimationPrecedesRemoval() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
+        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Picker", Guid.Empty));
+        server.Events.DrainDeferred();
+
+        // A drop at the player's feet (in view, no pickup delay matters once aged) - spawned to the viewer on spawn.
+        var drop = server.DefaultWorld.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(VanillaMod.Cobblestone, 1));
+        int netId = server.DefaultWorld.Ecs.Get<PickupEntityComponent>(drop).EntityId;
+
+        client.Sent.Clear();
+        for (int i = 0; i < 12; i++) server.DefaultWorld.Tick(); // age past pickup delay, settle, collect
+        server.FlushSystems();
+
+        int collect = client.Sent.FindIndex(m => m is CollectItemS2C c && c.CollectedEntityId == netId);
+        int remove = client.Sent.FindIndex(m => m is RemoveEntitiesS2C r && r.EntityIds.Contains(netId));
+        Assert.True(collect >= 0, "collect animation sent to the viewer");
+        Assert.True(remove >= 0, "drop removed from the viewer");
+        Assert.True(collect < remove, "collect animation precedes the removal");
+    }
+
     // -- Entity tracker: per-player visibility - spawn in view, cull out of view, remove on destroy --
     [Fact]
     public void EntityTrackerSpawnsInViewItemsAndRemovesThemOutOfView() {
