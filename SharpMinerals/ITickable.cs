@@ -5,6 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace SharpMinerals;
-public interface ITickable {
+public interface ITickable : ISystem {
     public void Tick();
 }

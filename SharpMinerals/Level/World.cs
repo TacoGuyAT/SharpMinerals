@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using Arch.Core;
 using SharpMinerals.Blocks;
-using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Entities.Descriptors;
@@ -9,6 +8,7 @@ using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
 using SharpMinerals.Items;
 using SharpMinerals.Math;
+using SharpMinerals.Network;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Persistence;
 using ArchWorld = Arch.Core.World;
@@ -27,12 +27,29 @@ public class World : ITickable {
     readonly IWorldStore? store;
     readonly ConcurrentDictionary<Vector3i, Chunk> loadedChunks = new();
 
-    // The per-tick entity systems, run in registration order each Tick.
-    readonly List<ITickable> systems;
+    // Every registered system (owns their lifetime), plus role-specific views so the per-tick loop and the
+    // client-projection passes each iterate exactly what they need (no per-element interface test). A system
+    // implementing both interfaces lands in both views; a purely event-driven one lives only in `systems`.
+    readonly List<ISystem> systems = new();
+    readonly List<ITickable> tickables = new();           // run in registration order each Tick
+    readonly List<INetworkSystem> networkSystems = new();  // driven by the server's Announce/Flush passes
 
-    /// <summary>The world's per-tick systems. The server scans these for <c>INetworkSystem</c> to drive each
-    /// one's client projection, so a world that omits a system also sends none of its packets.</summary>
-    public IReadOnlyList<ITickable> Systems => systems;
+    /// <summary>Every system registered in this world, in registration order.</summary>
+    public IReadOnlyList<ISystem> Systems => systems;
+
+    /// <summary>The world's per-tick systems, in registration order.</summary>
+    public IReadOnlyList<ITickable> Tickables => tickables;
+
+    /// <summary>The world's network-aware systems (client projection). A world that omits one sends none of its
+    /// packets - the server drives these in its pre-/post-tick passes.</summary>
+    public IReadOnlyList<INetworkSystem> NetworkSystems => networkSystems;
+
+    // Files a system under each role it implements. One call per system keeps registration order across the views.
+    void Register(ISystem system) {
+        systems.Add(system);
+        if (system is ITickable tickable) tickables.Add(tickable);
+        if (system is INetworkSystem network) networkSystems.Add(network);
+    }
 
     public string Name { get; }
 
@@ -76,17 +93,15 @@ public class World : ITickable {
         this.chunkGenerator = chunkGenerator;
         this.store = store;
         Entities = new SpatialIndex(this);
-        systems = new List<ITickable> {
-            new Systems.ItemLifecycleSystem(this),
-            new Systems.EntityPhysicsSystem(this),      // gravity + terrain collision; writes block-collision feedback
-            new Systems.FallingBlockSystem(this),       // lands falling blocks using that ground-contact feedback
-            new Systems.CollisionFeedbackSystem(this),  // entity-vs-entity overlap, on settled positions
-            new Systems.ItemPickupSystem(this),         // collects overlapped drops into player inventories
-            new Systems.EquipmentVisibilitySystem(this),// diffs each player's equipment -> others (post-tick)
-            new Systems.PlayerMovementSystem(this),     // relays each player's movement -> others (post-tick)
-            new Systems.ChunkStreamingSystem(this),     // streams columns as a player crosses chunks (post-tick)
-            new Systems.EntityTrackerSystem(this),      // per-player entity spawn/despawn - event-driven (no per-tick work); listed so it's constructed + subscribed
-        };
+        Register(new Systems.ItemLifecycleSystem(this));
+        Register(new Systems.EntityPhysicsSystem(this));      // gravity + terrain collision; writes block-collision feedback
+        Register(new Systems.FallingBlockSystem(this));       // lands falling blocks using that ground-contact feedback
+        Register(new Systems.CollisionFeedbackSystem(this));  // entity-vs-entity overlap, on settled positions
+        Register(new Systems.ItemPickupSystem(this));         // collects overlapped drops into player inventories
+        Register(new Systems.EquipmentVisibilitySystem(this));// diffs each player's equipment -> others (post-tick)
+        Register(new Systems.PlayerMovementSystem(this));     // relays each player's movement -> others (post-tick)
+        Register(new Systems.ChunkStreamingSystem(this));     // streams columns as a player crosses chunks (post-tick)
+        Register(new Systems.EntityTrackerSystem(this));      // per-player entity spawn/despawn - event-driven (no per-tick work); registered so it's constructed + subscribed
     }
 
     // -- Chunks --------------------------------------------------------------
@@ -395,7 +410,7 @@ public class World : ITickable {
     public void Tick() {
         if (!IsActive) return;
 
-        foreach (var system in systems)
+        foreach (var system in tickables)
             system.Tick();
 
         // Block entities (furnaces, ...) per loaded chunk.

@@ -276,16 +276,16 @@ public class Server : ITickable {
     /// entities at their un-decayed spawn state), on this thread, before the parallel world ticks.</summary>
     public void AnnounceSystems() {
         foreach (var world in Worlds.Values)
-            foreach (var system in world.Systems)
-                if (system is Network.INetworkSystem ns) ns.Announce(this);
+            foreach (var system in world.NetworkSystems)
+                system.Announce(this);
     }
 
     /// <summary>Post-tick client projection: run each world's network-aware systems' <c>Flush</c> (landings,
     /// pickups, despawns, ...), on this thread, after the parallel world ticks settle.</summary>
     public void FlushSystems() {
         foreach (var world in Worlds.Values)
-            foreach (var system in world.Systems)
-                if (system is Network.INetworkSystem ns) ns.Flush(this);
+            foreach (var system in world.NetworkSystems)
+                system.Flush(this);
     }
 
     /// <summary>Drops chunks no online player can see (saving dirty ones first) across every world.</summary>

@@ -1,6 +1,5 @@
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
-using SharpMinerals.Math;
 using SharpMinerals.Network;
 using SharpMinerals.Network.Messages;
 using ArchWorld = Arch.Core.World;
@@ -17,7 +16,7 @@ namespace SharpMinerals.Level.Systems;
 /// entities are stamped here on spawn (replacing the old pre-tick Announce), so the physical gates that read
 /// <c>EntityId != 0</c> see them immediately. World events fire from both the tick and network threads, so every
 /// handler runs under <see cref="gate"/>.</summary>
-public sealed class EntityTrackerSystem : ITickable {
+public sealed class EntityTrackerSystem : ISystem {
     readonly World world;
     readonly object gate = new();
 
@@ -36,8 +35,6 @@ public sealed class EntityTrackerSystem : ITickable {
         world.ViewerUnloadedColumn += OnViewerUnloadedColumn;
         world.Entities.EntityChangedColumn += OnEntityChangedColumn;
     }
-
-    public void Tick() { } // purely event-driven - no per-tick work
 
     // -- Entity lifetime -------------------------------------------------------
 
