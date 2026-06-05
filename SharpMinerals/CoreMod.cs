@@ -1,5 +1,4 @@
 using SharpMinerals.Blocks;
-using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Entities.Descriptors;
@@ -54,6 +53,7 @@ public sealed class CoreMod : Mod {
                 new CollisionEntityComponent { Touching = new List<ArchEntity>() },
                 new ChunkViewEntityComponent(),
                 new EquipmentEntityComponent(),
+                new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned
                 new SenderEntityComponent(),
                 new NetPlayerEntityComponent()));
 

@@ -15,8 +15,6 @@ namespace SharpMinerals.Level.Systems;
 /// the spawn + landing to clients via <see cref="INetworkSystem"/>. Because sim and its client view live in the
 /// one class, the landing hand-off is just a field - no ECS tag or extra query.</summary>
 public sealed class FallingBlockSystem : ITickable, INetworkSystem {
-    static readonly QueryDescription LiveQuery =
-        new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent>();
     static readonly QueryDescription GroundedQuery =
         new QueryDescription().WithAll<FallingBlockEntityComponent, TransformEntityComponent, BlockCollisionEntityComponent>();
 
@@ -63,43 +61,22 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
         }
     }
 
-    /// <summary>Pre-tick: give each freshly-detached block a network id and announce its spawn, so the client
-    /// tracks it from its un-decayed position and mirrors the fall.</summary>
-    public void Announce(Server server) {
-        var ecs = world.Ecs;
-        var fresh = new List<(ArchEntity Entity, BlockType Block, TransformEntityComponent Pos)>();
-        ecs.Query(in LiveQuery, (ArchEntity e, ref FallingBlockEntityComponent f, ref TransformEntityComponent t) => {
-            if (f.EntityId == 0) fresh.Add((e, f.Block, t));
-        });
-
-        foreach (var (entity, block, pos) in fresh) {
-            int id = server.NextEntityId();
-            ecs.Get<FallingBlockEntityComponent>(entity).EntityId = id;
-            SendSpawn(m => server.NetServer.Broadcast(m, c => c.State == ConnectionState.Play), id, block, pos);
-        }
-    }
-
     /// <summary>Writes the spawn packet for a falling block (carrying its block as the spawn Data) to
-    /// <paramref name="send"/> - a broadcast from <see cref="Announce"/>, or a targeted send when an existing
-    /// falling block is shown to a joining player (<see cref="Network.EntityVisibility"/>).</summary>
+    /// <paramref name="send"/> - called by the entity tracker when a falling block comes into a player's view.</summary>
     public static void SendSpawn(Action<IMessage> send, int id, BlockType block, TransformEntityComponent pos) =>
         send(new SpawnEntityS2C(
             EntityId: id, Uuid: Guid.NewGuid(), Type: EntityRegistry.FallingBlock,
             X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0,
             Data: 0, VelocityX: 0, VelocityY: 0, VelocityZ: 0, BlockData: block));
 
-    /// <summary>Post-tick: broadcast each landed cell's resulting block (whatever the reaction left there) and
-    /// remove the now-despawned entity.</summary>
+    /// <summary>Post-tick: broadcast each landed cell's resulting block (whatever the reaction left there). The
+    /// entity removal is the entity tracker's job - the landed entity was destroyed in <see cref="Tick"/>, so the
+    /// tracker despawns it for each viewer on this same flush.</summary>
     public void Flush(Server server) {
         if (landed.Count == 0) return;
-        var ids = new int[landed.Count];
-        for (int i = 0; i < landed.Count; i++) {
-            var (netId, cell) = landed[i];
+        foreach (var (_, cell) in landed)
             server.BroadcastInRange(world, cell.X + 0.5, cell.Z + 0.5,
                 new BlockUpdateS2C(cell, world.GetBlock(cell), world.GetBlockState(cell)));
-            ids[i] = netId;
-        }
-        server.NetServer.Broadcast(new RemoveEntitiesS2C(ids), c => c.State == ConnectionState.Play);
         landed.Clear();
     }
 

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Linq;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Math;
 using ArchEntity = Arch.Core.Entity;
@@ -18,6 +17,12 @@ public sealed class SpatialIndex {
     readonly World world;
 
     public SpatialIndex(World world) => this.world = world;
+
+    /// <summary>An entity crossed a chunk COLUMN boundary (its X/Z chunk changed; pure-Y moves don't fire it).
+    /// The entity tracker uses this to move the entity between viewers' loaded-column sets.</summary>
+    public event Action<ArchEntity, (Mint X, Mint Z), (Mint X, Mint Z)>? EntityChangedColumn;
+
+    static (Mint X, Mint Z) Column(Vector3i cell) => (cell.X, cell.Z);
 
     /// <summary>The chunk-cube coordinate that contains a world position. Must be the GLOBAL chunk coord
     /// (monotonic, so the range walk in <see cref="ForEachCandidate"/> works); ToLocal would wrap at chunk
@@ -43,12 +48,14 @@ public sealed class SpatialIndex {
     /// <summary>Re-files an entity that moved; a no-op unless it crossed a chunk boundary.</summary>
     public void Update(ArchEntity entity, double x, double y, double z) {
         var cell = CellOf(x, y, z);
-        if (cellOf.TryGetValue(entity, out var old)) {
+        bool known = cellOf.TryGetValue(entity, out var old);
+        if (known) {
             if (old == cell) return; // same cube - nothing to do
             if (buckets.TryGetValue(old, out var oldSet)) oldSet.TryRemove(entity, out _);
         }
         Bucket(cell)[entity] = 0;
         cellOf[entity] = cell;
+        if (known && Column(old) != Column(cell)) EntityChangedColumn?.Invoke(entity, Column(old), Column(cell));
     }
 
     ConcurrentDictionary<ArchEntity, byte> Bucket(Vector3i cell) =>

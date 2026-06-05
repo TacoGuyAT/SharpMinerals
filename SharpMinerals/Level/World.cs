@@ -44,6 +44,31 @@ public class World : ITickable {
     /// Systems publish deferred, since worlds tick on parallel threads.</summary>
     public EventBus? Events { get; set; }
 
+    /// <summary>Allocates the next server-wide network entity id (set by <c>Server</c>; null in standalone tests).
+    /// The entity tracker stamps freshly-spawned loose entities with one so the client can address them.</summary>
+    public Func<int>? NextEntityId { get; set; }
+
+    // -- Entity lifetime / visibility events (C# events; World is the hub the EntityTrackerSystem subscribes to) ----
+    /// <summary>A fully-initialised entity was added to this world (raised by the SpawnXxx methods AFTER their
+    /// per-instance components are set, so a handler sees a complete entity).</summary>
+    public event Action<World, ArchEntity>? EntitySpawned;
+    /// <summary>An entity is about to be destroyed - raised by <see cref="DestroyEntity"/> while it is still ALIVE,
+    /// so a handler can read its net id / position before the ECS row is gone.</summary>
+    public event Action<World, ArchEntity>? EntityDespawning;
+    /// <summary>A viewer's client just gained a chunk column (raised by <see cref="Streaming"/> after it updated
+    /// <see cref="ChunkViewEntityComponent.Loaded"/>): entities now in view should be spawned to it.</summary>
+    public event Action<World, ArchEntity, (Mint X, Mint Z)>? ViewerLoadedColumn;
+    /// <summary>A viewer's client just dropped a chunk column: entities in it should be despawned from it.</summary>
+    public event Action<World, ArchEntity, (Mint X, Mint Z)>? ViewerUnloadedColumn;
+
+    // Streaming lives in this assembly but a different type, so it raises these via internal forwarders.
+    internal void RaiseViewerLoadedColumn(ArchEntity viewer, (Mint X, Mint Z) column) => ViewerLoadedColumn?.Invoke(this, viewer, column);
+    internal void RaiseViewerUnloadedColumn(ArchEntity viewer, (Mint X, Mint Z) column) => ViewerUnloadedColumn?.Invoke(this, viewer, column);
+
+    /// <summary>The chunk column (X,Z) a world position falls in - the visibility unit the tracker and streaming share.</summary>
+    public static (Mint X, Mint Z) ColumnOf(in TransformEntityComponent t) =>
+        ((Mint)System.Math.Floor(t.X) >> Chunk.Shifts, (Mint)System.Math.Floor(t.Z) >> Chunk.Shifts);
+
     public World(string name, IWorldStore? store = null) : this(name, IChunkGenerator.Default, store) { }
 
     public World(string name, IChunkGenerator chunkGenerator, IWorldStore? store = null) {
@@ -60,6 +85,7 @@ public class World : ITickable {
             new Systems.EquipmentVisibilitySystem(this),// diffs each player's equipment -> others (post-tick)
             new Systems.PlayerMovementSystem(this),     // relays each player's movement -> others (post-tick)
             new Systems.ChunkStreamingSystem(this),     // streams columns as a player crosses chunks (post-tick)
+            new Systems.EntityTrackerSystem(this),      // per-player entity spawn/despawn - event-driven (no per-tick work); listed so it's constructed + subscribed
         };
     }
 
@@ -137,6 +163,7 @@ public class World : ITickable {
             EntityCodec.Apply(Ecs, entity, blob);
             var t = Ecs.Get<TransformEntityComponent>(entity);
             Entities.Update(entity, t.X, t.Y, t.Z);     // re-file at the restored position
+            EntitySpawned?.Invoke(this, entity);        // now fully restored - the tracker ids + tracks it
             spawned++;
         }
         return spawned;
@@ -294,8 +321,13 @@ public class World : ITickable {
     }
 
     /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
-    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, byte[]? saved = null) =>
-        Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
+    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, byte[]? saved = null) {
+        var entity = Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
+        // Player.Spawn has stamped the net id / position / inventory; the tracker can now spawn this player to any
+        // viewer already holding its column. The player's own view of others follows once its columns stream in.
+        EntitySpawned?.Invoke(this, entity);
+        return entity;
+    }
 
     /// <summary>Spawns a dropped-item entity centred on a block with a small random upward pop.</summary>
     public ArchEntity SpawnDroppedItem(Vector3i blockPos, ItemStack stack) {
@@ -310,6 +342,7 @@ public class World : ITickable {
         var entity = Spawn(EntityRegistry.Item, new TransformEntityComponent(x, y, z));
         Ecs.Get<VelocityEntityComponent>(entity) = velocity;
         Ecs.Get<PickupEntityComponent>(entity) = new PickupEntityComponent { Stack = stack, Age = 0, PickupDelay = pickupDelay };
+        EntitySpawned?.Invoke(this, entity); // fully initialised - the tracker can now id + spawn it
         return entity;
     }
 
@@ -337,12 +370,14 @@ public class World : ITickable {
     public ArchEntity SpawnFallingBlock(Vector3i cell, BlockType block) {
         var entity = Spawn(EntityRegistry.FallingBlock, new TransformEntityComponent(cell.X + 0.5, cell.Y, cell.Z + 0.5));
         Ecs.Get<FallingBlockEntityComponent>(entity).Block = block;
+        EntitySpawned?.Invoke(this, entity);
         return entity;
     }
 
     /// <summary>Despawns an entity: drops it from the spatial index, then destroys it in the ECS.
     /// Route all entity destruction through here so the index never holds a dead handle.</summary>
     public void DestroyEntity(ArchEntity entity) {
+        EntityDespawning?.Invoke(this, entity); // still alive: handlers read its net id / column before the row is gone
         Entities.Remove(entity);
         Ecs.Destroy(entity);
     }

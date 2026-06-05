@@ -61,10 +61,10 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
             if (!ecs.IsAlive(collector)) continue;
             int collectorNetId = ecs.Get<NetPlayerEntityComponent>(collector).EntityId;
 
+            // Collect animation (item flies to the collector). On a FULL pickup the drop was destroyed in Tick, so
+            // the entity tracker despawns it for each viewer this same flush; only a PARTIAL pickup needs a count update.
             Broadcast(server, new CollectItemS2C(netId, collectorNetId, count));
-            if (leftover.IsEmpty)
-                Broadcast(server, new RemoveEntitiesS2C(new[] { netId }));
-            else
+            if (!leftover.IsEmpty)
                 Broadcast(server, new SetItemEntityMetadataS2C(netId, leftover));
 
             if (ecs.Get<SenderEntityComponent>(collector).Client is { } client) {

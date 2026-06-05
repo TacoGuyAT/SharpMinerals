@@ -269,8 +269,9 @@ public class PlayStateTests {
         Assert.True(
             capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == digPos && b.Block == BlockRegistry.Air),
             "dig: BlockUpdate broadcast");
-        server.AnnounceSystems(); // the pre-physics announce broadcasts new drops' SpawnEntity
-        Assert.True(capture.Broadcasts.Any(m => m is SpawnEntityS2C), "dig: drop announced (SpawnEntity)");
+        server.AnnounceSystems(); // assign the drop a net id
+        server.FlushSystems();    // the tracker spawns it to the in-view player
+        Assert.True(client.Sent.Any(m => m is SpawnEntityS2C), "dig: drop spawned to the player (SpawnEntity)");
 
         // Placement (held item is Stone; placing on the top face of a grass block).
         capture.Broadcasts.Clear();
@@ -370,17 +371,26 @@ public class PlayStateTests {
             NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
         });
 
-        // Break a block -> drop spawns with the upward pop (DropVelocity Y = 0.2). Announce BEFORE any
-        // physics tick, so the velocity is the un-decayed spawn value.
+        // A viewer near the drop: entity visibility is per-player now, so the tracker sends the spawn to it.
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Viewer", Guid.Empty));
+        server.Events.DrainDeferred();
+        client.Sent.Clear();
+
+        // Break a block -> drop spawns with the upward pop (DropVelocity Y = 0.2). Flush BEFORE any physics tick,
+        // so the velocity the tracker sends is the un-decayed spawn value.
         server.DefaultWorld.BreakBlock(new Vector3i(0, 4, 0));
-        server.AnnounceSystems();
+        server.AnnounceSystems(); // assign the drop a net id
+        server.FlushSystems();    // the tracker spawns it to the in-view player
 
         // Velocity is delivered by the explicit Set Entity Velocity packet (the 1.20.1 client ignores
         // the spawn-packet velocity for items); the spawn packet's velocity is deliberately zeroed so it
         // can't double-apply. 0.2 blocks/tick x 8000 = 1600.
-        var spawn = capture.Broadcasts.OfType<SpawnEntityS2C>().First();
+        var spawn = client.Sent.OfType<SpawnEntityS2C>().First();
         Assert.Equal(0, spawn.VelocityY);
-        var vel = capture.Broadcasts.OfType<SetEntityVelocityS2C>().First();
+        var vel = client.Sent.OfType<SetEntityVelocityS2C>().First();
         Assert.Equal(spawn.EntityId, vel.EntityId);
         Assert.True(vel.VelocityY > 1000, $"item pop velocity sent (VelocityY={vel.VelocityY})");
     }
@@ -398,6 +408,13 @@ public class PlayStateTests {
         });
         var world = server.DefaultWorld;
 
+        // A viewer (spawn column 0,0): the sand column (1,1) is within view, so the tracker spawns/despawns it for it.
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Viewer", Guid.Empty));
+        server.Events.DrainDeferred();
+
         // A lone stone platform high above the flat terrain, with sand a few cells above it over air.
         var floor = new Vector3i(20, 100, 20);
         var sand = new Vector3i(20, 104, 20);
@@ -407,19 +424,19 @@ public class PlayStateTests {
 
         var fallingQuery = new QueryDescription().WithAll<FallingBlockEntityComponent>();
 
-        // Air beneath the sand -> it detaches: the source cell clears and one falling entity appears.
+        // Air beneath the sand -> it detaches: the source cell clears and one falling entity appears. The tracker
+        // stamps its net id and spawns it to the in-view viewer synchronously on spawn, so clear FIRST.
+        client.Sent.Clear();
         SharpMinerals.Level.Systems.FallingBlockSystem.TryStartFalling(server, world, sand);
         Assert.True(world.GetBlock(sand).IsAir, "fall: the sand's source cell is cleared");
         Assert.Equal(1, world.Ecs.CountEntities(in fallingQuery));
 
-        // Announced (pre-physics) as a falling_block carrying its block (Data = the per-protocol state id).
-        server.AnnounceSystems();
-        var spawn = capture.Broadcasts.OfType<SpawnEntityS2C>().First();
+        var spawn = client.Sent.OfType<SpawnEntityS2C>().First();
         Assert.Equal(EntityRegistry.FallingBlock, spawn.Type);
         Assert.Equal<BlockType>(VanillaMod.Sand, spawn.BlockData);
 
         // Landing happens inside the world tick (FallingBlockSystem fires the block's IOnLand reaction and
-        // despawns the entity, recording the landing); its Flush then projects the block update + removal.
+        // despawns the entity, recording the landing); its Flush projects the block update and the tracker the removal.
         for (int i = 0; i < 200 && world.Ecs.CountEntities(in fallingQuery) != 0; i++)
             world.Tick();
         server.FlushSystems();
@@ -429,7 +446,129 @@ public class PlayStateTests {
         Assert.True(world.GetBlock(sand).IsAir, "fall: the original cell stays air after landing");
         Assert.Contains(capture.Broadcasts.OfType<BlockUpdateS2C>(),
             b => b.Position.Equals(landed) && b.Block == VanillaMod.Sand);
-        Assert.Contains(capture.Broadcasts.OfType<RemoveEntitiesS2C>(), r => r.EntityIds.Contains(spawn.EntityId));
+        Assert.Contains(client.Sent.OfType<RemoveEntitiesS2C>(), r => r.EntityIds.Contains(spawn.EntityId));
+    }
+
+    // -- A 1.20.1 client renders a player only if its tab-list entry (PlayerInfoUpdate) arrives BEFORE the spawn.
+    //    Capture the whole join sequence (do NOT clear) and assert both the entry is sent and it precedes the spawn. --
+    [Fact]
+    public void PlayerInfoEntryIsSentBeforeSpawn() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator()),
+        };
+        var server = new Server(new ServerContext {
+            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
+        });
+        var handler = new ServerPacketHandler(server);
+
+        void FullTick() {
+            server.Events.DrainDeferred();
+            server.AnnounceSystems();
+            foreach (var w in worlds.Values) w.Tick();
+            server.FlushSystems();
+            server.Events.DrainDeferred();
+        }
+
+        // Alice is established first.
+        var alice = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(alice);
+        handler.Handle(alice, new LoginStartC2S("Alice", Guid.NewGuid()));
+        for (int i = 0; i < 3; i++) FullTick();
+
+        // Bob joins; capture EVERYTHING Alice and Bob receive from here on (no clear).
+        alice.Sent.Clear();
+        var bob = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
+        capture.Register(bob);
+        handler.Handle(bob, new LoginStartC2S("Bob", Guid.NewGuid()));
+        for (int i = 0; i < 3; i++) FullTick();
+
+        Assert.True(server.TryGetPlayer(1, out var pa));
+        Assert.True(server.TryGetPlayer(2, out var pb));
+        var aInfo = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pa.Entity);
+        var bInfo = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pb.Entity);
+
+        // Alice must learn Bob's profile, and it must arrive BEFORE Bob's entity spawn, or her client drops the spawn.
+        int aliceProfileOfBob = alice.Sent.FindIndex(m => m is PlayerInfoUpdateS2C u && u.Entries.Any(e => e.Uuid == bInfo.Uuid));
+        int aliceSpawnOfBob = alice.Sent.FindIndex(m => m is SpawnPlayerS2C s && s.EntityId == bInfo.EntityId);
+        Assert.True(aliceProfileOfBob >= 0, "Alice received Bob's PlayerInfoUpdate");
+        Assert.True(aliceSpawnOfBob >= 0, "Alice received Bob's SpawnPlayer");
+        Assert.True(aliceProfileOfBob < aliceSpawnOfBob, "Bob's profile precedes his spawn for Alice");
+
+        // And symmetrically Bob must learn Alice's profile before her spawn.
+        int bobProfileOfAlice = bob.Sent.FindIndex(m => m is PlayerInfoUpdateS2C u && u.Entries.Any(e => e.Uuid == aInfo.Uuid));
+        int bobSpawnOfAlice = bob.Sent.FindIndex(m => m is SpawnPlayerS2C s && s.EntityId == aInfo.EntityId);
+        Assert.True(bobProfileOfAlice >= 0, "Bob received Alice's PlayerInfoUpdate");
+        Assert.True(bobSpawnOfAlice >= 0, "Bob received Alice's SpawnPlayer");
+        Assert.True(bobProfileOfAlice < bobSpawnOfAlice, "Alice's profile precedes her spawn for Bob");
+    }
+
+    // -- A late joiner and an established, moved player still spawn to each other via the tracker --
+    [Fact]
+    public void LateJoinerSeesEstablishedPlayer() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator()),
+        };
+        var server = new Server(new ServerContext {
+            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
+        });
+        var handler = new ServerPacketHandler(server);
+        var world = server.DefaultWorld;
+
+        void FullTick() {
+            server.Events.DrainDeferred();
+            server.AnnounceSystems();
+            foreach (var w in worlds.Values) w.Tick();
+            server.FlushSystems();
+            server.Events.DrainDeferred();
+        }
+
+        // Alice joins and the server runs a few ticks (she is "established").
+        var c1 = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(c1);
+        handler.Handle(c1, new LoginStartC2S("Alice", Guid.NewGuid()));
+        // Confirm the join teleport, else MovePlayer ignores her position packets as stale.
+        var sync1 = c1.Sent.OfType<SynchronizePlayerPositionS2C>().First();
+        handler.Handle(c1, new ConfirmTeleportationC2S(sync1.TeleportId));
+        for (int i = 0; i < 5; i++) FullTick();
+
+        // Alice moves a couple of blocks (same chunk column) - this drives PlayerMovementSystem + Restream.
+        handler.Handle(c1, new SetPlayerPositionAndRotationC2S(3.5, WorldDefaults.SurfaceY, 2.5, 90f, 0f, true));
+        for (int i = 0; i < 3; i++) FullTick();
+
+        // Bob joins later. The mutual spawns now happen synchronously during his join, so clear Alice's buffer
+        // FIRST and capture from his join onward (don't clear afterwards).
+        c1.Sent.Clear();
+        var c2 = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
+        capture.Register(c2);
+        handler.Handle(c2, new LoginStartC2S("Bob", Guid.NewGuid()));
+        for (int i = 0; i < 3; i++) FullTick();
+
+        Assert.True(server.TryGetPlayer(1, out var ctx1));
+        Assert.True(server.TryGetPlayer(2, out var ctx2));
+        int eid1 = world.Ecs.Get<NetPlayerEntityComponent>(ctx1.Entity).EntityId;
+        int eid2 = world.Ecs.Get<NetPlayerEntityComponent>(ctx2.Entity).EntityId;
+
+        var bobSeesAlice = c2.Sent.OfType<SpawnPlayerS2C>().Where(s => s.EntityId == eid1).ToList();
+        var aliceSeesBob = c1.Sent.OfType<SpawnPlayerS2C>().Where(s => s.EntityId == eid2).ToList();
+        Assert.NotEmpty(bobSeesAlice);  // Bob sees established Alice
+        Assert.NotEmpty(aliceSeesBob);  // Alice sees Bob
+        // Alice's spawn position must carry her moved-to location, not the (0,0,0) blueprint default.
+        Assert.True(bobSeesAlice[0].X == 3.5 && bobSeesAlice[0].Z == 2.5, $"Alice spawned at ({bobSeesAlice[0].X},{bobSeesAlice[0].Z})");
+
+        // Now run many more ticks with both standing still: neither may be erroneously removed (a spawn-then-remove
+        // flicker would leave the client with no player rendered).
+        c1.Sent.Clear();
+        c2.Sent.Clear();
+        for (int i = 0; i < 20; i++) FullTick();
+        Assert.DoesNotContain(c2.Sent.OfType<RemoveEntitiesS2C>(), r => r.EntityIds.Contains(eid1));
+        Assert.DoesNotContain(c1.Sent.OfType<RemoveEntitiesS2C>(), r => r.EntityIds.Contains(eid2));
+        // And both remain recorded as spawned in each viewer's tracker.
+        Assert.Contains(eid1, world.Ecs.Get<EntityTrackerComponent>(ctx2.Entity).Sent);
+        Assert.Contains(eid2, world.Ecs.Get<EntityTrackerComponent>(ctx1.Entity).Sent);
     }
 
     // -- Mods: the ModLoader discovers a compiled-in mod and its OnServerStarted registers a command --
@@ -1185,15 +1324,73 @@ public class PlayStateTests {
         var pickup = server2.DefaultWorld.Ecs.Get<PickupEntityComponent>(loaded.First());
         Assert.True(pickup.Stack.Type == VanillaMod.Stone && pickup.Stack.Count == 3, "item restored on the new server");
 
-        // The loaded item is announced (net id assigned) BEFORE any client connects - broadcast reaches no one.
+        // The loaded item gets a net id BEFORE any client connects (announce reaches no one).
         server2.AnnounceSystems();
-        // So a player joining afterwards must be sent the existing item (EntityVisibility), else it's invisible.
+        // A player then joins (streaming the item's column) and the tracker spawns the existing item to it.
         var handler = new ServerPacketHandler(server2);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
         handler.Handle(client, new LoginStartC2S("Joiner", Guid.Empty));
         server2.Events.DrainDeferred();
+        server2.FlushSystems();
         Assert.Contains(client.Sent, m => m is SpawnEntityS2C s && s.Type == EntityRegistry.Item);
+    }
+
+    // -- Entity tracker: per-player visibility - spawn in view, cull out of view, remove on destroy --
+    [Fact]
+    public void EntityTrackerSpawnsInViewItemsAndRemovesThemOutOfView() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
+        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Viewer", Guid.Empty)); // spawns at column (0,0)
+        server.Events.DrainDeferred();
+
+        // One item in the viewer's columns, one far outside them (column ~100,100). Each is spawned to in-view
+        // clients synchronously on spawn now, so clear FIRST and read the ids the tracker stamped afterwards.
+        client.Sent.Clear();
+        var near = server.DefaultWorld.SpawnItem(2.5, 5.0, 2.5, default, new ItemStack(VanillaMod.Stone, 1), pickupDelay: 100);
+        var far = server.DefaultWorld.SpawnItem(1600.5, 5.0, 1600.5, default, new ItemStack(VanillaMod.Cobblestone, 1), pickupDelay: 100);
+
+        int nearId = server.DefaultWorld.Ecs.Get<PickupEntityComponent>(near).EntityId;
+        int farId = server.DefaultWorld.Ecs.Get<PickupEntityComponent>(far).EntityId;
+        Assert.Contains(client.Sent, m => m is SpawnEntityS2C s && s.EntityId == nearId);     // in view -> spawned
+        Assert.DoesNotContain(client.Sent, m => m is SpawnEntityS2C s && s.EntityId == farId); // out of view -> not sent
+
+        // Destroying the in-view item makes the next flush remove it from the client.
+        client.Sent.Clear();
+        server.DefaultWorld.DestroyEntity(near);
+        server.FlushSystems();
+        Assert.Contains(client.Sent, m => m is RemoveEntitiesS2C r && r.EntityIds.Contains(nearId));
+    }
+
+    // -- Entity tracker: two players in the same columns are spawned to each other --
+    [Fact]
+    public void EntityTrackerSpawnsPlayersToEachOther() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
+        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+
+        var handler = new ServerPacketHandler(server);
+        var ca = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        var cb = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
+        capture.Register(ca);
+        capture.Register(cb);
+        handler.Handle(ca, new LoginStartC2S("Alice", Guid.Empty));
+        handler.Handle(cb, new LoginStartC2S("Bob", Guid.Empty)); // Bob's join spawns him to Alice and Alice to him
+        server.Events.DrainDeferred();
+
+        Assert.True(server.TryGetPlayer(ca.Id, out var pa), "Alice present");
+        Assert.True(server.TryGetPlayer(cb.Id, out var pb), "Bob present");
+        int aId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pa.Entity).EntityId;
+        int bId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pb.Entity).EntityId;
+        Assert.Contains(ca.Sent, m => m is SpawnPlayerS2C s && s.EntityId == bId); // Alice sees Bob
+        Assert.Contains(cb.Sent, m => m is SpawnPlayerS2C s && s.EntityId == aId); // Bob sees Alice
     }
 
     // -- Persistence: the length-prefixed component bag round-trips known components and skips unknown ones --

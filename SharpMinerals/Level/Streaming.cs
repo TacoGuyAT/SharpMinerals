@@ -58,6 +58,8 @@ public static class Streaming {
     static bool StreamColumn(PlayerContext context, ChunkViewEntityComponent view, Mint columnX, Mint columnZ) {
         if (!view.Loaded.Add((columnX, columnZ))) return false; // the client already has this column
         context.Client.Send(context.Client.Protocol.BuildChunk(context.World, (int)columnX, (int)columnZ));
+        // Terrain is on the wire; let the entity tracker spawn whatever already sits in this column to this viewer.
+        context.World.RaiseViewerLoadedColumn(context.Entity, (columnX, columnZ));
         return true;
     }
 
@@ -93,9 +95,13 @@ public static class Streaming {
             for (Mint dz = -radius; dz <= radius; dz++)
                 if (StreamColumn(context, view, cx + dx, cz + dz)) sent++;
 
-        // Forget columns now outside the view so they re-send if the player returns.
-        view.Loaded.RemoveWhere(c =>
-            System.Math.Abs(c.X - cx) > radius || System.Math.Abs(c.Z - cz) > radius);
+        // Forget columns now outside the view so they re-send if the player returns; the tracker despawns the
+        // entities in each dropped column from this viewer.
+        view.Loaded.RemoveWhere(c => {
+            if (System.Math.Abs(c.X - cx) <= radius && System.Math.Abs(c.Z - cz) <= radius) return false;
+            context.World.RaiseViewerUnloadedColumn(context.Entity, c);
+            return true;
+        });
 
         if (sent > 0)
             Log.LogDebug("Streamed {Count} column(s) to #{Client} around chunk ({X},{Z})", sent, context.Client.Id, cx, cz);

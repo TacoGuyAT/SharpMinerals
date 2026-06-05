@@ -115,6 +115,7 @@ public class Server : ITickable {
 
         foreach (var world in Worlds.Values) {
             world.Events = Events;
+            world.NextEntityId = NextEntityId; // the tracker stamps loose entities with server-wide ids
             world.LoadEntities(); // respawn dropped items etc. saved from a previous session (before any tick)
         }
 
@@ -126,8 +127,7 @@ public class Server : ITickable {
 
         // Chunk streaming registered before visibility so a joining client gets terrain before other spawns.
         Streaming.Register(Events);
-        PlayerVisibility.Register(Events);
-        EntityVisibility.Register(Events); // show a joiner the loose entities (items, falling blocks) already in the world
+        PlayerVisibility.Register(Events); // tab-list profiles only; entity spawn/despawn is the per-world EntityTrackerSystem
     }
 
     /// <summary>Cross-session entity persistence backend (in-memory unless the host supplied one).</summary>
@@ -338,7 +338,12 @@ public class Server : ITickable {
     /// <summary>Gets a world by name, creating one via <paramref name="factory"/> (wired to the bus and
     /// ticked with the others) if it doesn't exist.</summary>
     public World GetOrCreateWorld(string name, Func<string, Server, World> factory) =>
-        Worlds.GetOrAdd(name, n => factory.Invoke(n, this));
+        Worlds.GetOrAdd(name, n => {
+            var world = factory.Invoke(n, this);
+            world.Events = Events;             // wire a dynamically-created world the same as the startup ones
+            world.NextEntityId = NextEntityId;
+            return world;
+        });
 
     /// <summary>Unloads <paramref name="target"/>, freeing its ECS + chunks. Refuses the default world or
     /// one that still has players. Runs under the ECS gate so teardown can't race a tick. Returns whether
@@ -377,9 +382,8 @@ public class Server : ITickable {
         var old = ctx.World;
         var info = old.Ecs.Get<NetPlayerEntityComponent>(ctx.Entity);
 
-        // Despawn the entity for anyone who could still see it (player stays online - no tab-list change).
-        NetServer.Broadcast(new RemoveEntitiesS2C(new[] { info.EntityId }), c => c.InWorld && c.Id != clientId);
-
+        // The old world's entity tracker despawns this player for its viewers once the entity leaves it (below);
+        // the target world's tracker spawns it there. The tab-list entry stays (the player is still online).
         PlayerContext moved;
         lock (ecsGate) {
             if (!old.Ecs.IsAlive(ctx.Entity)) return;
