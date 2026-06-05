@@ -41,7 +41,7 @@ public sealed class CoreMod : Mod {
             .Add(new HealthEntityDescriptor(MaxHealth: 20f))
             .Blueprint(ecs => ecs.Create(
                 new TransformEntityComponent(),
-                new SyncedTransformEntityComponent(),
+                new NetTransformEntityComponent(),
                 new VelocityEntityComponent(0, 0, 0),
                 new HealthEntityComponent(20f),
                 new InventoryEntityComponent(),

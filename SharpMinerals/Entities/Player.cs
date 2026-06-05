@@ -31,8 +31,8 @@ public static class Player {
         // Per-instance/session components the blueprint can't fill. Seed the movement-relay baseline to the FINAL
         // transform (restored or default) so a freshly-joined player doesn't immediately re-broadcast it.
         var transform = ecs.Get<TransformEntityComponent>(entity);
-        ecs.Get<SyncedTransformEntityComponent>(entity) = new SyncedTransformEntityComponent {
-            X = transform.X, Y = transform.Y, Z = transform.Z, Yaw = transform.Yaw, Pitch = transform.Pitch };
+        ecs.Get<NetTransformEntityComponent>(entity) = new NetTransformEntityComponent {
+            Position = transform.Position, Yaw = transform.Yaw, Pitch = transform.Pitch };
         ecs.Get<SenderEntityComponent>(entity) = SenderEntityComponent.ForPlayer(name);
         ecs.Get<NetPlayerEntityComponent>(entity) = new NetPlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, EntityId = entityId };
         return entity;
