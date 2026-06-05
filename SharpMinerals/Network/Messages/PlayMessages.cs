@@ -46,6 +46,12 @@ public sealed record SynchronizePlayerPositionS2C(
 /// </summary>
 public sealed record BlockUpdateS2C(Vector3i Position, BlockType Block, BlockState? State = null) : IMessage;
 
+/// <summary>Block Action ("block event"): runs a block-specific animation at <see cref="Position"/>. For a chest,
+/// <see cref="ActionId"/> is 1 ("number of viewers") and <see cref="Param"/> is the open-viewer count - the lid
+/// opens while it's &gt; 0 and closes at 0. <see cref="BlockType"/> is inferred from the position by the client
+/// (the Notchian client ignores the field), so it is left 0.</summary>
+public sealed record BlockActionS2C(Vector3i Position, byte ActionId, byte Param, int BlockType = 0) : IMessage;
+
 /// <summary>Acks a dig/place by echoing its sequence number so the client reconciles its predicted change.</summary>
 public sealed record AckBlockChangeS2C(int Sequence) : IMessage;
 

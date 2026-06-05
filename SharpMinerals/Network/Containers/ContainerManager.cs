@@ -3,6 +3,7 @@ using SharpMinerals.Components;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Items;
+using SharpMinerals.Level;
 using SharpMinerals.Math;
 using SharpMinerals.Network.Handlers;
 using SharpMinerals.Network.Messages;
@@ -39,7 +40,11 @@ public sealed class ContainerManager {
         public ItemStack Cursor;
         public required BlockEntity Chest;
         public required InventoryComponent ChestInv;
+        public required World World; // the chest's world, for broadcasting its lid animation to nearby clients
     }
+
+    // Chest "block action": action 1 = set number of viewers; the client opens the lid while > 0 and closes it at 0.
+    const int ChestViewersAction = 1;
 
     int NextWindowId() => nextWindowId = nextWindowId % 100 + 1; // cycle 1..100
 
@@ -48,8 +53,8 @@ public sealed class ContainerManager {
     /// <summary>Registers the player as a viewer of the chest.</summary>
     public void Open(Server server, ulong clientId, BlockEntity chest) {
         lock (gate) {
-            var pinv = PlayerInv(server, clientId);
-            if (pinv is null) return;
+            if (!server.TryGetPlayer(clientId, out var ctx) || !ctx.World.Ecs.IsAlive(ctx.Entity)) return;
+            var pinv = ctx.World.Ecs.Get<InventoryEntityComponent>(ctx.Entity);
 
             var chestInv = ChestInventory(chest);
 
@@ -59,12 +64,17 @@ public sealed class ContainerManager {
 
             var window = new OpenWindow {
                 ClientId = clientId, Id = NextWindowId(),
-                Chest = chest, ChestInv = chestInv,
+                Chest = chest, ChestInv = chestInv, World = ctx.World,
             };
             openByClient[clientId] = window;
 
             server.NetServer.Send(clientId, new OpenScreenS2C(window.Id, ChestMenuType, "Chest"));
             SendContent(server, window, pinv);
+
+            // Animate lids: the prior chest (if a different one) lost a viewer, and this one gained one.
+            if (prior is not null && prior.Chest.Position != chest.Position)
+                UpdateChestViewers(server, prior.World, prior.Chest.Position);
+            UpdateChestViewers(server, ctx.World, chest.Position);
         }
     }
 
@@ -104,13 +114,15 @@ public sealed class ContainerManager {
             var chestPinv = PlayerInv(server, clientId);
             if (chestPinv is not null && !window.Cursor.IsEmpty) PutIntoInventory(chestPinv, ref window.Cursor);
             openByClient.Remove(clientId);
+            UpdateChestViewers(server, window.World, window.Chest.Position); // this viewer left -> maybe close the lid
         }
     }
 
     /// <summary>A disconnecting player: drop any open session (cursor is lost with the connection).</summary>
-    public void OnLeave(ulong clientId) {
+    public void OnLeave(Server server, ulong clientId) {
         lock (gate) {
-            openByClient.Remove(clientId);
+            if (openByClient.Remove(clientId, out var window))
+                UpdateChestViewers(server, window.World, window.Chest.Position); // last viewer may have gone
             playerCursor.Remove(clientId); // items on the cursor vanish with the connection, as in vanilla
             dragSlots.Remove(clientId);    // abandon any in-progress drag
         }
@@ -119,11 +131,21 @@ public sealed class ContainerManager {
     /// <summary>A chest block was broken: force every viewer's window closed.</summary>
     public void ForceCloseChest(Server server, Vector3i chestPos) {
         lock (gate) {
+            World? world = null;
             foreach (var (clientId, w) in openByClient.Where(kv => kv.Value.Chest.Position == chestPos).ToList()) {
+                world = w.World;
                 server.NetServer.Send(clientId, new CloseContainerS2C(w.Id));
                 openByClient.Remove(clientId);
             }
+            if (world is not null) UpdateChestViewers(server, world, chestPos); // viewers gone -> lid closes
         }
+    }
+
+    // Broadcasts the chest's current open-viewer count so nearby clients animate its lid (open > 0, closed at 0).
+    void UpdateChestViewers(Server server, World world, Vector3i chest) {
+        int viewers = openByClient.Values.Count(w => w.Chest.Position == chest);
+        server.BroadcastInRange(world, chest.X + 0.5, chest.Z + 0.5,
+            new BlockActionS2C(chest, ChestViewersAction, (byte)System.Math.Min(viewers, byte.MaxValue)));
     }
 
     // -- Click application -----------------------------------------------------

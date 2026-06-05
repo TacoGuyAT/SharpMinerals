@@ -139,6 +139,18 @@ internal sealed class BlockUpdateS2CCodec : ICodec<BlockUpdateS2C> {
         throw new NotSupportedException("BlockUpdateS2C is clientbound only.");
 }
 
+internal sealed class BlockActionS2CCodec : ICodec<BlockActionS2C> {
+    public void Encode(MinecraftStream s, BlockActionS2C m) {
+        s.WritePosition(m.Position.X, m.Position.Y, m.Position.Z);
+        s.WriteUByte(m.ActionId);
+        s.WriteUByte(m.Param);
+        s.WriteVarInt(m.BlockType); // unused by the client (it infers the block from the position)
+    }
+
+    public BlockActionS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("BlockActionS2C is clientbound only.");
+}
+
 internal sealed class ChunkDataS2CCodec : ICodec<ChunkDataS2C> {
     // The whole packet body is built by ChunkSerializer; write it as-is.
     public void Encode(MinecraftStream s, ChunkDataS2C m) => s.Write(m.Payload, 0, m.Payload.Length);

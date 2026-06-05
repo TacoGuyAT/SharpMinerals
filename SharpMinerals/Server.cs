@@ -456,7 +456,7 @@ public class Server : ITickable {
 
     /// <summary>Despawns a disconnected client's player entity and tells others it left.</summary>
     public void RemovePlayer(ulong clientId) {
-        Containers.OnLeave(clientId);
+        Containers.OnLeave(this, clientId);
         pendingTeleports.TryRemove(clientId, out _);
         if (!players.TryRemove(clientId, out var context))
             return;

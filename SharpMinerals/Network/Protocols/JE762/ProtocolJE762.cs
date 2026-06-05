@@ -32,6 +32,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         public const int SpawnPlayer = 0x03;      // named_entity_spawn
         public const int EntityAnimation = 0x04;  // animation
         public const int AckBlockChange = 0x06;   // acknowledge_player_digging  (NOT 0x05 = statistics)
+        public const int BlockAction = 0x09;      // block_action / block_event  (chest lid, etc.)
         public const int BlockUpdate = 0x0A;      // block_change                (NOT 0x09 = block_action)
         public const int CustomPayload = 0x17;    // custom_payload (control channel)
         public const int KeepAlive = 0x23;        // keep_alive
@@ -124,6 +125,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.Commands, new DeclareCommandsS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.CommandSuggestions, new CommandSuggestionsResponseS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.AckBlockChange, new AckBlockChangeS2CCodec());
+        Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.BlockAction, new BlockActionS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.BlockUpdate, new BlockUpdateS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.CustomPayload, new BrandS2CCodec());
 #if TEST_HARNESS

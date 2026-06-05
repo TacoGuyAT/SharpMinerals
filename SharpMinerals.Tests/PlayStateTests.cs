@@ -1352,12 +1352,15 @@ public class PlayStateTests {
         handler.Handle(client, new LoginStartC2S("Picker", Guid.Empty));
         server.Events.DrainDeferred();
 
-        // A drop at the player's feet (in view, no pickup delay matters once aged) - spawned to the viewer on spawn.
-        var drop = server.DefaultWorld.SpawnDroppedItem(new Vector3i(0, 5, 0), new ItemStack(VanillaMod.Cobblestone, 1));
+        // A drop right on the player with zero velocity + no pickup delay (deterministic, unlike the random pop of
+        // SpawnDroppedItem): it overlaps immediately and is spawned to the viewer on spawn.
+        Assert.True(server.TryGetPlayer(client.Id, out var ctx));
+        var pos = server.DefaultWorld.Ecs.Get<TransformEntityComponent>(ctx.Entity);
+        var drop = server.DefaultWorld.SpawnItem(pos.X, pos.Y, pos.Z, default, new ItemStack(VanillaMod.Cobblestone, 1), pickupDelay: 0);
         int netId = server.DefaultWorld.Ecs.Get<PickupEntityComponent>(drop).EntityId;
 
         client.Sent.Clear();
-        for (int i = 0; i < 12; i++) server.DefaultWorld.Tick(); // age past pickup delay, settle, collect
+        for (int i = 0; i < 5; i++) server.DefaultWorld.Tick(); // collision feedback detects the overlap, pickup collects
         server.FlushSystems();
 
         int collect = client.Sent.FindIndex(m => m is CollectItemS2C c && c.CollectedEntityId == netId);
@@ -1365,6 +1368,35 @@ public class PlayStateTests {
         Assert.True(collect >= 0, "collect animation sent to the viewer");
         Assert.True(remove >= 0, "drop removed from the viewer");
         Assert.True(collect < remove, "collect animation precedes the removal");
+    }
+
+    // -- Chest lid animation: opening sends a Block Action with viewer count 1 (lid up), closing sends 0 (lid down) --
+    [Fact]
+    public void ChestOpenAndCloseAnimateTheLid() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
+        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Opener", Guid.Empty));
+        server.Events.DrainDeferred();
+
+        var chest = new BlockEntity(new Vector3i(2, 5, 2), VanillaMod.Chest); // near the opener (in broadcast range)
+        server.DefaultWorld.SetBlockEntity(chest);
+
+        capture.Broadcasts.Clear();
+        server.Containers.Open(server, client.Id, chest);
+        Assert.Contains(capture.Broadcasts.OfType<BlockActionS2C>(),
+            b => b.Position == chest.Position && b.ActionId == 1 && b.Param == 1); // one viewer -> lid opens
+
+        int win = client.Sent.OfType<OpenScreenS2C>().Last().WindowId;
+        capture.Broadcasts.Clear();
+        server.Containers.OnClose(server, client.Id, win);
+        Assert.Contains(capture.Broadcasts.OfType<BlockActionS2C>(),
+            b => b.Position == chest.Position && b.ActionId == 1 && b.Param == 0); // last viewer left -> lid closes
     }
 
     // -- Entity tracker: per-player visibility - spawn in view, cull out of view, remove on destroy --
