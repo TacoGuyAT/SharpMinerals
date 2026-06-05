@@ -45,9 +45,9 @@ if (loaded.Notice is { } notice) {
 // Initialise mods before the protocols snapshot the palette (OnInitialize registers content). File mods are
 // `mods/*.dll`; the test/sample mods are compiled in and loaded only on the matching build flags.
 var modLoader = new ModLoader();
-// Force the core engine blocks (air id 0, missing id 1) to register before any mod, then load the vanilla
-// content mod FIRST so minecraft:* blocks get the lowest palette ids right after the engine primitives.
-_ = BlockRegistry.Air;
+// The engine itself is a mod (CoreMod): load it FIRST so air/missing get palette ids 0/1, then the vanilla
+// content mod so minecraft:* blocks get the lowest ids right after the engine primitives.
+modLoader.TryLoad(new CoreMod());
 modLoader.TryLoad(new VanillaMod());
 #if TEST_HARNESS
 modLoader.TryLoad(new TestMod());

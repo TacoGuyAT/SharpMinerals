@@ -11,7 +11,8 @@ namespace SharpMinerals.Tests;
 internal static class TestBootstrap {
     [ModuleInitializer]
     internal static void Init() {
-        _ = BlockRegistry.Air;                       // engine blocks first (air id 0, missing id 1)
-        new ModLoader().TryLoad(new VanillaMod()); // minecraft:* content + Vanilla.* fields
+        var loader = new ModLoader();
+        loader.TryLoad(new CoreMod());   // the engine mod first: air id 0, missing id 1, built-in entities
+        loader.TryLoad(new VanillaMod()); // minecraft:* content + Vanilla.* fields
     }
 }

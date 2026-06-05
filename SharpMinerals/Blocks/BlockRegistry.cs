@@ -13,15 +13,6 @@ public static class BlockRegistry {
     static readonly List<BlockType> palette = new();
     static bool frozen;
 
-    // Explicit (non-beforefieldinit) static ctor so the engine field initializers below run eagerly the first
-    // time any member is touched - the host forces this (`_ = BlockRegistry.Air;`) before loading mods, so Air
-    // gets palette id 0 and Missing id 1 ahead of all mod content.
-    static BlockRegistry() { }
-
-    // The two engine blocks FORCE the sharpminerals namespace, independent of the ambient
-    // ModContent.CurrentNamespace (their static init may be triggered lazily during a mod's OnInitialize).
-    static BlockType Engine(string name, bool isAir = false) => Add(Identifier.EngineNamespace, name, isAir);
-
     static BlockType Add(string ns, string name, bool isAir) {
         if (frozen)
             throw new InvalidOperationException(
@@ -36,17 +27,19 @@ public static class BlockRegistry {
     /// <summary>Registers a new block, returning it for fluent composition. For mods - call from
     /// <see cref="Modding.Mod.OnInitialize"/>; throws once <see cref="Freeze">frozen</see>. Namespaced under the
     /// loading mod's id. A modded block's wire id falls back to stone until a type-mapping component is added.</summary>
-    public static BlockType Register(string name) => Add(ModContent.CurrentNamespace, name, isAir: false);
+    public static BlockType Register(string name, bool isAir = false) => Add(ModContent.CurrentNamespace, name, isAir);
 
     /// <summary>Seals the registry - the host calls this after mods init, before the palette is built.</summary>
     public static void Freeze() => frozen = true;
 
-    /// <summary>The empty cell (palette id 0). The chunk store and <see cref="FromState"/> depend on this id.</summary>
-    public static readonly BlockType Air     = Engine("air", isAir: true);
+    /// <summary>The empty cell (palette id 0). The chunk store and <see cref="FromState"/> depend on this id.
+    /// Registered by <see cref="CoreMod"/> (the engine mod, loaded first) - non-null after engine init.</summary>
+    public static BlockType Air { get; internal set; } = null!;
 
     /// <summary>Placeholder for content the server can't represent (a dropped mod block, an unmappable type). It
-    /// renders as stone on the wire (the type mapper's fallback) but is a distinct, non-air block.</summary>
-    public static readonly BlockType Missing = Engine("missing");
+    /// renders as stone on the wire (the type mapper's fallback) but is a distinct, non-air block. Registered by
+    /// <see cref="CoreMod"/>.</summary>
+    public static BlockType Missing { get; internal set; } = null!;
 
     /// <summary>All blocks, in palette order (index == <see cref="BlockType.BlockId"/>).</summary>
     public static IReadOnlyList<BlockType> All => palette;
