@@ -25,7 +25,7 @@ public class Server : ITickable {
     public bool IsRunning => running;
 
     ServerContext context;
-    readonly IPlayerStore playerStore;
+    readonly IEntityStore entityStore;
     volatile bool running;
     int stopping; // guard so Stop() tears down exactly once
     readonly ManualResetEventSlim stopped = new(false);
@@ -111,10 +111,12 @@ public class Server : ITickable {
         commandDispatcher = new(this);
         if (context.TicksPerSecond <= 0)
             context.TicksPerSecond = 20.0;
-        playerStore = ctx.PlayerStore ?? new InMemoryPlayerStore();
+        entityStore = ctx.EntityStore ?? new InMemoryEntityStore();
 
-        foreach (var world in Worlds.Values)
+        foreach (var world in Worlds.Values) {
             world.Events = Events;
+            world.LoadEntities(); // respawn dropped items etc. saved from a previous session (before any tick)
+        }
 
         // Keep each world's spatial index current on any entity move (player or item).
         Events.Subscribe<EntityMoved>(OnEntityMoved);
@@ -125,10 +127,11 @@ public class Server : ITickable {
         // Chunk streaming registered before visibility so a joining client gets terrain before other spawns.
         Streaming.Register(Events);
         PlayerVisibility.Register(Events);
+        EntityVisibility.Register(Events); // show a joiner the loose entities (items, falling blocks) already in the world
     }
 
-    /// <summary>Cross-session player persistence backend (in-memory unless the host supplied one).</summary>
-    public IPlayerStore PlayerStore => playerStore;
+    /// <summary>Cross-session entity persistence backend (in-memory unless the host supplied one).</summary>
+    public IEntityStore EntityStore => entityStore;
 
     public World DefaultWorld => Worlds.Values.First();
 
@@ -201,10 +204,9 @@ public class Server : ITickable {
     void PersistPlayer(World world, ArchEntity entity) {
         var ecs = world.Ecs;
         var info = ecs.Get<NetPlayerEntityComponent>(entity);
-        playerStore.Save(info.Uuid, new PlayerState(
-            ecs.Get<TransformEntityComponent>(entity),
-            ecs.Get<HealthEntityComponent>(entity),
-            ecs.Get<InventoryEntityComponent>(entity)));
+        // Generic entity encode: every persistent component on the live entity (placement, health, inventory)
+        // goes through the shared component bag, keyed by the player's UUID.
+        entityStore.Save(info.Uuid, EntityCodec.Encode(ecs, entity));
     }
 
     /// <summary>The game loop. PrecisionTimer paces it to a steady rate without busy-waiting.</summary>
@@ -317,7 +319,7 @@ public class Server : ITickable {
         var world = DefaultWorld;
         int entityId = NextEntityId();
         // Restore a previous session's entity state if any.
-        PlayerState? saved = playerStore.TryLoad(uuid, out var state) ? state : null;
+        byte[]? saved = entityStore.TryLoad(uuid, out var blob) ? blob : null;
         ArchEntity entity;
         // Entity creation is a structural change - serialize it with the tick so it can't run while a
         // world-tick query iterates archetypes on another thread.
@@ -381,13 +383,10 @@ public class Server : ITickable {
         PlayerContext moved;
         lock (ecsGate) {
             if (!old.Ecs.IsAlive(ctx.Entity)) return;
-            // Carry the persistent state across; reuse the same network entity id.
-            var state = new PlayerState(
-                old.Ecs.Get<TransformEntityComponent>(ctx.Entity),
-                old.Ecs.Get<HealthEntityComponent>(ctx.Entity),
-                old.Ecs.Get<InventoryEntityComponent>(ctx.Entity));
+            // Carry the persistent state across (same encode as a disk save); reuse the same network entity id.
+            var blob = EntityCodec.Encode(old.Ecs, ctx.Entity);
             old.DestroyEntity(ctx.Entity);
-            var entity = target.SpawnPlayer(clientId, info.Name, info.Uuid, info.EntityId, state);
+            var entity = target.SpawnPlayer(clientId, info.Name, info.Uuid, info.EntityId, blob);
             if (target.Ecs.Has<SenderEntityComponent>(entity))
                 target.Ecs.Get<SenderEntityComponent>(entity).Client = client;
             moved = new PlayerContext(this, target, entity, client);

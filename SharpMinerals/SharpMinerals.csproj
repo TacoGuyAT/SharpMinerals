@@ -52,10 +52,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\PrecisionTimer\PrecisionTimer.csproj" />
     <ProjectReference Include="..\SharpMinerals.Chat\SharpMinerals.Chat.csproj" />
-    <ProjectReference Include="..\..\Arch.Extended\Arch.AOT.SourceGenerator\Arch.AOT.SourceGenerator.csproj"
+    <!-- Our component generator (replaces Arch.AOT.SourceGenerator): scans [Component] types and emits a
+         [ModuleInitializer] registering them with ComponentRegistry (identity + Arch array), namespaced from the
+         assembly's [ModInfo]. Analyzer-only; GlobalPropertiesToRemove keeps it netstandard2.0 under AOT publish. -->
+    <ProjectReference Include="..\SharpMinerals.SourceGenerator\SharpMinerals.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false"
                       GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
-    <Using Include="Arch.AOT.SourceGenerator" />
+    <!-- [Component] resolves to OUR marker (SharpMinerals.Components). -->
+    <Using Include="SharpMinerals.Components" />
   </ItemGroup>
 
 </Project>

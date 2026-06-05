@@ -4,10 +4,12 @@ using SharpMinerals.Blocks;
 using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
+using SharpMinerals.Entities.Descriptors;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
 using SharpMinerals.Items;
 using SharpMinerals.Math;
+using SharpMinerals.Network.Buffers;
 using SharpMinerals.Persistence;
 using ArchWorld = Arch.Core.World;
 using ArchEntity = Arch.Core.Entity;
@@ -18,6 +20,8 @@ namespace SharpMinerals.Level;
 /// cuboid chunks. <see cref="Tick"/> runs the per-tick systems; block reads/writes go through the chunk grid.</summary>
 public class World : ITickable {
     static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
+    static readonly QueryDescription TypedEntityQuery = new QueryDescription().WithAll<TypeEntityDescriptor>();
+    const byte EntitiesVersion = 1;
 
     readonly IChunkGenerator chunkGenerator;
     readonly IWorldStore? store;
@@ -85,7 +89,57 @@ public class World : ITickable {
                 chunk.ClearDirty();
                 saved++;
             }
+        SaveEntities(); // loose world entities (dropped items) aren't chunk-dirty-tied; persist them every save
         return saved;
+    }
+
+    /// <summary>Persists this world's loose, world-persistent entities (dropped items, ...) as one blob (replacing
+    /// the previous one), so they survive a restart. Returns the number saved; no-op without a store. Call on the
+    /// tick thread (the drain phase), like chunk saves.</summary>
+    public int SaveEntities() {
+        if (store is null) return 0;
+        var persisted = new List<ArchEntity>();
+        Ecs.Query(in TypedEntityQuery, (ArchEntity e, ref TypeEntityDescriptor tag) => {
+            if (tag.Type.Persisted) persisted.Add(e);
+        });
+
+        using var ms = new MemoryStream();
+        var s = new MinecraftStream(ms);
+        s.WriteUByte(EntitiesVersion);
+        s.WriteVarInt(persisted.Count);
+        foreach (var e in persisted) {
+            s.WriteString(Ecs.Get<TypeEntityDescriptor>(e).Type.Id.Full); // the kind, so load spawns the right blueprint
+            var blob = EntityCodec.Encode(Ecs, e);
+            s.WriteVarInt(blob.Length);
+            s.Write(blob, 0, blob.Length);
+        }
+        store.SaveWorldEntities(Name, ms.ToArray());
+        return persisted.Count;
+    }
+
+    /// <summary>Respawns this world's saved loose entities onto fresh blueprint instances. Call ONCE, at startup,
+    /// before the world ticks (spawning is a structural ECS change). Returns the number spawned; no-op without a
+    /// store or saved data. An entity of an unregistered kind (a removed mod's) is skipped.</summary>
+    public int LoadEntities() {
+        if (store is null || store.LoadWorldEntities(Name) is not { } data) return 0;
+        using var ms = new MemoryStream(data, writable: false);
+        var s = new MinecraftStream(ms);
+        if (s.ReadUByte() is var version && version != EntitiesVersion)
+            throw new NotSupportedException($"Unknown world-entity format version {version}.");
+
+        int count = s.ReadVarInt();
+        int spawned = 0;
+        for (int i = 0; i < count; i++) {
+            var typeId = s.ReadString();
+            var blob = s.ReadBytes(s.ReadVarInt());
+            if (EntityRegistry.FromName(typeId) is not { } type) continue; // unknown kind - skip (its blob is consumed)
+            var entity = Spawn(type, default);          // blueprint at origin; the blob's transform overwrites it
+            EntityCodec.Apply(Ecs, entity, blob);
+            var t = Ecs.Get<TransformEntityComponent>(entity);
+            Entities.Update(entity, t.X, t.Y, t.Z);     // re-file at the restored position
+            spawned++;
+        }
+        return spawned;
     }
 
     /// <summary>Drops loaded chunks outside every kept centre (saving dirty ones first) to bound memory/disk.
@@ -130,6 +184,10 @@ public class World : ITickable {
     public BlockEntity? GetBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).GetBlockEntity(pos);
     public void SetBlockEntity(BlockEntity entity) => GetChunk(entity.Position.ToChunk()).SetBlockEntity(entity);
     public bool RemoveBlockEntity(Vector3i pos) => GetChunk(pos.ToChunk()).RemoveBlockEntity(pos);
+
+    /// <summary>Marks the chunk containing <paramref name="pos"/> dirty so it persists - call after mutating a block
+    /// entity's components in place (the block edit paths already mark dirty themselves).</summary>
+    public void MarkDirty(Vector3i pos) => GetChunk(pos.ToChunk()).MarkDirty();
 
     /// <summary>The block entity at <paramref name="pos"/>, creating and initializing one (via the block's
     /// <see cref="IBlockEntityDescriptor"/>) if the block carries a block entity but none exists yet - the one
@@ -236,7 +294,7 @@ public class World : ITickable {
     }
 
     /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
-    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, PlayerState? saved = null) =>
+    public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, byte[]? saved = null) =>
         Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
 
     /// <summary>Spawns a dropped-item entity centred on a block with a small random upward pop.</summary>

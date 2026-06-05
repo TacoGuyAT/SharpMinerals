@@ -53,7 +53,7 @@ public static class GiveCommand {
         if(given <= 0) { ctx.Source.Reply("Your inventory is full."); return 0; }
 
         // Resync the window; equipment others see is refreshed by the per-tick equipment diff.
-        client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
+        context.SyncInventory();
 
         ctx.Source.Reply($"Gave {given}.");
         return given;

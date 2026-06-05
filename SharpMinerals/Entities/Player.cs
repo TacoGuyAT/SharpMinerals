@@ -1,6 +1,7 @@
 ﻿using SharpMinerals.Entities.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Level;
+using SharpMinerals.Persistence;
 using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals.Entities;
@@ -10,20 +11,28 @@ public static class Player {
     /// <summary>The player kind's max health (from its <c>Living</c> definition component).</summary>
     public static float MaxHealth => EntityRegistry.Player.MaxHealth;
 
-    public static ArchEntity Spawn(World world, ulong clientId, string name, Guid uuid, int entityId, TransformEntityComponent spawn, PlayerState? saved = null) {
-        // A returning player restores their saved placement/health/inventory; a new one gets the
-        // default spawn point, full health and a starter kit.
-        var transform = saved?.Transform ?? spawn;
-        var entity = world.Spawn(EntityRegistry.Player, transform);
-
-        // The blueprint (EntityRegistry.Player) laid down every component with placeholder defaults; here we set
-        // only the ones that are per-instance. Everything else (hitbox, reach, collision list, ...) is already correct.
+    public static ArchEntity Spawn(World world, ulong clientId, string name, Guid uuid, int entityId, TransformEntityComponent spawn, byte[]? saved = null) {
+        // Spawn the blueprint at the default point; a returning player's saved blob then overwrites the persistent
+        // components (placement, health, inventory) generically via EntityCodec. A new player keeps the blueprint's
+        // full health and gets a starter kit.
+        var entity = world.Spawn(EntityRegistry.Player, spawn);
         var ecs = world.Ecs;
-        // Seed the movement-relay baseline to spawn, so a freshly-joined player doesn't re-broadcast it.
+
+        if (saved is { } blob) {
+            EntityCodec.Apply(ecs, entity, blob);
+            // The restored transform moved the entity off its spawn cell - re-file it in the spatial index, which
+            // world.Spawn registered at `spawn`.
+            var restored = ecs.Get<TransformEntityComponent>(entity);
+            world.Entities.Update(entity, restored.X, restored.Y, restored.Z);
+        } else {
+            ecs.Get<InventoryEntityComponent>(entity) = NewInventory();
+        }
+
+        // Per-instance/session components the blueprint can't fill. Seed the movement-relay baseline to the FINAL
+        // transform (restored or default) so a freshly-joined player doesn't immediately re-broadcast it.
+        var transform = ecs.Get<TransformEntityComponent>(entity);
         ecs.Get<SyncedTransformEntityComponent>(entity) = new SyncedTransformEntityComponent {
             X = transform.X, Y = transform.Y, Z = transform.Z, Yaw = transform.Yaw, Pitch = transform.Pitch };
-        ecs.Get<HealthEntityComponent>(entity) = saved?.Health ?? new HealthEntityComponent(MaxHealth);
-        ecs.Get<InventoryEntityComponent>(entity) = saved?.Inventory ?? NewInventory();
         ecs.Get<SenderEntityComponent>(entity) = SenderEntityComponent.ForPlayer(name);
         ecs.Get<NetPlayerEntityComponent>(entity) = new NetPlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, EntityId = entityId };
         return entity;

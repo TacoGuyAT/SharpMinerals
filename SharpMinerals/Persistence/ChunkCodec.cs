@@ -11,6 +11,9 @@ namespace SharpMinerals.Persistence;
 /// header (distinct block NAMES written once, then each cell references a palette index - compact and
 /// id-shift safe), followed by sparse per-cell states and block entities.</summary>
 public static class ChunkCodec {
+    // Each cell's state is LENGTH-PREFIXED with its value count, so an UNREGISTERED block's state can be
+    // skipped/preserved on load without its schema (inferring the length from the block would desync the stream
+    // the moment the block is gone). Pre-release: there's no older on-disk format to stay compatible with.
     const byte Version = 1;
     const Mint Volume = Chunk.Size * Chunk.Size * Chunk.Size;
 
@@ -19,24 +22,51 @@ public static class ChunkCodec {
         var s = new MinecraftStream(ms);
         s.WriteUByte(Version);
 
-        // Palette header: distinct block ids -> names, in first-seen order.
+        // Palette header: distinct block NAMES, in first-seen order. A cell that loaded as `missing` because its
+        // stored id was unregistered writes its ORIGINAL id back (non-destructive: re-adding the mod restores it),
+        // so the palette is keyed by the effective name, not the now-collapsed Missing id.
         var raw = chunk.RawStates;
-        var indexOf = new Dictionary<ushort, int>();
+        var unresolved = chunk.Unresolved;
+        var indexOf = new Dictionary<string, int>();
         var names = new List<string>();
-        foreach (var id in raw)
-            if (indexOf.TryAdd(id, names.Count))
-                names.Add(BlockRegistry.FromState(id).Id.Full);
+        var schemas = new List<string>();
+        var cellPalette = new int[Volume];
+        for (int cell = 0; cell < Volume; cell++) {
+            // An unresolved cell writes its ORIGINAL id + schema back (non-destructive); everything else its own.
+            bool unknown = unresolved.TryGetValue(cell, out var u);
+            string name = unknown ? u!.Id : BlockRegistry.FromState(raw[cell]).Id.Full;
+            if (!indexOf.TryGetValue(name, out int index)) {
+                index = names.Count; indexOf[name] = index; names.Add(name);
+                // Each entry carries its state SCHEMA so saved state can later be migrated by name.
+                schemas.Add(unknown ? u!.Schema : StateSchema.Of(BlockRegistry.FromState(raw[cell])));
+            }
+            cellPalette[cell] = index;
+        }
         s.WriteVarInt(names.Count);
-        foreach (var name in names) s.WriteString(name);
+        for (int i = 0; i < names.Count; i++) { s.WriteString(names[i]); s.WriteString(schemas[i]); }
 
-        foreach (var id in raw) s.WriteVarInt(indexOf[id]); // dense cells as palette indices
+        foreach (var index in cellPalette) s.WriteVarInt(index); // dense cells as palette indices
 
-        // Sparse per-cell block states (chest facing, wool colour, ...).
-        s.WriteVarInt(chunk.CellStates.Count);
+        // Sparse per-cell block states (chest facing, wool colour, ...), each LENGTH-PREFIXED with its value count
+        // so the reader can preserve an unknown block's state without its schema. Includes the preserved raw state
+        // of cells that degraded to missing, written back verbatim.
+        int unresolvedStateCount = 0;
+        foreach (var u in unresolved.Values) if (u.State is not null) unresolvedStateCount++;
+        s.WriteVarInt(chunk.CellStates.Count + unresolvedStateCount);
         foreach (var (cell, state) in chunk.CellStates) {
             s.WriteVarInt(cell);
-            if (state.Type.TryGet<StatesBlockDescriptor>(out var sp))
+            if (state.Type.TryGet<StatesBlockDescriptor>(out var sp)) {
+                s.WriteVarInt(sp.States.Count);
                 foreach (var property in sp.States) s.WriteVarInt(state.Get(property));
+            } else {
+                s.WriteVarInt(0);
+            }
+        }
+        foreach (var (cell, u) in unresolved) {
+            if (u.State is not { } values) continue;
+            s.WriteVarInt(cell);
+            s.WriteVarInt(values.Length);
+            foreach (var value in values) s.WriteVarInt(value);
         }
 
         // Block entities (e.g. a chest's contents).
@@ -57,19 +87,46 @@ public static class ChunkCodec {
 
         int paletteCount = s.ReadVarInt();
         var palette = new ushort[paletteCount];
-        for (int i = 0; i < paletteCount; i++)
-            palette[i] = (ushort)(BlockRegistry.FromName(s.ReadString())?.BlockId ?? 0); // dropped block -> air
-        for (int i = 0; i < Volume; i++)
-            raw[i] = palette[s.ReadVarInt()];
+        var unresolvedName = new string?[paletteCount];  // original id for entries that don't resolve
+        var unresolvedSchema = new string[paletteCount]; // ...and its preserved schema (for migration on remap/return)
+        var migrate = new Dictionary<ushort, string>();  // known block id -> OLD schema, when it drifted since save
+        for (int i = 0; i < paletteCount; i++) {
+            var name = s.ReadString();
+            var schema = s.ReadString();
+            if (BlockRegistry.FromName(name) is { } block) {
+                palette[i] = (ushort)block.BlockId;
+                if (schema != StateSchema.Of(block)) migrate[(ushort)block.BlockId] = schema; // schema changed -> migrate by name
+            } else {
+                palette[i] = (ushort)BlockRegistry.Missing.BlockId; // dropped block -> missing (id kept for recovery)
+                unresolvedName[i] = name;
+                unresolvedSchema[i] = schema;
+            }
+        }
+        for (int i = 0; i < Volume; i++) {
+            int index = s.ReadVarInt();
+            raw[i] = palette[index];
+            if (unresolvedName[index] is { } original)
+                chunk.MarkUnresolved(i, original, unresolvedSchema[index]);
+        }
 
         int stateCount = s.ReadVarInt();
         for (int i = 0; i < stateCount; i++) {
             int cell = s.ReadVarInt();
-            var block = BlockRegistry.FromState(raw[cell]);
-            var state = new BlockState(block);
-            if (block.TryGet<StatesBlockDescriptor>(out var sp))
-                foreach (var property in sp.States) state.Set(property, s.ReadVarInt());
-            chunk.PutCellState(cell, state);
+            // Length-prefixed: read the whole payload regardless of the block, so an unknown block never desyncs.
+            int valueCount = s.ReadVarInt();
+            var values = new int[valueCount];
+            for (int v = 0; v < valueCount; v++) values[v] = s.ReadVarInt();
+            if (chunk.Unresolved.ContainsKey(cell)) {
+                chunk.SetUnresolvedState(cell, values); // unknown block: keep its raw state for later migration
+            } else if (migrate.TryGetValue(raw[cell], out var oldSchema)) {
+                chunk.PutCellState(cell, StateSchema.Migrate(oldSchema, values, BlockRegistry.FromState(raw[cell]))); // schema drifted
+            } else {
+                var block = BlockRegistry.FromState(raw[cell]);
+                var state = new BlockState(block);
+                if (block.TryGet<StatesBlockDescriptor>(out var sp))
+                    for (int p = 0; p < sp.States.Count && p < values.Length; p++) state.Set(sp.States[p], values[p]);
+                chunk.PutCellState(cell, state);
+            }
         }
 
         int entityCount = s.ReadVarInt();
@@ -84,28 +141,17 @@ public static class ChunkCodec {
         s.WriteLong(entity.Position.X);
         s.WriteLong(entity.Position.Y);
         s.WriteLong(entity.Position.Z);
-        s.WriteString(entity.Type.Id.Full);
-
-        if (entity.TryGet<InventoryComponent>(out var inv)) {
-            s.WriteBool(true);
-            s.WriteVarInt(inv.Size);
-            for (int i = 0; i < inv.Size; i++) StackCodec.Write(s, inv[i]);
-        } else {
-            s.WriteBool(false);
-        }
+        s.WriteString(entity.TryGet<UnresolvedTypeComponent>(out var u) ? u.Id : entity.Type.Id.Full); // restore an unregistered type
+        ComponentBag.Write(s, entity); // its persistent components (inventory, ...) as a length-prefixed bag
     }
 
     static BlockEntity ReadEntity(MinecraftStream s) {
         var pos = new Vector3i(s.ReadLong(), s.ReadLong(), s.ReadLong());
-        var type = BlockRegistry.FromName(s.ReadString()) ?? BlockRegistry.Air;
-        var entity = new BlockEntity(pos, type);
-
-        if (s.ReadBool()) {
-            int size = s.ReadVarInt();
-            var inv = new InventoryComponent(size);
-            for (int i = 0; i < size; i++) inv[i] = StackCodec.Read(s);
-            entity.Add(inv);
-        }
+        var name = s.ReadString();
+        var resolved = BlockRegistry.FromName(name);
+        var entity = new BlockEntity(pos, resolved ?? BlockRegistry.Missing);
+        if (resolved is null) entity.Add(new UnresolvedTypeComponent(name)); // unregistered type -> missing, original kept for recovery
+        ComponentBag.Read(s, entity);
         return entity;
     }
 }

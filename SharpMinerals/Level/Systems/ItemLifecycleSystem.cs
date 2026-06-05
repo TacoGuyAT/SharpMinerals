@@ -1,4 +1,5 @@
 using Arch.Core;
+using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Entities.Descriptors;
 using SharpMinerals.Items;
@@ -45,18 +46,25 @@ public sealed class ItemLifecycleSystem : ITickable, INetworkSystem {
             int id = server.NextEntityId();
             ecs.Get<PickupEntityComponent>(entity).EntityId = id;
             var kind = ecs.Get<TypeEntityDescriptor>(entity).Type;
-            short vx = ToWire(vel.X), vy = ToWire(vel.Y), vz = ToWire(vel.Z);
-            // Bundle the spawn + item data so the client never renders a contents-less item. Velocity is a
-            // separate packet because the 1.20.1 client ignores the spawn-packet velocity for items.
-            Broadcast(server, new BundleDelimiterS2C());
-            Broadcast(server, new SpawnEntityS2C(
-                EntityId: id, Uuid: Guid.NewGuid(), Type: kind,
-                X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0, Data: 0,
-                VelocityX: 0, VelocityY: 0, VelocityZ: 0));
-            Broadcast(server, new SetEntityVelocityS2C(id, vx, vy, vz));
-            Broadcast(server, new SetItemEntityMetadataS2C(id, stack));
-            Broadcast(server, new BundleDelimiterS2C());
+            SendSpawn(m => Broadcast(server, m), id, kind, stack, pos, vel);
         }
+    }
+
+    /// <summary>Writes the packet sequence that makes a client render a dropped item (spawn + velocity + the item
+    /// stack, bundled so it never shows a contents-less item) to <paramref name="send"/> - a broadcast from
+    /// <see cref="Announce"/>, or a targeted send when an existing drop is shown to a joining player
+    /// (<see cref="Network.EntityVisibility"/>). Velocity is a separate packet because the 1.20.1 client ignores
+    /// the spawn-packet velocity for items.</summary>
+    public static void SendSpawn(Action<IMessage> send, int id, EntityType kind, ItemStack stack,
+                                 TransformEntityComponent pos, VelocityEntityComponent vel) {
+        send(new BundleDelimiterS2C());
+        send(new SpawnEntityS2C(
+            EntityId: id, Uuid: Guid.NewGuid(), Type: kind,
+            X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0, Data: 0,
+            VelocityX: 0, VelocityY: 0, VelocityZ: 0));
+        send(new SetEntityVelocityS2C(id, ToWire(vel.X), ToWire(vel.Y), ToWire(vel.Z)));
+        send(new SetItemEntityMetadataS2C(id, stack));
+        send(new BundleDelimiterS2C());
     }
 
     static void Broadcast(Server server, IMessage message) =>

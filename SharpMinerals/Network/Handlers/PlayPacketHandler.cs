@@ -195,7 +195,7 @@ public sealed class PlayPacketHandler {
         }
 
         context.World.TossItem(context.World.Ecs.Get<TransformEntityComponent>(context.Entity), tossed);
-        client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
+        context.SyncInventory();
     }
 
     /// <summary>Legacy (1.5.2) block placement: a creative client sends the held item in the packet, placed directly.</summary>

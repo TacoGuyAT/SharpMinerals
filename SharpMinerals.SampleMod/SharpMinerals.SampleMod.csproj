@@ -12,6 +12,13 @@
   <ItemGroup>
     <!-- Private/no-copy: the host already ships SharpMinerals.dll; a mod must not redeploy the engine. -->
     <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" Private="false" ExcludeAssets="runtime" />
+    <!-- The component source generator: scans this mod's [Component] types and registers them (namespaced from the
+         [ModInfo] below, e.g. sample:...) so any component it adds gets an id + persistence. Analyzer-only. -->
+    <ProjectReference Include="..\SharpMinerals.SourceGenerator\SharpMinerals.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
+    <!-- [Component] resolves to OUR marker (SharpMinerals.Components). -->
+    <Using Include="SharpMinerals.Components" />
   </ItemGroup>
 
 </Project>

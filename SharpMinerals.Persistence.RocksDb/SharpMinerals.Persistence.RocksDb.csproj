@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- RocksDB-backed IPlayerStore. Kept in its own assembly so the embeddable core stays
+  <!-- RocksDB-backed IEntityStore. Kept in its own assembly so the embeddable core stays
        free of the native RocksDB dependency; only hosts that want disk persistence reference it. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>

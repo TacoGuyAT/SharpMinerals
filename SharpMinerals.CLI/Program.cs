@@ -70,13 +70,13 @@ var endpoint = new IPEndPoint(IPAddress.Parse(config.Host), config.Port);
 // MinRocksDb and RocksDbSharp share an on-disk layout, so a world is portable between them.
 #if IN_MEMORY
 var worldStore = new AsyncWorldStore(new InMemoryWorldStore());
-var playerStore = new AsyncPlayerStore(new InMemoryPlayerStore());
+var entityStore = new AsyncEntityStore(new InMemoryEntityStore());
 #elif AOT
 var worldStore = new AsyncWorldStore(new MinRocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
-var playerStore = new AsyncPlayerStore(new MinRocksDbPlayerStore(Path.Combine(config.DataDir, "players")));
+var entityStore = new AsyncEntityStore(new MinRocksDbEntityStore(Path.Combine(config.DataDir, "players")));
 #else
 var worldStore = new AsyncWorldStore(new RocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
-var playerStore = new AsyncPlayerStore(new RocksDbPlayerStore(Path.Combine(config.DataDir, "players")));
+var entityStore = new AsyncEntityStore(new RocksDbEntityStore(Path.Combine(config.DataDir, "players")));
 #endif
 
 // The configured main world, a persisted superflat.
@@ -99,7 +99,7 @@ var context = new ServerContext {
     MOTD = config.Motd,
     MaxPlayers = config.MaxPlayers,
     TicksPerSecond = config.Tps,
-    PlayerStore = playerStore,
+    EntityStore = entityStore,
 };
 
 server = new Server(context);
@@ -142,6 +142,6 @@ if (!string.IsNullOrEmpty(config.Startup))
 // Block for the server's lifetime; Ctrl+C or `/server stop` releases this, then we close the stores and exit.
 server.WaitForShutdown();
 modLoader.StopAll(server); // let mods release anything they own before the stores close
-playerStore.Dispose();
+entityStore.Dispose();
 worldStore.Dispose();
 return 0;

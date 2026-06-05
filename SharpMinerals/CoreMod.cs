@@ -17,6 +17,9 @@ namespace SharpMinerals;
 [ModInfo("sharpminerals", "1.0.0", ["SharpMinerals"])]
 public sealed class CoreMod : Mod {
     public override void OnInitialize() {
+        // Engine COMPONENTS are not registered here: the component source generator emits a [ModuleInitializer]
+        // that registers every [Component] type in this assembly (namespaced from the [ModInfo] above) at load.
+
         // Engine blocks first: air MUST be palette id 0, missing id 1 (the chunk store + FromState depend on it).
         BlockRegistry.Air = BlockRegistry.Register("air", isAir: true);
         BlockRegistry.Missing = BlockRegistry.Register("missing");
@@ -31,7 +34,8 @@ public sealed class CoreMod : Mod {
             // A dropped item collides with terrain but doesn't block placement (Physics, not Placement).
             new HitboxEntityComponent(0.25, 0.25, CollisionUsage.Physics),
             new GravityEntityComponent(),
-            new PickupEntityComponent()));
+            new PickupEntityComponent()))
+            .Persist(); // dropped items are saved with the world
 
         EntityRegistry.Player = EntityRegistry.Register("player")
             .Add(new HealthEntityDescriptor(MaxHealth: 20f))
@@ -62,6 +66,7 @@ public sealed class CoreMod : Mod {
             new BlockCollisionEntityComponent(),
             // Default to the "missing" block so a data-less spawn (e.g. /summon falling_block) still has a real
             // block to fall, render and re-place as; SpawnFallingBlock overwrites it with the actual block.
-            new FallingBlockEntityComponent { Block = BlockRegistry.Missing }));
+            new FallingBlockEntityComponent { Block = BlockRegistry.Missing }))
+            .Persist(); // a falling block in flight is saved so its block isn't lost on shutdown
     }
 }

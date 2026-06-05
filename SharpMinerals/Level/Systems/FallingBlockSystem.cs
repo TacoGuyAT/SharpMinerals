@@ -75,13 +75,18 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
         foreach (var (entity, block, pos) in fresh) {
             int id = server.NextEntityId();
             ecs.Get<FallingBlockEntityComponent>(entity).EntityId = id;
-            server.NetServer.Broadcast(new SpawnEntityS2C(
-                EntityId: id, Uuid: Guid.NewGuid(), Type: EntityRegistry.FallingBlock,
-                X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0,
-                Data: 0, VelocityX: 0, VelocityY: 0, VelocityZ: 0, BlockData: block),
-                c => c.State == ConnectionState.Play);
+            SendSpawn(m => server.NetServer.Broadcast(m, c => c.State == ConnectionState.Play), id, block, pos);
         }
     }
+
+    /// <summary>Writes the spawn packet for a falling block (carrying its block as the spawn Data) to
+    /// <paramref name="send"/> - a broadcast from <see cref="Announce"/>, or a targeted send when an existing
+    /// falling block is shown to a joining player (<see cref="Network.EntityVisibility"/>).</summary>
+    public static void SendSpawn(Action<IMessage> send, int id, BlockType block, TransformEntityComponent pos) =>
+        send(new SpawnEntityS2C(
+            EntityId: id, Uuid: Guid.NewGuid(), Type: EntityRegistry.FallingBlock,
+            X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0,
+            Data: 0, VelocityX: 0, VelocityY: 0, VelocityZ: 0, BlockData: block));
 
     /// <summary>Post-tick: broadcast each landed cell's resulting block (whatever the reaction left there) and
     /// remove the now-despawned entity.</summary>

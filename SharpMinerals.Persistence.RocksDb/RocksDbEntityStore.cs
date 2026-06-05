@@ -1,20 +1,19 @@
 using RocksDbSharp;
-using SharpMinerals.Entities;
 
 namespace SharpMinerals.Persistence.RocksDb;
 
 /// <summary>
-/// Disk-backed <see cref="IPlayerStore"/> on RocksDB: one key per player (the UUID's 16 bytes),
-/// value is the <see cref="PlayerStateCodec"/> blob. Survives restarts. Writes go through
-/// RocksDB's write-ahead log, so state is durable per save even on an unclean shutdown.
+/// Disk-backed <see cref="IEntityStore"/> on RocksDB: one key per entity (the id's 16 bytes), value is the
+/// <see cref="EntityCodec"/> blob. Survives restarts. Writes go through RocksDB's write-ahead log, so state is
+/// durable per save even on an unclean shutdown.
 /// </summary>
-public sealed class RocksDbPlayerStore : IPlayerStore, IDisposable {
+public sealed class RocksDbEntityStore : IEntityStore, IDisposable {
     // Fully qualified: the enclosing namespace ends in ".RocksDb", which would otherwise shadow
     // the RocksDbSharp.RocksDb type name.
     readonly RocksDbSharp.RocksDb db;
 
     /// <summary>Opens (creating if missing) a RocksDB database at <paramref name="path"/>.</summary>
-    public RocksDbPlayerStore(string path) {
+    public RocksDbEntityStore(string path) {
         // RocksDB's CreateIfMissing makes the DB dir itself but not its parents - ensure the
         // full path exists first (e.g. "<data>/world/players").
         Directory.CreateDirectory(path);
@@ -22,16 +21,15 @@ public sealed class RocksDbPlayerStore : IPlayerStore, IDisposable {
         db = RocksDbSharp.RocksDb.Open(options, path);
     }
 
-    public void Save(Guid uuid, PlayerState state) =>
-        db.Put(uuid.ToByteArray(), PlayerStateCodec.Serialize(state));
+    public void Save(Guid id, byte[] data) => db.Put(id.ToByteArray(), data);
 
-    public bool TryLoad(Guid uuid, out PlayerState state) {
-        var bytes = db.Get(uuid.ToByteArray());
+    public bool TryLoad(Guid id, out byte[] data) {
+        var bytes = db.Get(id.ToByteArray());
         if (bytes is null) {
-            state = default;
+            data = default!;
             return false;
         }
-        state = PlayerStateCodec.Deserialize(bytes);
+        data = bytes;
         return true;
     }
 

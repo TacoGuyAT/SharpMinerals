@@ -11,6 +11,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+    <!-- The component source generator: registers this mod's [Component] types (namespaced from [ModInfo],
+         e.g. sharpminerals_test:...) so any component it adds gets an id + persistence. Analyzer-only. -->
+    <ProjectReference Include="..\SharpMinerals.SourceGenerator\SharpMinerals.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
+    <!-- [Component] resolves to OUR marker (SharpMinerals.Components). -->
+    <Using Include="SharpMinerals.Components" />
   </ItemGroup>
 
 </Project>

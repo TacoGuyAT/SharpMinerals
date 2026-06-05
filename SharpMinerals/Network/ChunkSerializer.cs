@@ -91,9 +91,11 @@ public static class ChunkSerializer {
 
                         // Block entities are derived from the block itself, not the lazily-created server-side
                         // BlockEntity instances (empty for a placed-but-unopened chest). IsBlockEntity is a cheap
-                        // cached gate so the wire-id lookup only runs for the rare block that carries one.
-                        if (block.IsBlockEntity)
-                            blockEntities.Add(((byte)((x << 4) | z), sectionBaseY + y, types.BlockEntityTypeId(block)));
+                        // cached gate so the wire-id lookup only runs for the rare block that carries one. Only
+                        // blocks with a REAL wire block-entity type id are sent: a data-only custom block entity (no
+                        // mapping) stays server-side rather than being sent as a bogus id 0 the client mis-renders.
+                        if (block.IsBlockEntity && types.TryBlockEntityTypeId(block, out var blockEntityId))
+                            blockEntities.Add(((byte)((x << 4) | z), sectionBaseY + y, blockEntityId));
                     }
                 }
             }

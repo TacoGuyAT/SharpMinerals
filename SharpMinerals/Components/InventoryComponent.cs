@@ -1,10 +1,14 @@
 using SharpMinerals.Items;
+using SharpMinerals.Network.Buffers;
+using SharpMinerals.Persistence;
 
 namespace SharpMinerals.Components;
 
 /// <summary>A fixed-size container of <see cref="ItemStack"/>s - the backing storage any inventory is built
-/// on. Slot count is set at construction and never changes.</summary>
-public class InventoryComponent {
+/// on. Slot count is set at construction and never changes. Persists itself (slot count + each stack) so a block
+/// entity's contents survive save/load via the <see cref="ComponentObject"/> bag.</summary>
+[Component]
+public class InventoryComponent : IPersistentComponent {
     readonly ItemStack[] slots;
 
     public InventoryComponent(int size) => slots = new ItemStack[size];
@@ -49,5 +53,27 @@ public class InventoryComponent {
         return stack.Count > 0 ? stack : default;
     }
 
+    /// <summary>Removes up to <paramref name="amount"/> items from slot <paramref name="index"/>, clearing the slot
+    /// when it empties. Returns the number actually removed (0 if the slot was already empty).</summary>
+    public int Consume(int index, int amount = 1) {
+        ref var slot = ref slots[index];
+        if (slot.IsEmpty || amount <= 0) return 0;
+        int removed = System.Math.Min(amount, slot.Count);
+        slot.Count -= removed;
+        if (slot.Count <= 0) slot = default;
+        return removed;
+    }
+
     public void Clear() => Array.Clear(slots);
+
+    public void Write(MinecraftStream s) {
+        s.WriteVarInt(slots.Length);
+        foreach (var stack in slots) StackCodec.Write(s, stack);
+    }
+
+    public static InventoryComponent Read(MinecraftStream s) {
+        var inv = new InventoryComponent(s.ReadVarInt());
+        for (int i = 0; i < inv.slots.Length; i++) inv.slots[i] = StackCodec.Read(s);
+        return inv;
+    }
 }

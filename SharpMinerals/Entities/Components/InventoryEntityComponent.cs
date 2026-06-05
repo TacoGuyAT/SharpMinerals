@@ -1,12 +1,14 @@
 using SharpMinerals.Components;
 using SharpMinerals.Items;
+using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Entities.Components;
 
 /// <summary>An entity's inventory layout over a backing <see cref="InventoryComponent"/>: 36 main slots
-/// (hotbar 0-8 + storage 9-35), 4 armor slots, and an off-hand. The held item is the selected hotbar slot.</summary>
+/// (hotbar 0-8 + storage 9-35), 4 armor slots, and an off-hand. The held item is the selected hotbar slot.
+/// Persists itself (selected slot + the backing storage) so a saved entity keeps its inventory and held item.</summary>
 [Component]
-public sealed class InventoryEntityComponent {
+public sealed class InventoryEntityComponent : IPersistentComponent {
     public const int MainSize = 36;
     public const int HotbarSize = 9;
     public const int ArmorSize = 4;
@@ -45,6 +47,21 @@ public sealed class InventoryEntityComponent {
     /// <summary>Adds a stack to the main inventory (slots 0-35; armor and off-hand are never auto-filled)
     /// and returns whatever didn't fit.</summary>
     public ItemStack Add(ItemStack stack) => Storage.Add(stack, 0, MainSize);
+
+    /// <summary>Consumes up to <paramref name="amount"/> items from the held (selected hotbar) slot; returns the
+    /// number actually removed.</summary>
+    public int ConsumeHeld(int amount = 1) => Storage.Consume(SelectedSlot, amount);
+
+    public void Write(MinecraftStream s) {
+        s.WriteVarInt(SelectedSlot);
+        Storage.Write(s);
+    }
+
+    public static InventoryEntityComponent Read(MinecraftStream s) {
+        int selected = s.ReadVarInt();
+        var storage = InventoryComponent.Read(s);
+        return new InventoryEntityComponent(storage) { SelectedSlot = selected };
+    }
 }
 
 /// <summary>The four armor slots, ordered foot-to-head as in the vanilla equipment array.</summary>

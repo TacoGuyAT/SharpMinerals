@@ -22,6 +22,7 @@ import net.minecraft.util.Identifier;
  * so automated runs never block each other.
  *
  * Commands: {@code break <x> <y> <z>}, {@code mine <block> [count]}, {@code goto <x> <z>},
+ * {@code place|use <x> <y> <z> [face]} (right-click a block: places the held block, or opens a container),
  * {@code attack <id>}, {@code look <yaw> <pitch>}, {@code drop [all]}, {@code select <slot>},
  * {@code count <type>}, {@code say <text>}, {@code cmd <text>}, {@code stop}, {@code exit},
  * {@code tree [name]} (the command tree the client received), {@code suggest <text>} (tab-completions,
@@ -246,6 +247,21 @@ public class SharpTester implements ClientModInitializer {
                     int count = a.length > 3 ? Integer.parseInt(a[3]) : 1;
                     mc.interactionManager.clickCreativeStack(new net.minecraft.item.ItemStack(item, count), slot);
                     result = "set slot " + slot + " = " + a[2] + " x" + count;
+                    break;
+                }
+                case "place": case "use": {
+                    // Right-click a block face: places the held block onto it, OR (for a container like a chest)
+                    // opens it - which is how a chest's block entity + inventory get materialized server-side.
+                    // `use <x> <y> <z> [face]` (face defaults to up). Builds a real Use Item On packet.
+                    int x = Integer.parseInt(a[1]), y = Integer.parseInt(a[2]), z = Integer.parseInt(a[3]);
+                    var face = a.length > 4 ? net.minecraft.util.math.Direction.byName(a[4].toLowerCase())
+                                            : net.minecraft.util.math.Direction.UP;
+                    var bpos = new net.minecraft.util.math.BlockPos(x, y, z);
+                    var hit = new net.minecraft.util.hit.BlockHitResult(
+                        net.minecraft.util.math.Vec3d.ofCenter(bpos), face, bpos, false);
+                    var action = mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+                    mc.player.swingHand(Hand.MAIN_HAND);
+                    result = "use (" + x + " " + y + " " + z + " " + face + ") -> " + action;
                     break;
                 }
                 case "exit": {

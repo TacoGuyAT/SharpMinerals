@@ -1,4 +1,5 @@
 using SharpMinerals.Blocks;
+using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Items;
 
@@ -19,5 +20,6 @@ public static class ModContent {
         BlockRegistry.Freeze();
         ItemRegistry.Freeze();
         EntityRegistry.Freeze();
+        ComponentRegistry.Freeze();
     }
 }

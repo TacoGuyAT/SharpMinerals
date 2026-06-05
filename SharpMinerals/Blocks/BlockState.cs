@@ -1,10 +1,15 @@
 using SharpMinerals.Blocks.Descriptors;
+using SharpMinerals.Components;
+using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Blocks;
 
 /// <summary>A concrete block state: a <see cref="BlockType"/> plus a value (index into the property's value
-/// list) for each of its state properties. Stateless blocks store no <c>BlockState</c>, just the type id.</summary>
-public sealed class BlockState {
+/// list) for each of its state properties. Stateless blocks store no <c>BlockState</c>, just the type id. Persists
+/// itself (block id + schema signature + values) so the per-instance state an item stack carries (a wool's colour)
+/// survives save/load through the <see cref="ComponentObject"/> bag, schema-migrated by name like chunk cells.</summary>
+[Component]
+public sealed class BlockState : IPersistentComponent {
     public BlockType Type { get; }
     readonly int[] values; // one per property, in StateProperties order; default 0
 
@@ -51,5 +56,29 @@ public sealed class BlockState {
         for (int i = 0; i < values.Length; i++)
             if (values[i] != other.values[i]) return false;
         return true;
+    }
+
+    public void Write(MinecraftStream s) {
+        s.WriteString(Type.Id.Full);
+        s.WriteString(StateSchema.Of(Type)); // signature so values migrate BY NAME on load, never by position
+        s.WriteVarInt(values.Length);
+        foreach (var value in values) s.WriteVarInt(value);
+    }
+
+    public static BlockState Read(MinecraftStream s) {
+        var name = s.ReadString();
+        var schema = s.ReadString();
+        int count = s.ReadVarInt();
+        var values = new int[count];
+        for (int i = 0; i < count; i++) values[i] = s.ReadVarInt();
+
+        var block = BlockRegistry.FromName(name)
+            ?? throw new InvalidDataException($"Unknown block '{name}' for a saved BlockState.");
+        // Migrate by name when the schema drifted (a reordered/renamed property); apply positionally otherwise.
+        if (schema != StateSchema.Of(block)) return StateSchema.Migrate(schema, values, block);
+        var state = new BlockState(block);
+        if (block.TryGet<StatesBlockDescriptor>(out var sp))
+            for (int i = 0; i < sp.States.Count && i < values.Length; i++) state.Set(sp.States[i], values[i]);
+        return state;
     }
 }

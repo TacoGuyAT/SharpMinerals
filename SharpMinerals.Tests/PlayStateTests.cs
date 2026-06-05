@@ -1047,25 +1047,62 @@ public class PlayStateTests {
             "inventory restored");
     }
 
-    // -- Persistence: the disk (RocksDB) serialization codec round-trips -------------
+    // -- Persistence: a live entity round-trips through the generic EntityCodec (the disk blob) --------
+    // Also exercises Step 1: a stack's carried block state (red wool's Color) goes through the item Data bag.
     [Fact]
-    public void PlayerStateCodecRoundTrips() {
-        var inv = new InventoryEntityComponent { SelectedSlot = 3 };
+    public void EntityCodecRoundTripsPersistentComponents() {
+        var world = new World("codec", new FlatChunkGenerator());
+        var ecs = world.Ecs;
+
+        var e1 = world.Spawn(EntityRegistry.Player, new TransformEntityComponent(1.5, 70.0, -3.25, 45f, 12f));
+        ecs.Get<HealthEntityComponent>(e1) = new HealthEntityComponent(15f, 20f);
+        var inv = ecs.Get<InventoryEntityComponent>(e1);
+        inv.SelectedSlot = 3;
         inv.Main(0) = new ItemStack(VanillaMod.Stone, 64);
         inv.Main(7) = Types.FromVanillaItem(194); // red wool, carrying its Color state
-        var state = new PlayerState(new TransformEntityComponent(1.5, 70.0, -3.25, 45f, 12f), new HealthEntityComponent(15f, 20f), inv);
 
-        var restored = PlayerStateCodec.Deserialize(PlayerStateCodec.Serialize(state));
+        var blob = EntityCodec.Encode(ecs, e1);
 
-        Assert.True(restored.Transform.X == 1.5 && restored.Transform.Yaw == 45f && restored.Transform.Pitch == 12f,
-            "transform round-trips");
-        Assert.True(restored.Health.Current == 15f && restored.Health.Max == 20f, "health round-trips");
-        Assert.True(restored.Inventory.SelectedSlot == 3, "selected slot round-trips");
-        Assert.True(restored.Inventory.Main(0).Type == VanillaMod.Stone && restored.Inventory.Main(0).Count == 64,
-            "plain stack round-trips");
-        Assert.True(restored.Inventory.Main(7).Type == VanillaMod.Wool
-            && restored.Inventory.Main(7).State?.Get(State.Color) == 14,
-            "stack with carried state round-trips");
+        // Apply onto a fresh blueprint-spawned entity (the restore path).
+        var e2 = world.Spawn(EntityRegistry.Player, new TransformEntityComponent(0, 0, 0));
+        EntityCodec.Apply(ecs, e2, blob);
+
+        var t = ecs.Get<TransformEntityComponent>(e2);
+        var h = ecs.Get<HealthEntityComponent>(e2);
+        var inv2 = ecs.Get<InventoryEntityComponent>(e2);
+        Assert.True(t.X == 1.5 && t.Yaw == 45f && t.Pitch == 12f, "transform round-trips");
+        Assert.True(h.Current == 15f && h.Max == 20f, "health round-trips");
+        Assert.True(inv2.SelectedSlot == 3, "selected slot round-trips");
+        Assert.True(inv2.Main(0).Type == VanillaMod.Stone && inv2.Main(0).Count == 64, "plain stack round-trips");
+        Assert.True(inv2.Main(7).Type == VanillaMod.Wool && inv2.Main(7).State?.Get(State.Color) == 14,
+            "stack with carried block state round-trips through the item Data bag");
+    }
+
+    // -- Inventory consume API (held-item consumption, e.g. fueling a machine) --------
+    [Fact]
+    public void InventoryConsumeRemovesItemsAndClearsEmptiedSlots() {
+        var inv = new InventoryComponent(9);
+        inv[0] = new ItemStack(VanillaMod.Stone, 5);
+        Assert.Equal(2, inv.Consume(0, 2));   // partial take
+        Assert.Equal(3, inv[0].Count);
+        Assert.Equal(3, inv.Consume(0, 10));  // more than present -> takes the remainder
+        Assert.True(inv[0].IsEmpty);           // emptied slot is cleared
+        Assert.Equal(0, inv.Consume(0));       // nothing left to take
+
+        var entityInv = new InventoryEntityComponent { SelectedSlot = 2 };
+        entityInv.Main(2) = new ItemStack(VanillaMod.Stone, 4);
+        Assert.Equal(1, entityInv.ConsumeHeld());      // default 1, from the held (selected) slot
+        Assert.Equal(3, entityInv.Main(2).Count);
+    }
+
+    // -- Chunk packet: only block entities with a real wire id are sent (data-only BEs stay server-side) --
+    [Fact]
+    public void TryBlockEntityTypeIdMapsAChestButNotAPlainBlock() {
+        var types = new ProtocolJE763().Types;
+        Assert.True(types.TryBlockEntityTypeId(VanillaMod.Chest, out var id) && id == 1,
+            "chest has a wire block-entity type id (1)");
+        Assert.False(types.TryBlockEntityTypeId(VanillaMod.Stone, out _),
+            "a plain block has no block-entity type id, so it isn't sent in the chunk packet");
     }
 
     // -- Persistence: world chunks (blocks, states, chest contents) survive a save/reload --
@@ -1096,6 +1133,120 @@ public class PlayStateTests {
         Assert.True(be is { } && be.Type == VanillaMod.Chest
             && be.Get<InventoryComponent>()[0].Type == VanillaMod.Stone && be.Get<InventoryComponent>()[0].Count == 5,
             "chest block entity + contents persisted");
+    }
+
+    // -- Persistence: loose world entities (dropped items) survive a world save/reload --
+    [Fact]
+    public void DroppedItemsPersistThroughWorldSaveAndLoad() {
+        var store = new InMemoryWorldStore();
+        var w1 = new World("drops", new FlatChunkGenerator(), store);
+        w1.SpawnItem(10.5, 65.0, -4.5, default, new ItemStack(VanillaMod.Stone, 9), pickupDelay: 0);
+        Assert.Equal(1, w1.SaveEntities());
+
+        // A fresh world over the same store respawns the item where it lay, with its stack intact.
+        var w2 = new World("drops", new FlatChunkGenerator(), store);
+        Assert.Equal(1, w2.LoadEntities());
+
+        var loaded = w2.Entities.InChunk(SpatialIndex.CellOf(10.5, 65.0, -4.5));
+        Assert.Single(loaded);
+        var e = loaded.First();
+        var pickup = w2.Ecs.Get<PickupEntityComponent>(e);
+        var t = w2.Ecs.Get<TransformEntityComponent>(e);
+        Assert.True(pickup.Stack.Type == VanillaMod.Stone && pickup.Stack.Count == 9, "item stack restored");
+        Assert.True(t.X == 10.5 && t.Y == 65.0 && t.Z == -4.5, "item position restored");
+    }
+
+    // -- Persistence: dropped items survive a full server save -> restart (the real wiring) --
+    [Fact]
+    public void DroppedItemsPersistAcrossServerRestart() {
+        var store = new InMemoryWorldStore();
+        var protocol = new ProtocolJE763();
+
+        var worlds1 = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator(), store),
+        };
+        var server1 = new Server(new ServerContext {
+            NetServer = new CaptureNetServer(protocol), Worlds = worlds1, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
+        });
+        server1.DefaultWorld.SpawnItem(8.5, 5.0, 8.5, default, new ItemStack(VanillaMod.Stone, 3), pickupDelay: 0);
+        server1.SaveWorlds(); // the real save path: Server.SaveWorlds -> World.Save -> SaveEntities
+
+        // A fresh server over the same store restores the item at construction (Server ctor -> World.LoadEntities).
+        var capture = new CaptureNetServer(protocol);
+        var worlds2 = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator(), store),
+        };
+        var server2 = new Server(new ServerContext {
+            NetServer = capture, Worlds = worlds2, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
+        });
+
+        var loaded = server2.DefaultWorld.Entities.InChunk(SpatialIndex.CellOf(8.5, 5.0, 8.5));
+        Assert.Single(loaded);
+        var pickup = server2.DefaultWorld.Ecs.Get<PickupEntityComponent>(loaded.First());
+        Assert.True(pickup.Stack.Type == VanillaMod.Stone && pickup.Stack.Count == 3, "item restored on the new server");
+
+        // The loaded item is announced (net id assigned) BEFORE any client connects - broadcast reaches no one.
+        server2.AnnounceSystems();
+        // So a player joining afterwards must be sent the existing item (EntityVisibility), else it's invisible.
+        var handler = new ServerPacketHandler(server2);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+        handler.Handle(client, new LoginStartC2S("Joiner", Guid.Empty));
+        server2.Events.DrainDeferred();
+        Assert.Contains(client.Sent, m => m is SpawnEntityS2C s && s.Type == EntityRegistry.Item);
+    }
+
+    // -- Persistence: the length-prefixed component bag round-trips known components and skips unknown ones --
+    [Fact]
+    public void ComponentBagRoundTripsKnownAndSkipsUnknownComponents() {
+        // Known component: an inventory survives Write -> Read through the bag, and a value written AFTER the bag
+        // is still readable (the length prefixes keep the stream aligned).
+        var src = new ComponentObject();
+        var inv = new InventoryComponent(9);
+        inv[2] = new ItemStack(VanillaMod.Stone, 7);
+        src.Add(inv);
+
+        using var ms = new MemoryStream();
+        var w = new MinecraftStream(ms);
+        ComponentBag.Write(w, src);
+        w.WriteString("after-bag");
+
+        ms.Position = 0;
+        var r = new MinecraftStream(ms);
+        var dst = new ComponentObject();
+        ComponentBag.Read(r, dst);
+        Assert.True(dst.TryGet<InventoryComponent>(out var got) && got[2].Type == VanillaMod.Stone && got[2].Count == 7,
+            "inventory round-tripped through the bag");
+        Assert.Equal("after-bag", r.ReadString());
+
+        // Unknown component: an id with no registered reader (a removed mod's) is skipped using its length prefix,
+        // and the value after it is still readable - no desync. The raw blob is PRESERVED, not lost.
+        using var ms2 = new MemoryStream();
+        var w2 = new MinecraftStream(ms2);
+        w2.WriteVarInt(1);                          // one component in the bag
+        w2.WriteString("ghost:removed_component");  // ...whose type is no longer registered
+        w2.WriteVarInt(3);
+        w2.Write(new byte[] { 1, 2, 3 }, 0, 3);     // its opaque, unreadable blob
+        w2.WriteString("after-unknown");            // trailing data
+
+        ms2.Position = 0;
+        var r2 = new MinecraftStream(ms2);
+        var dst2 = new ComponentObject();
+        ComponentBag.Read(r2, dst2);
+        Assert.False(dst2.Has<InventoryComponent>(), "the unknown component was not materialized as a real component");
+        Assert.Equal("after-unknown", r2.ReadString());
+
+        // ...but it round-trips: writing dst2 back re-emits the unknown [id][blob] verbatim (non-destructive,
+        // so re-adding the mod restores it).
+        using var ms3 = new MemoryStream();
+        var w3 = new MinecraftStream(ms3);
+        ComponentBag.Write(w3, dst2);
+        ms3.Position = 0;
+        var r3 = new MinecraftStream(ms3);
+        Assert.Equal(1, r3.ReadVarInt());
+        Assert.Equal("ghost:removed_component", r3.ReadString());
+        Assert.Equal(3, r3.ReadVarInt());
+        Assert.Equal(new byte[] { 1, 2, 3 }, r3.ReadBytes(3));
     }
 
     // -- Persistence: a chunk only saves once it has been modified ------------------
@@ -1191,18 +1342,18 @@ public class PlayStateTests {
 
     // -- Async persistence: write-behind reads-after-write and flushes on dispose ----
     [Fact]
-    public void AsyncPlayerStoreReadsAfterWriteThenFlushes() {
-        var inner = new InMemoryPlayerStore();
-        var uuid = Guid.NewGuid();
-        var state = new PlayerState(new TransformEntityComponent(1.0, 2.0, 3.0), new HealthEntityComponent(20f, 20f), new InventoryEntityComponent());
+    public void AsyncEntityStoreReadsAfterWriteThenFlushes() {
+        var inner = new InMemoryEntityStore();
+        var id = Guid.NewGuid();
+        var data = new byte[] { 1, 2, 3, 4 };
 
-        using (var store = new AsyncPlayerStore(inner)) {
-            store.Save(uuid, state); // queued, not necessarily flushed yet
-            Assert.True(store.TryLoad(uuid, out var read) && read.Transform.X == 1.0,
+        using (var store = new AsyncEntityStore(inner)) {
+            store.Save(id, data); // queued, not necessarily flushed yet
+            Assert.True(store.TryLoad(id, out var read) && read.Length == 4 && read[0] == 1,
                 "read-after-write sees the queued value before flush");
         } // Dispose drains the queue to the inner store
 
-        Assert.True(inner.TryLoad(uuid, out var flushed) && flushed.Transform.X == 1.0,
+        Assert.True(inner.TryLoad(id, out var flushed) && flushed.Length == 4 && flushed[0] == 1,
             "queued write was flushed to the inner store on dispose");
     }
 

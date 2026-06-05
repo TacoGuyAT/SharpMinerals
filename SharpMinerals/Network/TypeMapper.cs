@@ -148,6 +148,15 @@ public sealed class TypeMapper {
 
     public int BlockEntityTypeId(BlockType block) => For(block.Id, block).BlockEntity ?? 0;
 
+    /// <summary>The wire block-entity type id for <paramref name="block"/>, if it has one mapped (a mod maps a custom
+    /// block entity via <see cref="MappingBuilder.BlockEntity"/>). False for a data-only block entity with no mapping,
+    /// so the chunk serializer can skip it rather than send a bogus id.</summary>
+    public bool TryBlockEntityTypeId(BlockType block, out int id) {
+        if (For(block.Id, block).BlockEntity is { } mapped) { id = mapped; return true; }
+        id = 0;
+        return false;
+    }
+
     public int ItemId(ItemType item) => For(item.Id, item).Item?.Default ?? 0;
 
     public int ItemId(ItemStack stack) {

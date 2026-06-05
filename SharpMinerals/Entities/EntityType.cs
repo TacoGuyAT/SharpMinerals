@@ -26,6 +26,13 @@ public sealed class EntityType : ComponentObject {
     /// <summary>Max health from a <see cref="HealthEntityDescriptor"/> component (0 if this kind isn't living, e.g. an item).</summary>
     public float MaxHealth => TryGet<HealthEntityDescriptor>(out var l) ? l.MaxHealth : 0f;
 
+    /// <summary>Whether entities of this kind are saved with the world (e.g. dropped items). Off by default;
+    /// players persist separately (by UUID) and transient kinds aren't worth storing.</summary>
+    public bool Persisted { get; private set; }
+
+    /// <summary>Marks this kind as world-persistent (saved/restored with the world). Fluent.</summary>
+    public EntityType Persist(bool persisted = true) { Persisted = persisted; return this; }
+
     /// <summary>Sets the recipe for this kind's ECS components - a typed <c>ecs.Create(...)</c> of the entity's OWN
     /// components (NOT the <see cref="TypeEntityDescriptor"/> tag, which <see cref="Create"/> adds). Reference-bearing
     /// components must be constructed fresh here (the delegate runs once per spawn). Returns the type for chaining.</summary>
