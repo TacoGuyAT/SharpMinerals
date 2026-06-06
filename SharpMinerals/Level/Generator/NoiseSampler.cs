@@ -8,11 +8,12 @@ public sealed class NoiseSampler {
     readonly FastNoiseLite noise;
 
     public NoiseSampler(int seed, double frequency, int octaves = 1,
-                        FastNoiseLite.NoiseType type = FastNoiseLite.NoiseType.OpenSimplex2) {
+                        FastNoiseLite.NoiseType type = FastNoiseLite.NoiseType.OpenSimplex2,
+                        FastNoiseLite.FractalType fractal = FastNoiseLite.FractalType.FBm) {
         noise = new FastNoiseLite(seed);
         noise.SetNoiseType(type);
         noise.SetFrequency((float)frequency);
-        noise.SetFractalType(octaves > 1 ? FastNoiseLite.FractalType.FBm : FastNoiseLite.FractalType.None);
+        noise.SetFractalType(octaves > 1 ? fractal : FastNoiseLite.FractalType.None);
         noise.SetFractalOctaves(octaves);
     }
 

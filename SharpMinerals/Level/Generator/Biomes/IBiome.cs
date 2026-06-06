@@ -10,6 +10,9 @@ namespace SharpMinerals.Level.Generator.Biomes;
 /// P1 generates a single implicit overworld and does not consult this; the biome phase wires the source,
 /// registry, and the composite density that reads these.</summary>
 public interface IBiome {
+    /// <summary>Identifier for debugging, the wire biome registry, and lookups (e.g. "plains", "ocean").</summary>
+    string Name { get; }
+
     /// <summary>This biome's location in the climate space the source weights biomes against.</summary>
     ClimatePoint Climate { get; }
 

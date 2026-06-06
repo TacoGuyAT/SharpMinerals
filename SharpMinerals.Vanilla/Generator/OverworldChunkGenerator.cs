@@ -1,15 +1,30 @@
 using SharpMinerals.Level;
 using SharpMinerals.Level.Generator;
+using SharpMinerals.Level.Generator.Biomes;
+using SharpMinerals.Math;
 
 namespace SharpMinerals.Vanilla.Generator;
 
-/// <summary>Builds the P1 overworld generator: a seeded continentalness/FBm density driving a stone terrain
-/// pass and a grass/dirt surface pass, dispatched per cell by <see cref="ShaderChunkGenerator"/>. A single
-/// biome for now; the biome phase introduces the biome source and per-biome shaping. Lives in the vanilla
-/// mod because it builds vanilla blocks (core's default stays <see cref="VoidChunkGenerator"/>).</summary>
-public static class OverworldChunkGenerator {
-    public static IChunkGenerator Create(int seed) {
-        var density = new OverworldDensity(seed);
-        return new ShaderChunkGenerator(new TerrainShader(density), new SurfaceShader(density));
+/// <summary>The overworld generator: the registered biomes drive a shared <see cref="BiomeSource"/>, a composite
+/// <see cref="BiomeDensity"/> shapes terrain, and a stone terrain pass + a per-biome surface pass are dispatched
+/// per cell by <see cref="ShaderChunkGenerator"/>. Also exposes the biome at a column (<see cref="IBiomeLookup"/>).
+/// Lives in the vanilla mod because it builds vanilla content (core's default stays <see cref="VoidChunkGenerator"/>).</summary>
+public sealed class OverworldChunkGenerator : IChunkGenerator, IBiomeLookup {
+    readonly ShaderChunkGenerator generator;
+    readonly BiomeSource source;
+
+    public OverworldChunkGenerator(int seed) {
+        source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        // Sample the composite density on a coarse 4-block lattice and interpolate - the terrain and surface
+        // passes share the cached result, cutting density evaluations ~33x per cube.
+        var density = new InterpolatedDensity(new BiomeDensity(seed, source));
+        generator = new ShaderChunkGenerator(
+            new TerrainShader(density), new SurfaceShader(density, source), new WaterShader());
     }
+
+    public Chunk Generate(Vector3i position) => generator.Generate(position);
+
+    public string BiomeNameAt(int x, int z) => source.Dominant(x, z).Name;
+
+    public static IChunkGenerator Create(int seed) => new OverworldChunkGenerator(seed);
 }

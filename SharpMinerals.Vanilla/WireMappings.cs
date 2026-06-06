@@ -32,6 +32,8 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE762>("minecraft:sand").State(112).Item(44);
         TypeMapper.Map<ProtocolJE762>("minecraft:red_sand").State(117).Item(46);
         TypeMapper.Map<ProtocolJE762>("minecraft:gravel").State(118).Item(47);
+        TypeMapper.Map<ProtocolJE762>("minecraft:water").State(80); // source block (level 0); no block item
+
         TypeMapper.Map<ProtocolJE762>("minecraft:chest").State(2951, (State.Facing, 6)).Item(275).BlockEntity(1);
         TypeMapper.Map<ProtocolJE762>("minecraft:wool").State(2043, (State.Color, 1)).Item(179, (State.Color, 1));
         TypeMapper.Map<ProtocolJE762>("minecraft:stick").Item(803);

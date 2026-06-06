@@ -29,8 +29,13 @@ public sealed partial class VanillaMod : Mod {
         RedSand     = BlockRegistry.Register("red_sand").DropSelf();
         // Red sand falls like sand - borrow the stateless falling behaviour (its drop stays its own, via DropSelf).
         RedSand.Copy<FallingBlockDescriptor>(Sand);
+        // Water: a generated fluid for oceans/lakes. No drop, no item (placed via bucket, not a block item).
+        Water       = BlockRegistry.Register("water");
 
         Stick       = ItemRegistry.Register("stick");
+
+        // Overworld biomes (seeded factories the generator instantiates per world).
+        Generator.VanillaBiomes.Register();
 
         // Vanilla wire-id mappings (per protocol version) for the data-driven TypeMapper - the core knows no ids.
         WireMappings.Register();
@@ -50,5 +55,6 @@ public sealed partial class VanillaMod {
     public static BlockType Sand { get; internal set; } = null!;
     public static BlockType Gravel { get; internal set; } = null!;
     public static BlockType RedSand { get; internal set; } = null!;
+    public static BlockType Water { get; internal set; } = null!;
     public static ItemType Stick { get; internal set; } = null!;
 }

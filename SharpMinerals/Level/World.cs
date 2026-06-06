@@ -119,6 +119,9 @@ public class World : ITickable {
 
     public int LoadedChunkCount => loadedChunks.Count;
 
+    /// <summary>The biome name at a block column, if this world's generator exposes biomes (null for flat/void).</summary>
+    public string? BiomeNameAt(int x, int z) => (chunkGenerator as Generator.Biomes.IBiomeLookup)?.BiomeNameAt(x, z);
+
     /// <summary>Persists every chunk modified since its last save and marks them clean. No-op without a
     /// store. Returns the number of chunks written.</summary>
     public int Save() {

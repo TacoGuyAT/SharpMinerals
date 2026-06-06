@@ -12,9 +12,12 @@ using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Level;
+using SharpMinerals.Level.Generator;
+using SharpMinerals.Level.Generator.Biomes;
 using SharpMinerals.Math;
 using SharpMinerals.Modding;
 using SharpMinerals.Network;
+using SharpMinerals.Network.Nbt;
 using NuGet.Versioning;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Handlers;
@@ -81,15 +84,19 @@ public class PlayStateTests {
     }
 
     [Fact]
-    public void OverworldSurfaceIsGrassOverDirtOverStone() {
-        var world = new World("ovw-surf", OverworldChunkGenerator.Create(1337));
-        // Pick a column with a clean (non-overhang) surface - solid for several blocks under the top.
+    public void OverworldSurfaceMatchesBiomeRule() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-surf", OverworldChunkGenerator.Create(seed));
+        // Pick a column with a clean (non-overhang) surface, then check it is capped by its biome's surface
+        // top block, with air above and stone well below the soil - whichever biome owns the column.
         for (int x = 0; x < 16; x++) {
             int top = TopSolidY(world, x, 0);
             if (top <= 0 || !SolidColumnBelow(world, x, 0, top, 8)) continue;
-            Assert.True(world.GetBlock(new Vector3i(x, top, 0)) == VanillaMod.GrassBlock, "overworld: top is grass");
+            var biome = source.SurfacePick(x, 0);
+            var expectedTop = biome.Surface.Block(x, top, 0, depthBelowSurface: 0, VanillaMod.Stone);
+            Assert.True(world.GetBlock(new Vector3i(x, top, 0)) == expectedTop, $"overworld: top is {biome.Name}'s surface");
             Assert.True(world.GetBlock(new Vector3i(x, top + 1, 0)).IsAir, "overworld: above the surface is air");
-            Assert.True(world.GetBlock(new Vector3i(x, top - 1, 0)) == VanillaMod.Dirt, "overworld: dirt under the grass");
             Assert.True(world.GetBlock(new Vector3i(x, top - 6, 0)) == VanillaMod.Stone, "overworld: deep is stone");
             return;
         }
@@ -97,11 +104,76 @@ public class PlayStateTests {
     }
 
     [Fact]
+    public void BiomeWireIdsMatchRegistrationOrder() {
+        Assert.Equal(0, BiomeWireRegistry.IdOf("plains"));   // plains first -> the client's default biome
+        Assert.Equal(1, BiomeWireRegistry.IdOf("forest"));
+        Assert.Equal(2, BiomeWireRegistry.IdOf("badlands"));
+        Assert.Equal(3, BiomeWireRegistry.IdOf("ocean"));
+        Assert.Equal(0, BiomeWireRegistry.IdOf(null));       // no-biome world -> default
+        Assert.Equal(0, BiomeWireRegistry.IdOf("nonsense")); // unknown -> default
+        Assert.NotNull(RegistryCodec.Default);               // login biome registry NBT builds without throwing
+    }
+
+    [Fact]
+    public void OverworldChunkPacketEncodesWithBiomes() {
+        // End-to-end: generate + serialize a column, exercising the interpolated density, block-state mapping,
+        // and the new per-cell biome palette. Just has to produce a non-empty, exception-free packet.
+        var world = new World("ovw-pkt", OverworldChunkGenerator.Create(1337));
+        var types = new TypeMapper(typeof(ProtocolJE763));
+        var packet = ChunkSerializer.Build(types, world, 0, 0);
+        Assert.True(packet.Payload.Length > 0, "chunk packet encodes");
+    }
+
+    [Fact]
+    public void GrassSurfaceBecomesDirtUnderwater() {
+        var rule = new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt);
+        Assert.Equal(VanillaMod.GrassBlock, rule.Block(0, 63, 0, 0, VanillaMod.Stone)); // at the waterline, dry -> grass
+        Assert.Equal(VanillaMod.Dirt, rule.Block(0, 62, 0, 0, VanillaMod.Stone));       // water above -> dirt
+        Assert.Equal(VanillaMod.Dirt, rule.Block(0, 70, 0, 2, VanillaMod.Stone));       // within filler depth -> dirt
+        Assert.Equal(VanillaMod.Stone, rule.Block(0, 70, 0, 5, VanillaMod.Stone));      // below soil -> unchanged
+
+        // Sand floors are not swapped underwater (no submergedTop).
+        var sand = new LayeredSurfaceRule(VanillaMod.Sand, VanillaMod.Dirt, fillerDepth: 2);
+        Assert.Equal(VanillaMod.Sand, sand.Block(0, 30, 0, 0, VanillaMod.Stone));       // deep ocean floor stays sand
+    }
+
+    [Fact]
+    public void BiomeSelectionFollowsClimate() {
+        var source = new BiomeSource(7, BiomeRegistry.Build(7));
+        Assert.Equal("ocean", source.DominantForClimate(new ClimatePoint(0.0, 0.0, -0.9, -0.3, 0.0)).Name);
+        Assert.Equal("plains", source.DominantForClimate(new ClimatePoint(0.1, 0.0, 0.4, -0.2, 0.0)).Name);
+        Assert.Equal("forest", source.DominantForClimate(new ClimatePoint(0.0, 0.6, 0.4, 0.0, 0.0)).Name);
+        Assert.Equal("badlands", source.DominantForClimate(new ClimatePoint(0.7, -0.7, 0.4, 0.2, 0.0)).Name);
+    }
+
+    [Fact]
+    public void OceanBasinsFillWithWaterToSeaLevel() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-water", OverworldChunkGenerator.Create(seed));
+
+        // Climate lookup is pure noise (no chunk gen), so scan cheaply for a deep-ocean column, then probe it.
+        int ox = 0, oz = 0;
+        bool found = false;
+        for (int x = 0; x < 12000 && !found; x += 64)
+            for (int z = 0; z < 12000 && !found; z += 64)
+                if (source.Dominant(x, z).Name == "ocean") { ox = x; oz = z; found = true; }
+        Assert.True(found, "ocean: found a deep-ocean column");
+
+        Assert.True(world.GetBlock(new Vector3i(ox, WorldDefaults.SeaLevel - 1, oz)) == VanillaMod.Water,
+            "ocean: water just below sea level");
+        Assert.True(world.GetBlock(new Vector3i(ox, WorldDefaults.SeaLevel, oz)).IsAir,
+            "ocean: air at and above sea level");
+        var floor = world.GetBlock(new Vector3i(ox, 12, oz));
+        Assert.True(!floor.IsAir && floor != VanillaMod.Water, "ocean: solid ground below the water");
+    }
+
+    [Fact]
     public void OverworldBlocksMatchGlobalDensityAcrossCubeBorder() {
         // Solidity must equal the single global density across the x=15|16 cube border (and into the next
         // cube), proving the dispatcher feeds correct world coordinates - a seam would surface as a mismatch.
         int seed = 123;
-        var density = new OverworldDensity(seed);
+        var density = new InterpolatedDensity(new BiomeDensity(seed, new BiomeSource(seed, BiomeRegistry.Build(seed))));
         var world = new World("ovw-seam", OverworldChunkGenerator.Create(seed));
         for (int x = 14; x <= 18; x++)
             for (int y = 56; y <= 96; y++) {
@@ -160,6 +232,20 @@ public class PlayStateTests {
         Assert.True(t.Measure(now, 10) < 5.0, "10s window reflects the recent stall, not the burst");
         double m1 = t.Measure(now, 60);
         Assert.True(m1 is > 12.0 and < 19.0, $"1m window averages the stall in (was {m1})");
+    }
+
+    // A multilinear field (no cross terms), which trilinear interpolation must reproduce exactly.
+    sealed class LinearDensity : IDensity {
+        public double At(int x, int y, int z) => 0.5 * x + 1.0 * y - 0.3 * z + 2.0;
+    }
+
+    [Fact]
+    public void InterpolatedDensityIsExactForLinearFields() {
+        var inner = new LinearDensity();
+        var interp = new InterpolatedDensity(inner);
+        (int X, int Y, int Z)[] points = { (1, 2, 3), (7, 5, 11), (15, 15, 15), (-3, 40, -9), (33, 1, 128) };
+        foreach (var (x, y, z) in points)
+            Assert.Equal(inner.At(x, y, z), interp.At(x, y, z), 6); // exact (within fp tolerance) off the lattice too
     }
 
     static int TopSolidY(World world, int x, int z) {

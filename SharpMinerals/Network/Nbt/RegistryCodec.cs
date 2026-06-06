@@ -63,29 +63,47 @@ public static class RegistryCodec {
         .Put("has_ceiling", false);
 
     // -- minecraft:worldgen/biome --------------------------------------------
-    // Badlands at id 0 (ChunkSerializer.BiomeId); plains MUST also exist - the client uses it as the
-    // empty-chunk default biome (getOrThrow, or world construction fails).
+    // Built from BiomeWireRegistry (mods register their biomes there) so the ids here match the ids the chunk
+    // encoder writes. The wire ids are the registration order. The client uses the first biome as the
+    // empty-chunk default, so the mod registers a safe land biome (plains) first.
     static NbtCompound BiomeRegistry() {
         var value = new NbtList(NbtTagType.Compound);
-        value.Add(Entry("minecraft:badlands", 0, Biome(7254527, 2.0f, 0.0f, hasPrecipitation: false)));
-        value.Add(Entry("minecraft:plains", 1, Biome(7907327, 0.8f, 0.4f, hasPrecipitation: true)));
+        var wires = BiomeWireRegistry.Entries;
+        if (wires.Count == 0) {
+            // No mod loaded: a minimal valid pair so the client can still join.
+            value.Add(Entry("minecraft:plains", 0, Biome(7907327, 0.8f, 0.4f, hasPrecipitation: true)));
+            value.Add(Entry("minecraft:badlands", 1, Biome(7254527, 2.0f, 0.0f, hasPrecipitation: false)));
+        } else {
+            for (int id = 0; id < wires.Count; id++) {
+                var w = wires[id];
+                value.Add(Entry($"minecraft:{w.Name}", id,
+                    Biome(w.SkyColor, w.Temperature, w.Downfall, w.HasPrecipitation, w.GrassColor, w.FoliageColor, w.WaterColor)));
+            }
+        }
         return Registry("minecraft:worldgen/biome", value);
     }
 
-    static NbtCompound Biome(int skyColor, float temperature, float downfall, bool hasPrecipitation) => new NbtCompound()
-        .Put("has_precipitation", hasPrecipitation)
-        .Put("temperature", temperature)
-        .Put("downfall", downfall)
-        .Put("effects", new NbtCompound()
+    static NbtCompound Biome(int skyColor, float temperature, float downfall, bool hasPrecipitation,
+                             int? grassColor = null, int? foliageColor = null, int waterColor = 4159204) {
+        var effects = new NbtCompound()
             .Put("sky_color", skyColor)
             .Put("water_fog_color", 329011)
             .Put("fog_color", 12638463)
-            .Put("water_color", 4159204)
+            .Put("water_color", waterColor)
             .Put("mood_sound", new NbtCompound()
                 .Put("tick_delay", 6000)
                 .Put("offset", 2.0d)
                 .Put("sound", "minecraft:ambient.cave")
-                .Put("block_search_extent", 8)));
+                .Put("block_search_extent", 8));
+        if (grassColor is { } grass) effects.Put("grass_color", grass);
+        if (foliageColor is { } foliage) effects.Put("foliage_color", foliage);
+
+        return new NbtCompound()
+            .Put("has_precipitation", hasPrecipitation)
+            .Put("temperature", temperature)
+            .Put("downfall", downfall)
+            .Put("effects", effects);
+    }
 
     // -- minecraft:chat_type -------------------------------------------------
     static NbtCompound ChatTypeRegistry() {

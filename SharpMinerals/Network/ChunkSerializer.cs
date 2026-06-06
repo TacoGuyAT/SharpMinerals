@@ -17,7 +17,6 @@ public static class ChunkSerializer {
     const int MinSectionY = MinY / 16;    // chunk-cube Y of the bottom section (-4)
     const int SectionCount = 24;          // 384 / 16
     const int LightSectionCount = SectionCount + 2; // one padding section above and below
-    const int BiomeId = 0;                // minecraft:badlands (1.20.1 registry id 0)
 
     // A full-bright sky-light section (4096 nibbles = 2048 bytes, all 0xFF), written verbatim per section.
     static readonly byte[] FullSkyLight = CreateFullSkyLight();
@@ -71,6 +70,8 @@ public static class ChunkSerializer {
         var s = new MinecraftStream(ms, leaveOpen: true);
 
         var states = new int[16 * 16 * 16];
+        // Biomes are 2D (per column) here, so the 4x4x4 cell grid is identical for every section of the column.
+        int[] biomeCells = BuildBiomeCells(world, chunkX, chunkZ);
         for (int sy = 0; sy < SectionCount; sy++) {
             // A vanilla section IS one server chunk cube - fetch it once and read cells directly, rather than
             // a GetBlock/GetChunk dictionary lookup (+ Vector3i alloc) per cell.
@@ -102,14 +103,31 @@ public static class ChunkSerializer {
 
             s.WriteShort((short)nonAir);
             WritePalettedStates(s, states);
-            WriteSingleValuedBiome(s);
+            WritePalettedStates(s, biomeCells, minBits: 1); // biome containers use 1..3-bit indirect palettes
         }
 
         return ms.ToArray();
     }
 
-    /// <summary>Writes a block-state paletted container (single-valued or indirect).</summary>
-    static void WritePalettedStates(MinecraftStream s, int[] states) {
+    /// <summary>The 4x4x4 (64) biome registry ids for a column's sections, ordered ((y*4)+z)*4+x. Biomes are
+    /// 2D, so the 4x4 horizontal grid (sampled from the world's generator) repeats over the four y-layers.
+    /// Unknown/no-biome worlds fall back to id 0.</summary>
+    static int[] BuildBiomeCells(World world, int chunkX, int chunkZ) {
+        var cells = new int[64];
+        Span<int> horizontal = stackalloc int[16];
+        for (int bz = 0; bz < 4; bz++)
+            for (int bx = 0; bx < 4; bx++)
+                horizontal[bz * 4 + bx] =
+                    Nbt.BiomeWireRegistry.IdOf(world.BiomeNameAt(chunkX * 16 + bx * 4, chunkZ * 16 + bz * 4));
+        for (int y = 0; y < 4; y++)
+            for (int zx = 0; zx < 16; zx++)
+                cells[y * 16 + zx] = horizontal[zx];
+        return cells;
+    }
+
+    /// <summary>Writes a paletted container (single-valued or indirect). <paramref name="minBits"/> is the
+    /// floor on bits-per-entry for the indirect form: 4 for block states, 1 for biomes.</summary>
+    static void WritePalettedStates(MinecraftStream s, int[] states, int minBits = 4) {
         var palette = states.Distinct().ToArray();
 
         if (palette.Length == 1) {
@@ -119,7 +137,7 @@ public static class ChunkSerializer {
             return;
         }
 
-        int bits = System.Math.Max(4, BitsFor(palette.Length));
+        int bits = System.Math.Max(minBits, BitsFor(palette.Length));
         var indexOf = new Dictionary<int, int>(palette.Length);
         for (int i = 0; i < palette.Length; i++) indexOf[palette[i]] = i;
 
@@ -133,12 +151,6 @@ public static class ChunkSerializer {
         long[] packed = PackBits(indices, bits);
         s.WriteVarInt(packed.Length);
         foreach (var l in packed) s.WriteLong(l);
-    }
-
-    static void WriteSingleValuedBiome(MinecraftStream s) {
-        s.WriteUByte(0);                      // single-valued palette
-        s.WriteVarInt(BiomeId);
-        s.WriteVarInt(0);
     }
 
     /// <summary>
