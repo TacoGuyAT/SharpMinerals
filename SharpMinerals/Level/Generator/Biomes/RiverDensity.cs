@@ -24,7 +24,7 @@ public sealed class RiverDensity : IDensity {
         this.baseTerrain = baseTerrain;
         this.source = source;
         this.natural = natural;
-        cache = new ThreadLocal<Slab[]>(() => new[] { new Slab(), new Slab() });
+        cache = new ThreadLocal<Slab[]>(() => [new Slab(), new Slab()]);
     }
 
     public double At(int x, int y, int z) {

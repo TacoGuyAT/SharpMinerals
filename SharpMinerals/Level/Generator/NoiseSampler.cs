@@ -9,12 +9,14 @@ public sealed class NoiseSampler {
 
     public NoiseSampler(int seed, double frequency, int octaves = 1,
                         FastNoiseLite.NoiseType type = FastNoiseLite.NoiseType.OpenSimplex2,
-                        FastNoiseLite.FractalType fractal = FastNoiseLite.FractalType.FBm) {
+                        FastNoiseLite.FractalType fractal = FastNoiseLite.FractalType.FBm,
+                        FastNoiseLite.CellularReturnType cellularReturnType = FastNoiseLite.CellularReturnType.Distance) {
         noise = new FastNoiseLite(seed);
         noise.SetNoiseType(type);
         noise.SetFrequency((float)frequency);
         noise.SetFractalType(octaves > 1 ? fractal : FastNoiseLite.FractalType.None);
         noise.SetFractalOctaves(octaves);
+        noise.SetCellularReturnType(cellularReturnType);
     }
 
     public double Sample2D(double x, double z) => noise.GetNoise((float)x, (float)z);

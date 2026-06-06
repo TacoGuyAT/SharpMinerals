@@ -105,7 +105,7 @@ public class PlayStateTests {
             var expectedTop = biome.Surface.Block(x, top, 0, depthBelowSurface: 0, VanillaMod.Stone);
             Assert.True(world.GetBlock(new Vector3i(x, top, 0)) == expectedTop, $"overworld: top is {biome.Name}'s surface");
             Assert.True(world.GetBlock(new Vector3i(x, top + 1, 0)).IsAir, "overworld: above the surface is air");
-            Assert.True(world.GetBlock(new Vector3i(x, top - 6, 0)) == VanillaMod.Stone, "overworld: deep is stone");
+            Assert.True(world.GetBlock(new Vector3i(x, top - 8, 0)) == VanillaMod.Stone, "overworld: deep is stone");
             return;
         }
         Assert.Fail("overworld: no clean surface column found in the test row");

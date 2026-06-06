@@ -57,6 +57,7 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE763>("minecraft:cornflower").State(2086).Item(206);
         TypeMapper.Map<ProtocolJE763>("minecraft:oxeye_daisy").State(2085).Item(205);
         TypeMapper.Map<ProtocolJE763>("minecraft:dead_bush").State(2007).Item(177);
+        TypeMapper.Map<ProtocolJE763>("minecraft:red_sandstone").State(10938).Item(488);
 
         // -- Legacy Java (1.5.2 / protocol 61): flat ids, state == item; colour/metadata not modeled; no entities. --
         TypeMapper.Map<ProtocolJE61>("sharpminerals:air").State(0);
