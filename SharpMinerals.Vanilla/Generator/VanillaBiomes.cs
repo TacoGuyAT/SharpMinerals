@@ -15,14 +15,14 @@ public static class VanillaBiomes {
             new ClimatePoint(Temperature: 0.1, Humidity: 0.0, Continentalness: 0.4, Rockiness: -0.2, Weirdness: 0.0),
             baseHeight: 3.0, heightVariation: 4.0,
             new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt),
-            treeDensity: 0.003));
+            treeDensity: 0.003, grassDensity: 0.25, flowerDensity: 0.04));
 
         // Forest: temperate and humid, inland, gently rolling - grass over dirt, densely wooded.
         BiomeRegistry.Register(_ => new Biome("forest",
             new ClimatePoint(Temperature: 0.0, Humidity: 0.6, Continentalness: 0.4, Rockiness: 0.0, Weirdness: 0.0),
             baseHeight: 5.0, heightVariation: 7.0,
             new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt),
-            treeDensity: 0.10));
+            treeDensity: 0.10, grassDensity: 0.35, flowerDensity: 0.015));
 
         // Badlands: hot and arid, inland, raised mesa plateaus - red sand over red sand.
         BiomeRegistry.Register(seed => new Biome("badlands",

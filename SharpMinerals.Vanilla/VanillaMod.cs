@@ -33,6 +33,12 @@ public sealed partial class VanillaMod : Mod {
         Water       = BlockRegistry.Register("water");
         OakLog      = BlockRegistry.Register("oak_log").DropSelf();
         OakLeaves   = BlockRegistry.Register("oak_leaves").DropSelf();
+        // Ground cover (non-solid plants). Flowers drop themselves; short grass drops nothing.
+        ShortGrass  = BlockRegistry.Register("short_grass");
+        Dandelion   = BlockRegistry.Register("dandelion").DropSelf();
+        Poppy       = BlockRegistry.Register("poppy").DropSelf();
+        Cornflower  = BlockRegistry.Register("cornflower").DropSelf();
+        OxeyeDaisy  = BlockRegistry.Register("oxeye_daisy").DropSelf();
 
         Stick       = ItemRegistry.Register("stick");
 
@@ -60,5 +66,10 @@ public sealed partial class VanillaMod {
     public static BlockType Water { get; internal set; } = null!;
     public static BlockType OakLog { get; internal set; } = null!;
     public static BlockType OakLeaves { get; internal set; } = null!;
+    public static BlockType ShortGrass { get; internal set; } = null!;
+    public static BlockType Dandelion { get; internal set; } = null!;
+    public static BlockType Poppy { get; internal set; } = null!;
+    public static BlockType Cornflower { get; internal set; } = null!;
+    public static BlockType OxeyeDaisy { get; internal set; } = null!;
     public static ItemType Stick { get; internal set; } = null!;
 }

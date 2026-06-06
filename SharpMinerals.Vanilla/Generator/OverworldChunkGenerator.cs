@@ -24,6 +24,7 @@ public sealed class OverworldChunkGenerator : IChunkGenerator, IBiomeLookup {
         };
         var decorators = new IChunkDecorator[] {
             new TreeDecorator(seed, source, biomeDensity, density),
+            new PlantDecorator(seed, source), // after trees, so it skips columns capped by trunks/canopy
         };
         generator = new ShaderChunkGenerator(shaders, decorators);
     }

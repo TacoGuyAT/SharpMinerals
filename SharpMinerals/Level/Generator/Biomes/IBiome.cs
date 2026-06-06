@@ -30,6 +30,12 @@ public interface IBiome {
     /// it. Forests are dense, plains sparse, deserts/oceans bare.</summary>
     double TreeDensity { get; }
 
+    /// <summary>Chance per grass column for short grass (0 = none).</summary>
+    double GrassDensity { get; }
+
+    /// <summary>Chance per grass column for a flower (0 = none), before the feature-density map scales it.</summary>
+    double FlowerDensity { get; }
+
     /// <summary>How cells where this biome dominates are surfaced (top and filler blocks).</summary>
     ISurfaceRule Surface { get; }
 }
