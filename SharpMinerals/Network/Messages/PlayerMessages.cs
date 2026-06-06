@@ -1,6 +1,5 @@
 using SharpMinerals.Entities;
 using SharpMinerals.Items;
-using SharpMinerals.Math;
 
 namespace SharpMinerals.Network.Messages;
 

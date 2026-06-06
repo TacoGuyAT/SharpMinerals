@@ -118,34 +118,34 @@ public sealed class EntityTrackerSystem : ISystem {
     void RemoveFrom(ArchWorld ecs, ArchEntity viewer, int netId) {
         if (!ecs.Has<EntityTrackerComponent>(viewer)) return;
         if (ecs.Get<EntityTrackerComponent>(viewer).Sent.Remove(netId) && ClientOf(ecs, viewer) is { } client)
-            client.Send(new RemoveEntitiesS2C(new[] { netId }));
+            client.Send(new RemoveEntitiesS2C([netId]));
     }
 
+    // TODO: refactor into INetEntityComponent, ecs.Has<INetEntityComponent>()
     void SendSpawn(NetClient client, ArchWorld ecs, ArchEntity entity) {
         if (ecs.Has<NetPlayerEntityComponent>(entity))
             PlayerVisibility.SendSpawn(client, ecs, entity);
         else if (ecs.Has<PickupEntityComponent>(entity)) {
-            var d = ecs.Get<PickupEntityComponent>(entity);
-            ItemLifecycleSystem.SendSpawn(client.Send, d.EntityId, EntityRegistry.Item, d.Stack,
-                ecs.Get<TransformEntityComponent>(entity), ecs.Get<VelocityEntityComponent>(entity));
+            var (d, t, v) = ecs.Get<PickupEntityComponent, TransformEntityComponent, VelocityEntityComponent>(entity);
+            ItemLifecycleSystem.SendSpawn(client.Send, d.EntityId, EntityRegistry.Item, d.Stack, t, v);
         } else if (ecs.Has<FallingBlockEntityComponent>(entity)) {
             var f = ecs.Get<FallingBlockEntityComponent>(entity);
             FallingBlockSystem.SendSpawn(client.Send, f.EntityId, f.Block, ecs.Get<TransformEntityComponent>(entity));
         }
     }
 
-    // The net id for an entity, assigning a fresh one to a loose entity that lacks one. 0 = not a trackable kind.
-    int ResolveOrAssignNetId(ArchWorld ecs, ArchEntity e) {
-        if (ecs.Has<NetPlayerEntityComponent>(e))
-            return ecs.Get<NetPlayerEntityComponent>(e).EntityId;
-        if (ecs.Has<PickupEntityComponent>(e)) {
-            ref var d = ref ecs.Get<PickupEntityComponent>(e);
+    /// <returns>0 = not a trackable kind.</returns>
+    int ResolveOrAssignNetId(ArchWorld ecs, ArchEntity entity) {
+        if (ecs.Has<NetPlayerEntityComponent>(entity))
+            return ecs.Get<NetPlayerEntityComponent>(entity).EntityId;
+        if (ecs.Has<PickupEntityComponent>(entity)) {
+            ref var d = ref ecs.Get<PickupEntityComponent>(entity);
             if (d.Stack.IsEmpty) return 0;
             if (d.EntityId == 0) d.EntityId = world.NextEntityId?.Invoke() ?? 0;
             return d.EntityId;
         }
-        if (ecs.Has<FallingBlockEntityComponent>(e)) {
-            ref var f = ref ecs.Get<FallingBlockEntityComponent>(e);
+        if (ecs.Has<FallingBlockEntityComponent>(entity)) {
+            ref var f = ref ecs.Get<FallingBlockEntityComponent>(entity);
             if (f.EntityId == 0) f.EntityId = world.NextEntityId?.Invoke() ?? 0;
             return f.EntityId;
         }

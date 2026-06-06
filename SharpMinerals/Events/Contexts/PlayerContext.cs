@@ -30,13 +30,19 @@ public sealed record PlayerContext(Server Server, World World, ArchEntity Entity
     /// to the client. Returns the number actually removed (0 if the hand was empty).</summary>
     public int ConsumeHeld(int amount = 1) {
         int removed = Inventory.ConsumeHeld(amount);
-        if (removed > 0) SyncInventory();
+        if (removed > 0) SyncInventory(); // TODO: sync single slot
         return removed;
     }
 
     /// <summary>Shows <paramref name="text"/> on the player's action bar (the line above the hotbar).</summary>
-    public void SendActionBar(TextComponent text) => Client.Send(new SystemChatMessageS2C(text, Overlay: true));
+    public void SendActionBar(TextComponent text) => Client.Send(new SystemChatMessageS2C(text, true));
 
     /// <summary>Shows <paramref name="text"/> on the player's action bar.</summary>
     public void SendActionBar(string text) => SendActionBar(new TextComponent(text));
+
+    /// <summary>TODO</summary>
+    public void SendChat(TextComponent text) => Client.Send(new SystemChatMessageS2C(text, false));
+
+    /// <summary>TODO</summary>
+    public void SendChat(string text) => SendChat(new TextComponent(text));
 }

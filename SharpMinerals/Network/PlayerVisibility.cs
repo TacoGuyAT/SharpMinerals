@@ -18,8 +18,40 @@ public static class PlayerVisibility {
     const int CreativeMode = 1;
 
     public static void Register(EventBus events) {
-        events.Subscribe<PlayerJoined>(e => OnJoin(e.Context.Server, e.Context.Client));
-        events.Subscribe<PlayerLeft>(e => OnLeave(e.Context.Server, e.Context.Player));
+        events.Subscribe<PlayerJoined>(static e => {
+            var server = e.Server;
+            var client = e.Client;
+
+            if(!server.TryGetPlayer(client.Id, out var self) || !self.World.Ecs.IsAlive(self.Entity))
+                return;
+
+            var selfInfo = self.World.Ecs.Get<NetPlayerEntityComponent>(self.Entity);
+
+            // Everyone (incl. the newcomer, for its tab list) learns the new profile; the entity tracker spawns the
+            // actual player entities per-view on the next flush.
+            server.NetServer.Broadcast(
+                new PlayerInfoUpdateS2C([Entry(selfInfo)]),
+                c => c.State == ConnectionState.Play
+            );
+
+            var others = new List<PlayerListEntry>(server.PlayerCount);
+            foreach(var (clientId, context) in server.Players) {
+                if(clientId != client.Id && context.World.Ecs.IsAlive(context.Entity)) {
+                    others.Add(Entry(context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity)));
+                }
+            }
+            if(others.Count > 0) {
+                client.Send(new PlayerInfoUpdateS2C(others));
+            }
+
+            OnInventoryChanged(self);
+        });
+
+        events.Subscribe<PlayerLeft>(static e => {
+            var server = e.Server;
+            var player = e.Player;
+            server.NetServer.Broadcast(new PlayerInfoRemoveS2C([player.Uuid]), c => c.State == ConnectionState.Play);
+        });
     }
 
     static PlayerListEntry Entry(in NetPlayerEntityComponent p) => new(p.Uuid, p.Name, CreativeMode, Listed: true, Latency: 0);
@@ -76,38 +108,6 @@ public static class PlayerVisibility {
     static bool LooksSame(ItemStack a, ItemStack b) =>
         a.IsEmpty || b.IsEmpty ? a.IsEmpty && b.IsEmpty : a.StacksWith(b);
 
-    public static void OnJoin(Server server, NetClient client) {
-        if (!server.TryGetPlayer(client.Id, out var self) || !self.World.Ecs.IsAlive(self.Entity))
-            return;
-
-        var selfInfo = self.World.Ecs.Get<NetPlayerEntityComponent>(self.Entity);
-
-        // Everyone (incl. the newcomer, for its tab list) learns the new profile; the entity tracker spawns the
-        // actual player entities per-view on the next flush.
-        server.NetServer.Broadcast(new PlayerInfoUpdateS2C(new[] { Entry(selfInfo) }),
-            c => c.State == ConnectionState.Play);
-
-        // The newcomer must learn existing profiles, or the tracker's spawns of them can't render.
-        var others = new List<PlayerListEntry>();
-        foreach (var (clientId, context) in server.Players)
-            if (clientId != client.Id && context.World.Ecs.IsAlive(context.Entity))
-                others.Add(Entry(context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity)));
-        if (others.Count > 0)
-            client.Send(new PlayerInfoUpdateS2C(others));
-
-        // Seed the player's equipment baseline (a restored player may already wear items) - the tracker replays
-        // equipment to each viewer when it spawns this player; this is the same path as any later change.
-        OnInventoryChanged(self);
-    }
-
-    public static void OnLeave(Server server, NetPlayerEntityComponent info) {
-        // The entity tracker removes the despawned player entity from each viewer; here we only drop the tab entry.
-        server.NetServer.Broadcast(new PlayerInfoRemoveS2C(new[] { info.Uuid }), c => c.State == ConnectionState.Play);
-    }
-
-    static SpawnPlayerS2C Spawn(in NetPlayerEntityComponent info, in TransformEntityComponent pos) =>
-        new(info.EntityId, info.Uuid, info.Name, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch);
-
     /// <summary>Sends a player's entity spawn (+ active flags + equipment) to one viewer's client - the player
     /// dispatch used by <c>EntityTrackerSystem</c> when this player comes into that viewer's view.</summary>
     public static void SendSpawn(NetClient client, ArchWorld ecs, ArchEntity entity) {
@@ -118,8 +118,8 @@ public static class PlayerVisibility {
         // viewer before that broadcast has run (the entity exists a few lines before PlayerJoined is published, and
         // the tick thread races that window) - sending it here makes the spawn self-contained. ADD_PLAYER is
         // idempotent, so the duplicate for an already-listed player is harmless.
-        client.Send(new PlayerInfoUpdateS2C(new[] { Entry(info) }));
-        client.Send(Spawn(info, pos));
+        client.Send(new PlayerInfoUpdateS2C([Entry(info)]));
+        client.Send(new SpawnPlayerS2C(info.EntityId, info.Uuid, info.Name, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch));
         if (info.Flags != EntityFlags.None)
             client.Send(new EntityFlagsS2C(info.EntityId, info.Flags));
         if (ecs.Has<InventoryEntityComponent>(entity))
