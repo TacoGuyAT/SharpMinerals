@@ -89,16 +89,15 @@ public static class Streaming {
 
         Recenter(context, cx, cz);
 
-        int radius = context.Client.Protocol.ChunkViewRadius;
         int sent = 0;
-        for (Mint dx = -radius; dx <= radius; dx++)
-            for (Mint dz = -radius; dz <= radius; dz++)
+        for (Mint dx = -ViewRadius; dx <= ViewRadius; dx++)
+            for (Mint dz = -ViewRadius; dz <= ViewRadius; dz++)
                 if (StreamColumn(context, view, cx + dx, cz + dz)) sent++;
 
         // Forget columns now outside the view so they re-send if the player returns; the tracker despawns the
         // entities in each dropped column from this viewer.
         view.Loaded.RemoveWhere(c => {
-            if (System.Math.Abs(c.X - cx) <= radius && System.Math.Abs(c.Z - cz) <= radius) return false;
+            if (System.Math.Abs(c.X - cx) <= ViewRadius && System.Math.Abs(c.Z - cz) <= ViewRadius) return false;
             context.World.RaiseViewerUnloadedColumn(context.Entity, c);
             return true;
         });

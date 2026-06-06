@@ -47,9 +47,6 @@ public abstract class Protocol {
     /// </summary>
     public virtual IMessage? ChunkViewCenter(int cx, int cz) => null;
 
-    /// <summary>Column radius streamed around a player for this protocol (legacy uses a smaller one).</summary>
-    public virtual int ChunkViewRadius => 5;
-
     protected void Register<T>(ConnectionState state, PacketDirection direction, int id, ICodec<T> codec)
         where T : IMessage {
         var entry = new Entry(state, direction, id, codec);

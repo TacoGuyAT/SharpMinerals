@@ -31,5 +31,4 @@ public abstract class LegacyJavaProtocol : Protocol {
 
     // Pre-Anvil 1.5.2 chunk format; legacy has no Set-Center-Chunk and uses a smaller radius (heavier build).
     public override IMessage BuildChunk(World world, int cx, int cz) => LegacyChunkSerializer.Build(Types, world, cx, cz);
-    public override int ChunkViewRadius => 3;
 }

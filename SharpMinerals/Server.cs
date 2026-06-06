@@ -65,7 +65,8 @@ public class Server : ITickable {
                 || !ctx.World.Ecs.IsAlive(ctx.Entity))
                 return false;
             var t = ctx.World.Ecs.Get<TransformEntityComponent>(ctx.Entity);
-            double r = radius ?? (c.Protocol.ChunkViewRadius + 1) * 16.0;
+            // TODO: per-client radius
+            double r = radius ?? (Streaming.ViewRadius + 1) * 16.0;
             double dx = t.X - x, dz = t.Z - z;
             return dx * dx + dz * dz <= r * r;
         });
