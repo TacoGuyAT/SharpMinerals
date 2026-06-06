@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;

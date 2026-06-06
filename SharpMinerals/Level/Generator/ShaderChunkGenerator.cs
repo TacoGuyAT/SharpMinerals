@@ -1,0 +1,36 @@
+using SharpMinerals.Blocks;
+using SharpMinerals.Math;
+
+namespace SharpMinerals.Level.Generator;
+
+/// <summary>Drives a list of <see cref="IChunkShader"/> passes over every cell of a 16x16x16 cube - the
+/// shader dispatcher. It owns the per-cell loop and the world-coordinate math; each cell starts as air and
+/// is threaded through the passes in order, the final block written to the chunk via
+/// <see cref="ChunkBuilder"/>. Stateless and deterministic: a chunk is a pure function of its world
+/// coordinates, so cubes generate independently and never seam.</summary>
+public sealed class ShaderChunkGenerator : IChunkGenerator {
+    readonly IChunkShader[] shaders;
+
+    public ShaderChunkGenerator(params IChunkShader[] shaders) => this.shaders = shaders;
+
+    public Chunk Generate(Vector3i position) {
+        var chunk = new Chunk(position);
+        var framebuffer = new ChunkBuilder(chunk);
+
+        int baseX = (int)(position.X * Chunk.Size);
+        int baseY = (int)(position.Y * Chunk.Size);
+        int baseZ = (int)(position.Z * Chunk.Size);
+        var air = BlockRegistry.Air;
+
+        for (int y = 0; y < Chunk.Size; y++)
+            for (int z = 0; z < Chunk.Size; z++)
+                for (int x = 0; x < Chunk.Size; x++) {
+                    var block = air;
+                    for (int s = 0; s < shaders.Length; s++)
+                        block = shaders[s].Shade(baseX + x, baseY + y, baseZ + z, block);
+                    framebuffer.Set(x, y, z, block);
+                }
+
+        return chunk;
+    }
+}

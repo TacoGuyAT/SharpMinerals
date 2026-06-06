@@ -335,9 +335,24 @@ public class World : ITickable {
         return entity;
     }
 
-    /// <summary>Spawns a player entity at the flat-world surface and returns its handle.</summary>
+    /// <summary>The transform a fresh player should stand on at column (x,z): one block above the highest
+    /// solid block, scanned top-down so it works for any generator (flat, procedural, void). A column with no
+    /// solid block (void world) falls back to the flat surface height.</summary>
+    public TransformEntityComponent SurfaceSpawn(double x, double z) {
+        int bx = (int)System.Math.Floor(x), bz = (int)System.Math.Floor(z);
+        for (int y = WorldDefaults.MaxY - 1; y >= WorldDefaults.MinY; y--)
+            if (!GetBlock(new Vector3i(bx, y, bz)).IsAir)
+                return new TransformEntityComponent(x, y + 1, z);
+        return new TransformEntityComponent(x, WorldDefaults.SurfaceY, z);
+    }
+
+    /// <summary>Spawns a player entity on the terrain surface and returns its handle. A restored player's
+    /// saved transform overwrites the spawn position, so the column is only scanned for genuinely new players.</summary>
     public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, byte[]? saved = null) {
-        var entity = Player.Spawn(this, clientId, name, uuid, entityId, new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5), saved);
+        var spawn = saved is null
+            ? SurfaceSpawn(0.5, 0.5)
+            : new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5); // overwritten from saved below
+        var entity = Player.Spawn(this, clientId, name, uuid, entityId, spawn, saved);
         // Player.Spawn has stamped the net id / position / inventory; the tracker can now spawn this player to any
         // viewer already holding its column. The player's own view of others follows once its columns stream in.
         EntitySpawned?.Invoke(this, entity);

@@ -49,7 +49,8 @@ public class Chunk : ITickable {
     /// call it after mutating a block entity's components in place (e.g. a machine's stored energy).</summary>
     public void MarkDirty() => Dirty = true;
 
-    static Mint Index(Mint x, Mint y, Mint z) => x + z * Size + y * Size * Size;
+    // internal so the generation framebuffer (ChunkBuilder) can address RawStates with the same layout.
+    internal static Mint Index(Mint x, Mint y, Mint z) => x + z * Size + y * Size * Size;
 
     public ushort GetState(Mint x, Mint y, Mint z) => states[Index(x, y, z)];
     public void SetState(Mint x, Mint y, Mint z, ushort state) { states[Index(x, y, z)] = state; Dirty = true; }

@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
 using SharpMinerals;
-using SharpMinerals.Blocks;
 using SharpMinerals.CLI;
 using SharpMinerals.Commands;
 using SharpMinerals.Vanilla;
+using SharpMinerals.Vanilla.Generator;
 using SharpMinerals.Level;
 using SharpMinerals.Modding;
 using SharpMinerals.Network;
@@ -79,9 +79,9 @@ var worldStore = new AsyncWorldStore(new RocksDbWorldStore(Path.Combine(config.D
 var entityStore = new AsyncEntityStore(new RocksDbEntityStore(Path.Combine(config.DataDir, "players")));
 #endif
 
-// The configured main world, a persisted superflat.
+// The configured main world, a persisted procedural overworld (seed fixed for now; config to follow).
 var worlds = new ConcurrentDictionary<string, World>();
-worlds[config.World] = new World(config.World, new FlatChunkGenerator(), worldStore);
+worlds[config.World] = new World(config.World, OverworldChunkGenerator.Create(1337), worldStore);
 
 // Forward-declared for the transport callbacks below; both are assigned before any client connects.
 Server server = null!;
