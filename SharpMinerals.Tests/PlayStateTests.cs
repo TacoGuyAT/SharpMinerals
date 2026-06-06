@@ -83,11 +83,19 @@ public class PlayStateTests {
                     "overworld: same seed yields the same block");
     }
 
+    // A world with only the terrain + surface shaders - no water fill and no decorators - so tests of the bare
+    // heightfield are not perturbed by water filling carved channels or by trees/ground cover above the surface.
+    static World TerrainOnlyWorld(string name, int seed, out BiomeSource source, out IDensity density) {
+        source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        density = new TrilinearDensity(new BiomeDensity(seed, source));
+        var gen = new ShaderChunkGenerator(new TerrainShader(density), new SurfaceShader(density, source));
+        return new World(name, gen);
+    }
+
     [Fact]
     public void OverworldSurfaceMatchesBiomeRule() {
         int seed = 1337;
-        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
-        var world = new World("ovw-surf", OverworldChunkGenerator.Create(seed));
+        var world = TerrainOnlyWorld("ovw-surf", seed, out var source, out _);
         // Pick a column with a clean (non-overhang) surface, then check it is capped by its biome's surface
         // top block, with air above and stone well below the soil - whichever biome owns the column.
         for (int x = 0; x < 16; x++) {
@@ -180,6 +188,46 @@ public class PlayStateTests {
     }
 
     [Fact]
+    public void GroundCoverGrowsOnGrassyBiomes() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-plants", OverworldChunkGenerator.Create(seed));
+
+        int fx = 0, fz = 0;
+        bool found = false;
+        for (int x = 0; x < 12000 && !found; x += 16)
+            for (int z = 0; z < 12000 && !found; z += 16)
+                if (source.Dominant(x, z).Name == "forest") { fx = x; fz = z; found = true; }
+        Assert.True(found, "plants: found a forest");
+
+        int grass = 0;
+        for (int x = fx; x < fx + 48; x++)
+            for (int z = fz; z < fz + 48; z++)
+                for (int y = 60; y < 130; y++)
+                    if (world.GetBlock(new Vector3i(x, y, z)) == VanillaMod.ShortGrass) grass++;
+        Assert.True(grass > 0, $"plants: a forest has short grass (found {grass})");
+
+        // The forest chunk serializes - exercises the new plant state ids end to end.
+        var packet = ChunkSerializer.Build(new TypeMapper(typeof(ProtocolJE763)), world, fx >> 4, fz >> 4);
+        Assert.True(packet.Payload.Length > 0, "plants: forest chunk encodes");
+
+        // Badlands (red sand, no grass block) gets no ground cover.
+        int bx = 0, bz = 0;
+        bool badlands = false;
+        for (int x = 0; x < 12000 && !badlands; x += 16)
+            for (int z = 0; z < 12000 && !badlands; z += 16)
+                if (source.Dominant(x, z).Name == "badlands") { bx = x; bz = z; badlands = true; }
+        if (badlands) {
+            int onSand = 0;
+            for (int x = bx; x < bx + 32; x++)
+                for (int z = bz; z < bz + 32; z++)
+                    for (int y = 60; y < 140; y++)
+                        if (world.GetBlock(new Vector3i(x, y, z)) == VanillaMod.ShortGrass) onSand++;
+            Assert.Equal(0, onSand);
+        }
+    }
+
+    [Fact]
     public void TreesAreSpacedApart() {
         int seed = 1337;
         var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
@@ -207,6 +255,26 @@ public class PlayStateTests {
             }
         // Trunks at least CanopyRadius+1 apart -> no trunk sits inside another canopy (no leaf-through-log).
         Assert.True(minDistance >= 3, $"spacing: trunks should be >= 3 apart (min was {minDistance})");
+    }
+
+    [Fact]
+    public void RiversCarveWaterThroughLand() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-river", OverworldChunkGenerator.Create(seed));
+
+        // Find a lowland river-centre column in a grassy biome that carved below sea level; water there (with open
+        // air above) proves a river cut through land that would otherwise be dry grass.
+        bool found = false;
+        for (int x = 0; x < 12000 && !found; x += 4)
+            for (int z = 0; z < 12000 && !found; z += 4) {
+                string biome = source.Dominant(x, z).Name;
+                if ((biome != "plains" && biome != "forest") || System.Math.Abs(source.River(x, z)) >= 0.003) continue;
+                if (world.GetBlock(new Vector3i(x, WorldDefaults.SeaLevel - 2, z)) != VanillaMod.Water) continue;
+                Assert.True(world.GetBlock(new Vector3i(x, WorldDefaults.SeaLevel, z)).IsAir, "river: open air above the water");
+                found = true;
+            }
+        Assert.True(found, "river: a lowland river carves water through grass");
     }
 
     [Fact]
@@ -245,8 +313,8 @@ public class PlayStateTests {
         // Solidity must equal the single global density across the x=15|16 cube border (and into the next
         // cube), proving the dispatcher feeds correct world coordinates - a seam would surface as a mismatch.
         int seed = 123;
-        var density = new InterpolatedDensity(new BiomeDensity(seed, new BiomeSource(seed, BiomeRegistry.Build(seed))));
-        var world = new World("ovw-seam", OverworldChunkGenerator.Create(seed));
+        // Decorator-free world sharing the exact density instance, so solidity must match it cell for cell.
+        var world = TerrainOnlyWorld("ovw-seam", seed, out _, out var density);
         for (int x = 14; x <= 18; x++)
             for (int y = 56; y <= 96; y++) {
                 bool solid = !world.GetBlock(new Vector3i(x, y, 0)).IsAir;
@@ -314,10 +382,13 @@ public class PlayStateTests {
     [Fact]
     public void InterpolatedDensityIsExactForLinearFields() {
         var inner = new LinearDensity();
-        var interp = new InterpolatedDensity(inner);
+        var interp = new TrilinearDensity(inner);
+        var tricubic = new TricubicDensity(inner);
         (int X, int Y, int Z)[] points = { (1, 2, 3), (7, 5, 11), (15, 15, 15), (-3, 40, -9), (33, 1, 128) };
-        foreach (var (x, y, z) in points)
-            Assert.Equal(inner.At(x, y, z), interp.At(x, y, z), 6); // exact (within fp tolerance) off the lattice too
+        foreach (var (x, y, z) in points) {
+            Assert.Equal(inner.At(x, y, z), interp.At(x, y, z), 6);   // trilinear: exact off the lattice too
+            Assert.Equal(inner.At(x, y, z), tricubic.At(x, y, z), 6); // Catmull-Rom: also reproduces linear fields
+        }
     }
 
     static int TopSolidY(World world, int x, int z) {

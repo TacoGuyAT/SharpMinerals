@@ -14,6 +14,7 @@ public sealed class BiomeSource {
     const double DitherSharpness = 20.0;         // sharpens the surface dither; band width ~ sigma/sqrt(this) - higher = narrower
 
     const double FeatureFrequency = 0.005; // feature-density patches (dense groves vs clearings) are mid-scale
+    const double RiverFrequency = 0.002;   // winding rivers - finer than biomes, coarser than terrain detail
 
     readonly NoiseSampler temperature;
     readonly NoiseSampler humidity;
@@ -21,6 +22,7 @@ public sealed class BiomeSource {
     readonly NoiseSampler rockiness;
     readonly NoiseSampler weirdness;
     readonly NoiseSampler featureDensity;
+    readonly NoiseSampler river;
     readonly IBiome[] biomes;
 
     public IReadOnlyList<IBiome> Biomes => biomes;
@@ -35,7 +37,12 @@ public sealed class BiomeSource {
         rockiness = new NoiseSampler(seed ^ 0x12CC1, ClimateFrequency, octaves: 2);
         weirdness = new NoiseSampler(seed ^ 0x3B19D, ClimateFrequency, octaves: 2);
         featureDensity = new NoiseSampler(seed ^ 0xFEA7, FeatureFrequency, octaves: 2);
+        river = new NoiseSampler(seed ^ 0x217E5, RiverFrequency, octaves: 2);
     }
+
+    /// <summary>The river field; terrain carves down to a riverbed where this is near zero, so its winding zero
+    /// contour becomes a river once the water fill floods the channel.</summary>
+    public double River(int x, int z) => river.Sample2D(x, z);
 
     /// <summary>A [0, 1] feature-density map: scales how thickly decorators (trees, flora) scatter at a column,
     /// so vegetation forms dense groves and open clearings within a biome instead of a uniform sprinkle.</summary>

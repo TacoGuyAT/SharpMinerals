@@ -2,12 +2,13 @@ using SharpMinerals.Math;
 
 namespace SharpMinerals.Level.Generator.Biomes;
 
-/// <summary>The composite density for a biome world. Terrain height is a shared continentalness spline (the
-/// macro land/ocean shape) plus the neighbour-blended per-biome <c>BaseHeight</c>; the 3D field's amplitude is
-/// the blended per-biome <c>HeightVariation</c>, scaled up where it is rocky; and each biome's optional detail
-/// field is added in scaled by that biome's weight, so it fades to nothing at the border (unique terrain with
-/// no muddy blends and no cliffs). All inputs come from the shared <see cref="BiomeSource"/>, so the selected
-/// biome and the terrain shape always agree.</summary>
+/// <summary>The base (river-free) composite density for a biome world. Terrain height is a shared
+/// continentalness spline (the macro land/ocean shape) plus the neighbour-blended per-biome <c>BaseHeight</c>;
+/// the 3D field's amplitude is the blended per-biome <c>HeightVariation</c>, scaled up where it is rocky; and
+/// each biome's optional detail field is added in scaled by that biome's weight, so it fades to nothing at the
+/// border (unique terrain, no muddy blends, no cliffs). All inputs come from the shared <see cref="BiomeSource"/>.
+/// This is smooth, so it interpolates cleanly; rivers are carved on top separately (<see cref="RiverDensity"/> /
+/// <see cref="RiverCarveField"/>) to keep their sharp banks out of the terrain interpolator.</summary>
 public sealed class BiomeDensity : IDensity {
     const double SeaLevel = WorldDefaults.SeaLevel;
 
@@ -24,8 +25,8 @@ public sealed class BiomeDensity : IDensity {
     }
 
     /// <summary>The macro terrain height (sea level + continental spline + blended biome base) WITHOUT the 3D
-    /// perturbation or contributions - a cheap estimate of where the surface sits, used to centre a tight
-    /// surface scan during decoration.</summary>
+    /// perturbation, contributions, or river carve - a cheap estimate of where the surface sits, used to centre
+    /// a surface scan during decoration and as the basis the river carve lowers from.</summary>
     public double SurfaceHeight(int x, int z) {
         var climate = source.ClimateAt(x, z);
         Span<double> weights = stackalloc double[source.Biomes.Count];

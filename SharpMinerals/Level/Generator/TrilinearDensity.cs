@@ -10,14 +10,14 @@ namespace SharpMinerals.Level.Generator;
 /// A per-thread two-cube cache makes the dispatcher's per-cell <see cref="At"/> calls (and the surface pass's
 /// upward re-probes, which spill into the cube above near the top) reuse one built lattice. Deterministic and
 /// thread-safe: the cache only memoises pure samples, so the result never depends on call order.</summary>
-public sealed class InterpolatedDensity : IDensity {
+public sealed class TrilinearDensity : IDensity {
     const int Step = 4;
     const int Lattice = (int)Chunk.Size / Step + 1; // 5 lattice points per axis (0,4,8,12,16)
 
     readonly IDensity inner;
     readonly ThreadLocal<Slab[]> cache;
 
-    public InterpolatedDensity(IDensity inner) {
+    public TrilinearDensity(IDensity inner) {
         this.inner = inner;
         cache = new ThreadLocal<Slab[]>(() => new[] { new Slab(), new Slab() });
     }

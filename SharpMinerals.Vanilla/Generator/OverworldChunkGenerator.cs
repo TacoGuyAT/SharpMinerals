@@ -15,10 +15,14 @@ public sealed class OverworldChunkGenerator : IChunkGenerator, IBiomeLookup {
 
     public OverworldChunkGenerator(int seed) {
         source = new BiomeSource(seed, BiomeRegistry.Build(seed));
-        // Sample the composite density on a coarse 4-block lattice and interpolate - the terrain and surface
-        // passes share the cached result, cutting density evaluations ~33x per cube.
         var biomeDensity = new BiomeDensity(seed, source);
-        var density = new InterpolatedDensity(biomeDensity);
+        // General terrain sampling (smooth, so trilinear is fine and fast). Rivers are carved separately below.
+        //IDensity terrain = biomeDensity;                          // full precision (per cell)
+        //IDensity terrain = new TricubicDensity(biomeDensity);     // tricubic
+        IDensity terrain = new TrilinearDensity(biomeDensity);      // trilinear x4 (fast)
+        // Rivers carved per-cell (full resolution) on top, so their sharp banks stay crisp (the trilinear lattice
+        // would alias them). The river carve is cheap (2D noise + the natural surface), terrain stays interpolated.
+        IDensity density = new RiverDensity(terrain, source, biomeDensity);
         var shaders = new IChunkShader[] {
             new TerrainShader(density), new SurfaceShader(density, source), new WaterShader(),
         };

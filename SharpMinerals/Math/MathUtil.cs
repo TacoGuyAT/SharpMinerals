@@ -16,4 +16,14 @@ public static class MathUtil {
         t = Clamp(t, 0.0, 1.0);
         return t * t * (3.0 - 2.0 * t);
     }
+
+    /// <summary>Catmull-Rom cubic: the smooth curve through p1..p2 with neighbours p0,p3 (t in [0,1]). C1
+    /// continuous across segments and exact for linear data - the building block for tricubic interpolation.</summary>
+    public static double CatmullRom(double p0, double p1, double p2, double p3, double t) {
+        double t2 = t * t, t3 = t2 * t;
+        return 0.5 * (2.0 * p1
+            + (-p0 + p2) * t
+            + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+            + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
+    }
 }
