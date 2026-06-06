@@ -29,7 +29,7 @@ public static class VanillaBiomes {
             new ClimatePoint(Temperature: 0.7, Humidity: -0.7, Continentalness: 0.4, Rockiness: 0.2, Weirdness: 0.0),
             baseHeight: 8.0, heightVariation: 5.0,
             new LayeredSurfaceRule(VanillaMod.RedSand, VanillaMod.RedSand, fillerDepth: 4),
-            contribution: new MesaContribution(seed, amplitude: 22.0)));
+            contribution: new MesaContribution(seed, amplitude: 22.0), deadBushDensity: 0.02));
 
         // Ocean: deep basin (low continentalness), sandy floor over dirt. Empty until water fill lands.
         BiomeRegistry.Register(_ => new Biome("ocean",

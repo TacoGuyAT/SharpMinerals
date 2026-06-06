@@ -36,6 +36,9 @@ public interface IBiome {
     /// <summary>Chance per grass column for a flower (0 = none), before the feature-density map scales it.</summary>
     double FlowerDensity { get; }
 
+    /// <summary>Chance per sand/red-sand column for a dead bush (0 = none), before the feature-density map scales it.</summary>
+    double DeadBushDensity { get; }
+
     /// <summary>How cells where this biome dominates are surfaced (top and filler blocks).</summary>
     ISurfaceRule Surface { get; }
 }

@@ -39,6 +39,7 @@ public sealed partial class VanillaMod : Mod {
         Poppy       = BlockRegistry.Register("poppy").DropSelf();
         Cornflower  = BlockRegistry.Register("cornflower").DropSelf();
         OxeyeDaisy  = BlockRegistry.Register("oxeye_daisy").DropSelf();
+        DeadBush    = BlockRegistry.Register("dead_bush").DropSelf();
 
         Stick       = ItemRegistry.Register("stick");
 
@@ -71,5 +72,6 @@ public sealed partial class VanillaMod {
     public static BlockType Poppy { get; internal set; } = null!;
     public static BlockType Cornflower { get; internal set; } = null!;
     public static BlockType OxeyeDaisy { get; internal set; } = null!;
+    public static BlockType DeadBush { get; internal set; } = null!;
     public static ItemType Stick { get; internal set; } = null!;
 }

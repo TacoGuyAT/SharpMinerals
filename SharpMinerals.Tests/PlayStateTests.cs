@@ -228,6 +228,27 @@ public class PlayStateTests {
     }
 
     [Fact]
+    public void BadlandsGrowDeadBushes() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-deadbush", OverworldChunkGenerator.Create(seed));
+
+        int bx = 0, bz = 0;
+        bool found = false;
+        for (int x = 0; x < 12000 && !found; x += 16)
+            for (int z = 0; z < 12000 && !found; z += 16)
+                if (source.Dominant(x, z).Name == "badlands") { bx = x; bz = z; found = true; }
+        Assert.True(found, "deadbush: found badlands");
+
+        int bushes = 0;
+        for (int x = bx; x < bx + 64; x++)
+            for (int z = bz; z < bz + 64; z++)
+                for (int y = 60; y < 160; y++)
+                    if (world.GetBlock(new Vector3i(x, y, z)) == VanillaMod.DeadBush) bushes++;
+        Assert.True(bushes > 0, $"deadbush: badlands has dead bushes (found {bushes})");
+    }
+
+    [Fact]
     public void TreesAreSpacedApart() {
         int seed = 1337;
         var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
