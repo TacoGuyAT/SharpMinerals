@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MinRocksDb", "..\MinRocksDb
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMinerals.Persistence.MinRocksDb", "SharpMinerals.Persistence.MinRocksDb\SharpMinerals.Persistence.MinRocksDb.csproj", "{AC6323E4-9361-4E9E-BD32-4123CA3C89BA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMinerals.SourceGenerator", "SharpMinerals.SourceGenerator\SharpMinerals.SourceGenerator.csproj", "{692BC66E-EB6B-4619-B3F3-F40241DD8073}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -167,6 +169,18 @@ Global
 		{AC6323E4-9361-4E9E-BD32-4123CA3C89BA}.Release|x64.Build.0 = Release|Any CPU
 		{AC6323E4-9361-4E9E-BD32-4123CA3C89BA}.Release|x86.ActiveCfg = Release|Any CPU
 		{AC6323E4-9361-4E9E-BD32-4123CA3C89BA}.Release|x86.Build.0 = Release|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Debug|x64.Build.0 = Debug|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Debug|x86.Build.0 = Debug|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Release|Any CPU.Build.0 = Release|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Release|x64.ActiveCfg = Release|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Release|x64.Build.0 = Release|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Release|x86.ActiveCfg = Release|Any CPU
+		{692BC66E-EB6B-4619-B3F3-F40241DD8073}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
