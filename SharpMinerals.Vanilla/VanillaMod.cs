@@ -31,6 +31,8 @@ public sealed partial class VanillaMod : Mod {
         RedSand.Copy<FallingBlockDescriptor>(Sand);
         // Water: a generated fluid for oceans/lakes. No drop, no item (placed via bucket, not a block item).
         Water       = BlockRegistry.Register("water");
+        OakLog      = BlockRegistry.Register("oak_log").DropSelf();
+        OakLeaves   = BlockRegistry.Register("oak_leaves").DropSelf();
 
         Stick       = ItemRegistry.Register("stick");
 
@@ -56,5 +58,7 @@ public sealed partial class VanillaMod {
     public static BlockType Gravel { get; internal set; } = null!;
     public static BlockType RedSand { get; internal set; } = null!;
     public static BlockType Water { get; internal set; } = null!;
+    public static BlockType OakLog { get; internal set; } = null!;
+    public static BlockType OakLeaves { get; internal set; } = null!;
     public static ItemType Stick { get; internal set; } = null!;
 }

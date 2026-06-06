@@ -10,8 +10,14 @@ namespace SharpMinerals.Level.Generator;
 /// coordinates, so cubes generate independently and never seam.</summary>
 public sealed class ShaderChunkGenerator : IChunkGenerator {
     readonly IChunkShader[] shaders;
+    readonly IChunkDecorator[] decorators;
 
-    public ShaderChunkGenerator(params IChunkShader[] shaders) => this.shaders = shaders;
+    public ShaderChunkGenerator(params IChunkShader[] shaders) : this(shaders, []) { }
+
+    public ShaderChunkGenerator(IChunkShader[] shaders, IChunkDecorator[] decorators) {
+        this.shaders = shaders;
+        this.decorators = decorators;
+    }
 
     public Chunk Generate(Vector3i position) {
         var chunk = new Chunk(position);
@@ -30,6 +36,10 @@ public sealed class ShaderChunkGenerator : IChunkGenerator {
                         block = shaders[s].Shade(baseX + x, baseY + y, baseZ + z, block);
                     framebuffer.Set(x, y, z, block);
                 }
+
+        // Stamp multi-cell features (trees, ...) over the finished terrain.
+        for (int d = 0; d < decorators.Length; d++)
+            decorators[d].Decorate(chunk, position);
 
         return chunk;
     }

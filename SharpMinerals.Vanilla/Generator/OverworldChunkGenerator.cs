@@ -17,9 +17,15 @@ public sealed class OverworldChunkGenerator : IChunkGenerator, IBiomeLookup {
         source = new BiomeSource(seed, BiomeRegistry.Build(seed));
         // Sample the composite density on a coarse 4-block lattice and interpolate - the terrain and surface
         // passes share the cached result, cutting density evaluations ~33x per cube.
-        var density = new InterpolatedDensity(new BiomeDensity(seed, source));
-        generator = new ShaderChunkGenerator(
-            new TerrainShader(density), new SurfaceShader(density, source), new WaterShader());
+        var biomeDensity = new BiomeDensity(seed, source);
+        var density = new InterpolatedDensity(biomeDensity);
+        var shaders = new IChunkShader[] {
+            new TerrainShader(density), new SurfaceShader(density, source), new WaterShader(),
+        };
+        var decorators = new IChunkDecorator[] {
+            new TreeDecorator(seed, source, biomeDensity, density),
+        };
+        generator = new ShaderChunkGenerator(shaders, decorators);
     }
 
     public Chunk Generate(Vector3i position) => generator.Generate(position);

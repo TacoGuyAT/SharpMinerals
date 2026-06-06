@@ -33,6 +33,8 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE762>("minecraft:red_sand").State(117).Item(46);
         TypeMapper.Map<ProtocolJE762>("minecraft:gravel").State(118).Item(47);
         TypeMapper.Map<ProtocolJE762>("minecraft:water").State(80); // source block (level 0); no block item
+        TypeMapper.Map<ProtocolJE762>("minecraft:oak_log").State(131);    // axis=y (default)
+        TypeMapper.Map<ProtocolJE762>("minecraft:oak_leaves").State(264); // default state (renders, foliage-tinted)
 
         TypeMapper.Map<ProtocolJE762>("minecraft:chest").State(2951, (State.Facing, 6)).Item(275).BlockEntity(1);
         TypeMapper.Map<ProtocolJE762>("minecraft:wool").State(2043, (State.Color, 1)).Item(179, (State.Color, 1));
@@ -45,6 +47,8 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE763>("minecraft:red_sand").Item(47);
         TypeMapper.Map<ProtocolJE763>("minecraft:gravel").Item(48);
         TypeMapper.Map<ProtocolJE763>("minecraft:stick").Item(807);
+        TypeMapper.Map<ProtocolJE763>("minecraft:oak_log").Item(110);
+        TypeMapper.Map<ProtocolJE763>("minecraft:oak_leaves").Item(154);
 
         // -- Legacy Java (1.5.2 / protocol 61): flat ids, state == item; colour/metadata not modeled; no entities. --
         TypeMapper.Map<ProtocolJE61>("sharpminerals:air").State(0);

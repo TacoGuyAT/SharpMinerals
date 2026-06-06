@@ -26,6 +26,10 @@ public interface IBiome {
     /// border). Null for a biome that only rides the shared base shape.</summary>
     IDensity? Contribution { get; }
 
+    /// <summary>Base chance per column that a tree roots here (0 = none), before the feature-density map scales
+    /// it. Forests are dense, plains sparse, deserts/oceans bare.</summary>
+    double TreeDensity { get; }
+
     /// <summary>How cells where this biome dominates are surfaced (top and filler blocks).</summary>
     ISurfaceRule Surface { get; }
 }

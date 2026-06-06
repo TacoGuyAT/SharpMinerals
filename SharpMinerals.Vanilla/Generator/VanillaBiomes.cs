@@ -10,17 +10,19 @@ namespace SharpMinerals.Vanilla.Generator;
 /// the ocean basins comes with the water/wire phase.</summary>
 public static class VanillaBiomes {
     public static void Register() {
-        // Plains: temperate, fairly dry, inland, flat - grass over dirt (dirt underwater).
+        // Plains: temperate, fairly dry, inland, flat - grass over dirt (dirt underwater), the occasional tree.
         BiomeRegistry.Register(_ => new Biome("plains",
             new ClimatePoint(Temperature: 0.1, Humidity: 0.0, Continentalness: 0.4, Rockiness: -0.2, Weirdness: 0.0),
             baseHeight: 3.0, heightVariation: 4.0,
-            new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt)));
+            new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt),
+            treeDensity: 0.003));
 
-        // Forest: temperate and humid, inland, gently rolling - grass over dirt (trees arrive with features).
+        // Forest: temperate and humid, inland, gently rolling - grass over dirt, densely wooded.
         BiomeRegistry.Register(_ => new Biome("forest",
             new ClimatePoint(Temperature: 0.0, Humidity: 0.6, Continentalness: 0.4, Rockiness: 0.0, Weirdness: 0.0),
             baseHeight: 5.0, heightVariation: 7.0,
-            new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt)));
+            new LayeredSurfaceRule(VanillaMod.GrassBlock, VanillaMod.Dirt, fillerDepth: 3, submergedTop: VanillaMod.Dirt),
+            treeDensity: 0.10));
 
         // Badlands: hot and arid, inland, raised mesa plateaus - red sand over red sand.
         BiomeRegistry.Register(seed => new Biome("badlands",

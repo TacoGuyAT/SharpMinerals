@@ -23,6 +23,18 @@ public sealed class BiomeDensity : IDensity {
         density3d = new NoiseSampler(seed ^ 0x6F1E9A, frequency: 0.0125, octaves: 4);
     }
 
+    /// <summary>The macro terrain height (sea level + continental spline + blended biome base) WITHOUT the 3D
+    /// perturbation or contributions - a cheap estimate of where the surface sits, used to centre a tight
+    /// surface scan during decoration.</summary>
+    public double SurfaceHeight(int x, int z) {
+        var climate = source.ClimateAt(x, z);
+        Span<double> weights = stackalloc double[source.Biomes.Count];
+        source.WeightsFor(climate, weights);
+        double baseHeight = 0.0;
+        for (int i = 0; i < weights.Length; i++) baseHeight += weights[i] * source.Biomes[i].BaseHeight;
+        return SeaLevel + ContinentalSpline.Sample(climate.Continentalness) + baseHeight;
+    }
+
     public double At(int x, int y, int z) {
         var climate = source.ClimateAt(x, z);
         Span<double> weights = stackalloc double[source.Biomes.Count];

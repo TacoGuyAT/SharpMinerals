@@ -13,11 +13,14 @@ public sealed class BiomeSource {
     const double BlendSigma = 0.3;               // Gaussian width in climate space (smaller = sharper biomes)
     const double DitherSharpness = 20.0;         // sharpens the surface dither; band width ~ sigma/sqrt(this) - higher = narrower
 
+    const double FeatureFrequency = 0.005; // feature-density patches (dense groves vs clearings) are mid-scale
+
     readonly NoiseSampler temperature;
     readonly NoiseSampler humidity;
     readonly NoiseSampler continentalness;
     readonly NoiseSampler rockiness;
     readonly NoiseSampler weirdness;
+    readonly NoiseSampler featureDensity;
     readonly IBiome[] biomes;
 
     public IReadOnlyList<IBiome> Biomes => biomes;
@@ -31,6 +34,14 @@ public sealed class BiomeSource {
         continentalness = new NoiseSampler(seed ^ 0xC0A57, ContinentalFrequency, octaves: 3);
         rockiness = new NoiseSampler(seed ^ 0x12CC1, ClimateFrequency, octaves: 2);
         weirdness = new NoiseSampler(seed ^ 0x3B19D, ClimateFrequency, octaves: 2);
+        featureDensity = new NoiseSampler(seed ^ 0xFEA7, FeatureFrequency, octaves: 2);
+    }
+
+    /// <summary>A [0, 1] feature-density map: scales how thickly decorators (trees, flora) scatter at a column,
+    /// so vegetation forms dense groves and open clearings within a biome instead of a uniform sprinkle.</summary>
+    public double FeatureDensity(int x, int z) {
+        double n = featureDensity.Sample2D(x, z) * 0.5 + 0.5; // [-1,1] -> [0,1]
+        return n < 0.0 ? 0.0 : n > 1.0 ? 1.0 : n;
     }
 
     public ClimatePoint ClimateAt(int x, int z) => new(

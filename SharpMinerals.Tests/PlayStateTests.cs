@@ -138,6 +138,78 @@ public class PlayStateTests {
     }
 
     [Fact]
+    public void BiomeTreeDensityByBiome() {
+        var biomes = BiomeRegistry.Build(1);
+        double Density(string name) {
+            foreach (var b in biomes) if (b.Name == name) return b.TreeDensity;
+            return -1.0;
+        }
+        Assert.True(Density("forest") > Density("plains"), "forest is denser than plains");
+        Assert.True(Density("plains") > 0.0, "plains has some trees");
+        Assert.Equal(0.0, Density("badlands"));
+        Assert.Equal(0.0, Density("ocean"));
+    }
+
+    [Fact]
+    public void FeatureDensityStaysInRange() {
+        var source = new BiomeSource(1, BiomeRegistry.Build(1));
+        for (int i = 0; i < 50; i++)
+            Assert.InRange(source.FeatureDensity(i * 37, i * 71), 0.0, 1.0);
+    }
+
+    [Fact]
+    public void ForestsGrowTrees() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-trees", OverworldChunkGenerator.Create(seed));
+
+        // Climate lookup is pure noise (no chunk gen), so scan cheaply for a forest, then probe the terrain there.
+        int fx = 0, fz = 0;
+        bool found = false;
+        for (int x = 0; x < 12000 && !found; x += 16)
+            for (int z = 0; z < 12000 && !found; z += 16)
+                if (source.Dominant(x, z).Name == "forest") { fx = x; fz = z; found = true; }
+        Assert.True(found, "trees: found a forest");
+
+        int logs = 0;
+        for (int x = fx; x < fx + 32; x++)
+            for (int z = fz; z < fz + 32; z++)
+                for (int y = 60; y < 130; y++)
+                    if (world.GetBlock(new Vector3i(x, y, z)) == VanillaMod.OakLog) logs++;
+        Assert.True(logs > 0, $"trees: a forest area has oak logs (found {logs})");
+    }
+
+    [Fact]
+    public void TreesAreSpacedApart() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var world = new World("ovw-spacing", OverworldChunkGenerator.Create(seed));
+        int fx = 0, fz = 0;
+        bool found = false;
+        for (int x = 0; x < 12000 && !found; x += 16)
+            for (int z = 0; z < 12000 && !found; z += 16)
+                if (source.Dominant(x, z).Name == "forest") { fx = x; fz = z; found = true; }
+        Assert.True(found, "spacing: found a forest");
+
+        // Each tree is a single trunk column, so distinct columns containing a log are distinct trees.
+        var trunks = new System.Collections.Generic.List<(int X, int Z)>();
+        for (int x = fx; x < fx + 48; x++)
+            for (int z = fz; z < fz + 48; z++)
+                for (int y = 60; y < 130; y++)
+                    if (world.GetBlock(new Vector3i(x, y, z)) == VanillaMod.OakLog) { trunks.Add((x, z)); break; }
+        Assert.True(trunks.Count >= 2, $"spacing: enough trees to test ({trunks.Count})");
+
+        int minDistance = int.MaxValue;
+        for (int i = 0; i < trunks.Count; i++)
+            for (int j = i + 1; j < trunks.Count; j++) {
+                int d = System.Math.Max(System.Math.Abs(trunks[i].X - trunks[j].X), System.Math.Abs(trunks[i].Z - trunks[j].Z));
+                if (d < minDistance) minDistance = d;
+            }
+        // Trunks at least CanopyRadius+1 apart -> no trunk sits inside another canopy (no leaf-through-log).
+        Assert.True(minDistance >= 3, $"spacing: trunks should be >= 3 apart (min was {minDistance})");
+    }
+
+    [Fact]
     public void BiomeSelectionFollowsClimate() {
         var source = new BiomeSource(7, BiomeRegistry.Build(7));
         Assert.Equal("ocean", source.DominantForClimate(new ClimatePoint(0.0, 0.0, -0.9, -0.3, 0.0)).Name);

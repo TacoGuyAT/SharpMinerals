@@ -11,16 +11,18 @@ public sealed class Biome : IBiome {
     public double BaseHeight { get; }
     public double HeightVariation { get; }
     public IDensity? Contribution { get; }
+    public double TreeDensity { get; }
     public ISurfaceRule Surface { get; }
 
     public Biome(string name, ClimatePoint climate, double baseHeight, double heightVariation,
-                 ISurfaceRule surface, IDensity? contribution = null) {
+                 ISurfaceRule surface, IDensity? contribution = null, double treeDensity = 0.0) {
         Name = name;
         Climate = climate;
         BaseHeight = baseHeight;
         HeightVariation = heightVariation;
         Surface = surface;
         Contribution = contribution;
+        TreeDensity = treeDensity;
     }
 
     public override string ToString() => Name;
