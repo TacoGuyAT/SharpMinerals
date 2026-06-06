@@ -9,7 +9,9 @@ public static class ServerCommand {
         .Literal("server")
         .Then(x => x.Literal("tps").Executes(ctx => {
             var server = ctx.Source.Server;
-            ctx.Source.Reply($"TPS target {server?.TicksPerSecond ?? 0}, tick {server?.CurrentTick ?? 0}");
+            if (server is null) { ctx.Source.Reply("TPS unavailable (no server)"); return 1; }
+            ctx.Source.Reply($"TPS target {server.TicksPerSecond:0.#}, tick {server.CurrentTick}");
+            ctx.Source.Reply($"  measured: {server.MeasuredTps(300):0.0} (5m), {server.MeasuredTps(60):0.0} (1m), {server.MeasuredTps(10):0.0} (10s)");
             return 1;
         }))
         .Then(x => x.Literal("players").Executes(ctx => {

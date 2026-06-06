@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 using Arch.Core;
+using SharpMinerals;
 using Brigadier.NET.Builder;
 using SharpMinerals.Blocks;
 using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Vanilla;
+using SharpMinerals.Vanilla.Generator;
 using SharpMinerals.Commands;
 using SharpMinerals.Components;
 using SharpMinerals.Entities;
@@ -48,6 +50,128 @@ public class PlayStateTests {
         Assert.True(gen.GetBlock(new Vector3i(0, 4, 0)) == VanillaMod.GrassBlock, "flat: grass at y=4");
         Assert.True(gen.GetBlock(new Vector3i(0, 5, 0)).IsAir, "flat: air at y=5");
         Assert.True(gen.GetBlock(new Vector3i(-1, 0, -33)) == VanillaMod.Bedrock, "flat: works at negative coords");
+    }
+
+    // -- Procedural overworld generation ------------------------------------
+    [Fact]
+    public void SplineInterpolatesAndClampsEnds() {
+        var s = new Spline((0.0, 0.0), (1.0, 10.0));
+        Assert.Equal(0.0, s.Sample(-5));   // clamped flat below the first point
+        Assert.Equal(10.0, s.Sample(5));   // clamped flat above the last point
+        Assert.Equal(5.0, s.Sample(0.5), 6);
+    }
+
+    [Fact]
+    public void MathUtilHelpers() {
+        Assert.Equal(5.0, MathUtil.Lerp(0, 10, 0.5));
+        Assert.Equal(2.0, MathUtil.Clamp(5, 0, 2));
+        Assert.Equal(0.5, MathUtil.InverseLerp(0, 10, 5));
+        Assert.Equal(0.0, MathUtil.Smoothstep(-1));
+        Assert.Equal(1.0, MathUtil.Smoothstep(2));
+    }
+
+    [Fact]
+    public void OverworldGenerationIsDeterministicForSeed() {
+        var a = new World("ovw-a", OverworldChunkGenerator.Create(99));
+        var b = new World("ovw-b", OverworldChunkGenerator.Create(99));
+        for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 16; z++)
+                Assert.True(a.GetBlock(new Vector3i(x, 64, z)) == b.GetBlock(new Vector3i(x, 64, z)),
+                    "overworld: same seed yields the same block");
+    }
+
+    [Fact]
+    public void OverworldSurfaceIsGrassOverDirtOverStone() {
+        var world = new World("ovw-surf", OverworldChunkGenerator.Create(1337));
+        // Pick a column with a clean (non-overhang) surface - solid for several blocks under the top.
+        for (int x = 0; x < 16; x++) {
+            int top = TopSolidY(world, x, 0);
+            if (top <= 0 || !SolidColumnBelow(world, x, 0, top, 8)) continue;
+            Assert.True(world.GetBlock(new Vector3i(x, top, 0)) == VanillaMod.GrassBlock, "overworld: top is grass");
+            Assert.True(world.GetBlock(new Vector3i(x, top + 1, 0)).IsAir, "overworld: above the surface is air");
+            Assert.True(world.GetBlock(new Vector3i(x, top - 1, 0)) == VanillaMod.Dirt, "overworld: dirt under the grass");
+            Assert.True(world.GetBlock(new Vector3i(x, top - 6, 0)) == VanillaMod.Stone, "overworld: deep is stone");
+            return;
+        }
+        Assert.Fail("overworld: no clean surface column found in the test row");
+    }
+
+    [Fact]
+    public void OverworldBlocksMatchGlobalDensityAcrossCubeBorder() {
+        // Solidity must equal the single global density across the x=15|16 cube border (and into the next
+        // cube), proving the dispatcher feeds correct world coordinates - a seam would surface as a mismatch.
+        int seed = 123;
+        var density = new OverworldDensity(seed);
+        var world = new World("ovw-seam", OverworldChunkGenerator.Create(seed));
+        for (int x = 14; x <= 18; x++)
+            for (int y = 56; y <= 96; y++) {
+                bool solid = !world.GetBlock(new Vector3i(x, y, 0)).IsAir;
+                Assert.True((density.At(x, y, 0) > 0) == solid, $"overworld: density matches block at ({x},{y},0)");
+            }
+    }
+
+    [Fact]
+    public void NewPlayerSurfaceSpawnSitsOnSolidGround() {
+        var world = new World("ovw-spawn", OverworldChunkGenerator.Create(1337));
+        var spawn = world.SurfaceSpawn(0.5, 0.5);
+        int sy = (int)spawn.Y;
+        Assert.True(world.GetBlock(new Vector3i(0, sy, 0)).IsAir, "spawn: the spawn cell is air");
+        Assert.False(world.GetBlock(new Vector3i(0, sy - 1, 0)).IsAir, "spawn: the block under the spawn is solid");
+        Assert.True(sy > WorldDefaults.SurfaceY, "spawn: procedural surface is well above the flat default");
+    }
+
+    [Fact]
+    public void TpsTrackerMeasuresRollingWindows() {
+        var t = new TpsTracker(20.0);
+        long now = 0;
+        for (int i = 0; i < 20 * 120; i++) { now += 50; t.Record(now); } // a steady 20 TPS for 2 minutes
+        Assert.Equal(20.0, t.Measure(now, 10), 1);   // 10s window
+        Assert.Equal(20.0, t.Measure(now, 60), 1);   // 1m window
+        Assert.Equal(20.0, t.Measure(now, 300), 1);  // 5m window (not yet full -> divides by elapsed, still 20)
+    }
+
+    [Fact]
+    public void TpsTrackerReflectsSlowTicksAndCapsAtTarget() {
+        // 10 ticks/sec for 30s: half the target should show through every window.
+        var slow = new TpsTracker(20.0);
+        long now = 0;
+        for (int i = 0; i < 10 * 30; i++) { now += 100; slow.Record(now); }
+        Assert.Equal(10.0, slow.Measure(now, 10), 1);
+        Assert.Equal(10.0, slow.Measure(now, 60), 1); // window longer than history -> divides by elapsed
+
+        // A second with far more ticks than the target (a catch-up burst) is clamped per second.
+        var fast = new TpsTracker(20.0);
+        long f = 0;
+        for (int i = 0; i < 100 * 20; i++) { f += 10; fast.Record(f); } // 100 TPS for 20s
+        Assert.Equal(20.0, fast.Measure(f, 10), 1);
+
+        Assert.Equal(0.0, new TpsTracker(20.0).Measure(0, 10)); // no ticks recorded yet
+    }
+
+    [Fact]
+    public void TpsTrackerKeepsLagVisibleAfterCatchUpBurst() {
+        // The loop catches up after a stall by bursting ticks; the metric must not let that mask the lag.
+        var t = new TpsTracker(20.0);
+        long now = 0;
+        for (int i = 0; i < 20 * 60; i++) { now += 50; t.Record(now); } // 60s healthy at 20 TPS
+        now += 10_000;                                                  // a 10s stall (no ticks recorded)
+        for (int i = 0; i < 200; i++) { now += 1; t.Record(now); }      // catch-up burst: 200 ticks in ~0.2s
+
+        Assert.True(t.Measure(now, 10) < 5.0, "10s window reflects the recent stall, not the burst");
+        double m1 = t.Measure(now, 60);
+        Assert.True(m1 is > 12.0 and < 19.0, $"1m window averages the stall in (was {m1})");
+    }
+
+    static int TopSolidY(World world, int x, int z) {
+        for (int y = 200; y >= -64; y--)
+            if (!world.GetBlock(new Vector3i(x, y, z)).IsAir) return y;
+        return int.MinValue;
+    }
+
+    static bool SolidColumnBelow(World world, int x, int z, int top, int depth) {
+        for (int d = 1; d <= depth; d++)
+            if (world.GetBlock(new Vector3i(x, top - d, z)).IsAir) return false;
+        return true;
     }
 
     // -- Block break + drop, then placement ----------------------------------

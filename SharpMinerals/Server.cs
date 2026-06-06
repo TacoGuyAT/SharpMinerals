@@ -31,6 +31,7 @@ public class Server : ITickable {
     readonly ManualResetEventSlim stopped = new(false);
     Thread? loopThread;
     long currentTick;
+    readonly TpsTracker tps;
     int nextEntityId;
     int nextTeleportId;
 
@@ -102,6 +103,10 @@ public class Server : ITickable {
     /// <summary>The number of ticks elapsed since <see cref="Start"/>.</summary>
     public long CurrentTick => Interlocked.Read(ref currentTick);
 
+    /// <summary>Measured ticks-per-second over the last <paramref name="windowSeconds"/>, capped at the
+    /// target. 0 until the loop has run a couple of ticks.</summary>
+    public double MeasuredTps(double windowSeconds) => tps.Measure(Environment.TickCount64, windowSeconds);
+
     /// <summary>Players summed across every world.</summary>
     public int PlayerCount => Worlds.Values.Sum(w => w.PlayerCount);
 
@@ -111,6 +116,7 @@ public class Server : ITickable {
         commandDispatcher = new(this);
         if (context.TicksPerSecond <= 0)
             context.TicksPerSecond = 20.0;
+        tps = new TpsTracker(context.TicksPerSecond);
         entityStore = ctx.EntityStore ?? new InMemoryEntityStore();
 
         foreach (var world in Worlds.Values) {
@@ -219,6 +225,7 @@ public class Server : ITickable {
                 Log.LogError(ex, "Tick {Tick} failed", CurrentTick);
             }
             Interlocked.Increment(ref currentTick);
+            tps.Record(Environment.TickCount64);
             timer.Wait();
         }
     }
