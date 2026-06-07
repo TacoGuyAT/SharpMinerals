@@ -110,11 +110,13 @@ public class World : ITickable {
         loadedChunks.GetOrAdd(chunkPosition, LoadOrGenerate);
 
     Chunk LoadOrGenerate(Vector3i pos) {
-        var chunk = store is not null && store.TryLoadChunk(Name, pos, out var data)
-            ? ChunkCodec.Deserialize(pos, data)
-            : chunkGenerator.Generate(pos);
-        chunk.ClearDirty(); // a freshly loaded/generated chunk is the baseline, not a pending change
-        return chunk;
+        if(store is not null && store.TryLoadChunk(Name, pos, out var data)) {
+            var chunk = ChunkCodec.Deserialize(pos, data);
+            chunk.ClearDirty();
+            return chunk;
+        } else {
+            return chunkGenerator.Generate(pos);
+        }
     }
 
     public int LoadedChunkCount => loadedChunks.Count;

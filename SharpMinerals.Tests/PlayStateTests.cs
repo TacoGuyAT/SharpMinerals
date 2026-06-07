@@ -1885,14 +1885,20 @@ public class PlayStateTests {
 
     // -- Persistence: a chunk only saves once it has been modified ------------------
     [Fact]
-    public void OnlyModifiedChunksAreDirty() {
+    public void GeneratedChunksPersistAndLoadedChunksAreClean() {
         var store = new InMemoryWorldStore();
         var world = new World("dirtytest", new FlatChunkGenerator(), store);
         world.GetBlock(new Vector3i(0, 0, 0)); // generate a chunk, no gameplay change
-        Assert.True(world.Save() == 0, "a freshly generated chunk is not dirty");
+        Assert.True(world.Save() == 1, "a freshly generated chunk is dirty, so worldgen output is persisted");
+        Assert.True(world.Save() == 0, "saving clears the dirty flag");
         world.SetBlock(new Vector3i(1, 6, 1), VanillaMod.Stone);
         Assert.True(world.Save() == 1, "a gameplay edit marks the chunk dirty");
         Assert.True(world.Save() == 0, "saving clears the dirty flag");
+
+        // A chunk read back from the store is the clean baseline (ClearDirty on the load path), not re-persisted.
+        var reloaded = new World("dirtytest", new FlatChunkGenerator(), store);
+        reloaded.GetBlock(new Vector3i(0, 0, 0)); // hits the store, not the generator
+        Assert.True(reloaded.Save() == 0, "a chunk loaded from the store is not dirty");
     }
 
     // -- Chunk streaming: the view follows the player across chunk boundaries --------
