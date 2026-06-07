@@ -1130,7 +1130,7 @@ public class PlayStateTests {
         // Decode side: a present wire slot whose id maps to no SharpMinerals type reads back as null.
         using (var ms = new System.IO.MemoryStream()) {
             var w = new MinecraftStream(ms, leaveOpen: true) { Types = protocol.Types };
-            w.WriteBool(true); w.WriteVarInt(999); w.WriteByte2(1); w.WriteUByte(0x00); // present, unknown id, no NBT
+            w.WriteBool(true); w.WriteVarInt(99999); w.WriteByte2(1); w.WriteUByte(0x00); // present, unknown id (beyond any vanilla item), no NBT
             ms.Position = 0;
             var r = new MinecraftStream(ms, leaveOpen: true) { Types = protocol.Types };
             Assert.Null(SlotWire.ReadStack(r)); // unrepresentable -> null

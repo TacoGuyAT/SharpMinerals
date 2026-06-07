@@ -1,63 +1,55 @@
 using SharpMinerals.Blocks;
+using SharpMinerals.Blocks.Descriptors;
+using SharpMinerals.Items;
 using SharpMinerals.Network;
 using SharpMinerals.Network.Protocols.JE61;
 using SharpMinerals.Network.Protocols.JE762;
 using SharpMinerals.Network.Protocols.JE763;
+using SharpMinerals.Vanilla.Data;
 
 namespace SharpMinerals.Vanilla;
 
 /// <summary>
 /// Registers the vanilla wire mappings (block-state / item / entity ids per protocol version) with the data-driven
-/// <see cref="TypeMapper"/>. This is the wire-side counterpart to the content registration in <see cref="VanillaMod"/>
-/// - the core engine knows no vanilla ids; they all live here. Ranges use the protocol inheritance chain: a
-/// <c>Map&lt;ProtocolJE762&gt;</c> applies to 762 AND 763 (onwards), and a <c>Map&lt;ProtocolJE763&gt;</c> delta
-/// overrides it per facet for 763+.
+/// <see cref="TypeMapper"/>. The bulk is now driven straight from <see cref="MinecraftData"/>: every registered
+/// stateless block/item gets its <c>defaultState</c> / item id per version (1.20.1 -> <see cref="ProtocolJE763"/>,
+/// 1.19.4 -> <see cref="ProtocolJE762"/>), which automatically tracks the state-id shifts between releases. Only
+/// the engine primitives, the few stateful blocks (which need explicit striding), and the legacy flat-id 1.5.2
+/// protocol are hand-written. Ranges use the protocol inheritance chain: a <c>Map&lt;ProtocolJE762&gt;</c> applies
+/// to 762 AND 763 (onwards), and a <c>Map&lt;ProtocolJE763&gt;</c> delta overrides it per facet for 763+.
 /// </summary>
 internal static class WireMappings {
-    public static void Register() {
-        // -- Modern Java (1.19.4 / protocol 762 onwards) -----------------------------------------
-        // Engine primitives - their wire ids are vanilla facts (air=0, missing->stone, the entity type ids).
+    public static void Register(MinecraftData data) {
+        // -- Engine primitives (not in minecraft-data under these names) - their wire ids are vanilla facts. ----
         TypeMapper.Map<ProtocolJE762>("sharpminerals:air").State(0);
         TypeMapper.Map<ProtocolJE762>("sharpminerals:missing").State(1).Item(1);
         TypeMapper.Map<ProtocolJE762>("sharpminerals:item").Entity(54);
         TypeMapper.Map<ProtocolJE762>("sharpminerals:falling_block").Entity(36);
         TypeMapper.Map<ProtocolJE762>("sharpminerals:player").EntityViaSpawnPlayer();
 
-        // 1.19.4 vanilla blocks/items.
-        TypeMapper.Map<ProtocolJE762>("minecraft:bedrock").State(79).Item(43);
-        TypeMapper.Map<ProtocolJE762>("minecraft:stone").State(1).Item(1);
-        TypeMapper.Map<ProtocolJE762>("minecraft:dirt").State(10).Item(15);
-        TypeMapper.Map<ProtocolJE762>("minecraft:grass_block").State(9).Item(14);
-        TypeMapper.Map<ProtocolJE762>("minecraft:cobblestone").State(14).Item(22);
-        TypeMapper.Map<ProtocolJE762>("minecraft:sand").State(112).Item(44);
-        TypeMapper.Map<ProtocolJE762>("minecraft:red_sand").State(117).Item(46);
-        TypeMapper.Map<ProtocolJE762>("minecraft:gravel").State(118).Item(47);
-        TypeMapper.Map<ProtocolJE762>("minecraft:water").State(80); // source block (level 0); no block item
-        TypeMapper.Map<ProtocolJE762>("minecraft:oak_log").State(131);    // axis=y (default)
-        TypeMapper.Map<ProtocolJE762>("minecraft:oak_leaves").State(264); // default state (renders, foliage-tinted)
+        // -- Bulk (modern Java): every registered minecraft block/item, per version, from the data. -------------
+        // Stateful blocks (a StatesBlockDescriptor) are skipped here and get explicit striding below; engine
+        // primitives (sharpminerals namespace) are skipped too.
+        foreach (var block in BlockRegistry.All) {
+            if (block.Id.Namespace != "minecraft") continue;
+            if (block.Has<StatesBlockDescriptor>()) continue;
+            MapBlock<ProtocolJE763>(block, data.V763);
+            MapBlock<ProtocolJE762>(block, data.V762);
+        }
+        foreach (var item in ItemRegistry.All) {
+            if (item is BlockType) continue; // block items handled above
+            if (item.Id.Namespace != "minecraft") continue;
+            MapItem<ProtocolJE763>(item, data.V763);
+            MapItem<ProtocolJE762>(item, data.V762);
+        }
 
+        // -- Stateful blocks: explicit striding the data can't express as a single default state. ----------------
+        // chest: facing has stride 6 (4 facings packed in the larger state space); 762 also carries the BlockEntity
+        // (1) which 763 inherits per facet. wool: the engine's synthetic Color axis maps to the 16 colour ids.
         TypeMapper.Map<ProtocolJE762>("minecraft:chest").State(2951, (State.Facing, 6)).Item(275).BlockEntity(1);
-        TypeMapper.Map<ProtocolJE762>("minecraft:wool").State(2043, (State.Color, 1)).Item(179, (State.Color, 1));
-        TypeMapper.Map<ProtocolJE762>("minecraft:stick").Item(803);
-
-        // 1.20.1 (protocol 763) deltas - the 1.20 additions shifted these ids. Unspecified facets inherit from 762
-        // (chest keeps its BlockEntity, red_sand/gravel keep their State).
         TypeMapper.Map<ProtocolJE763>("minecraft:chest").State(2955, (State.Facing, 6)).Item(277);
+        TypeMapper.Map<ProtocolJE762>("minecraft:wool").State(2043, (State.Color, 1)).Item(179, (State.Color, 1));
         TypeMapper.Map<ProtocolJE763>("minecraft:wool").State(2047, (State.Color, 1)).Item(180, (State.Color, 1));
-        TypeMapper.Map<ProtocolJE763>("minecraft:red_sand").Item(47);
-        TypeMapper.Map<ProtocolJE763>("minecraft:gravel").Item(48);
-        TypeMapper.Map<ProtocolJE763>("minecraft:stick").Item(807);
-        TypeMapper.Map<ProtocolJE763>("minecraft:oak_log").Item(110);
-        TypeMapper.Map<ProtocolJE763>("minecraft:oak_leaves").Item(154);
-
-        // Ground cover - 1.20.1 ids only (high state ids that shifted from 1.19.4; 762 falls back, fine).
-        TypeMapper.Map<ProtocolJE763>("minecraft:short_grass").State(2005).Item(173);
-        TypeMapper.Map<ProtocolJE763>("minecraft:dandelion").State(2075).Item(196);
-        TypeMapper.Map<ProtocolJE763>("minecraft:poppy").State(2077).Item(197);
-        TypeMapper.Map<ProtocolJE763>("minecraft:cornflower").State(2086).Item(206);
-        TypeMapper.Map<ProtocolJE763>("minecraft:oxeye_daisy").State(2085).Item(205);
-        TypeMapper.Map<ProtocolJE763>("minecraft:dead_bush").State(2007).Item(177);
-        TypeMapper.Map<ProtocolJE763>("minecraft:red_sandstone").State(10938).Item(488);
 
         // -- Legacy Java (1.5.2 / protocol 61): flat ids, state == item; colour/metadata not modeled; no entities. --
         TypeMapper.Map<ProtocolJE61>("sharpminerals:air").State(0);
@@ -69,5 +61,19 @@ internal static class WireMappings {
         TypeMapper.Map<ProtocolJE61>("minecraft:bedrock").State(7).Item(7);
         TypeMapper.Map<ProtocolJE61>("minecraft:wool").State(35).Item(35);
         TypeMapper.Map<ProtocolJE61>("minecraft:chest").State(54).Item(54);
+    }
+
+    /// <summary>Maps a stateless block's default block-state id (and item id, if it has one) for one protocol from
+    /// the version data. A block absent in that version (a few 1.20 additions) is left unmapped, so it falls back
+    /// to <c>missing</c> (-> stone) on that protocol.</summary>
+    static void MapBlock<TProto>(BlockType block, MinecraftData.JavaVersion v) where TProto : Protocol {
+        if (!v.DefaultState.TryGetValue(block.Id.Name, out int state)) return;
+        var b = TypeMapper.Map<TProto>(block.Id.Full).State(state);
+        if (v.ItemId.TryGetValue(block.Id.Name, out int item)) b.Item(item);
+    }
+
+    static void MapItem<TProto>(ItemType item, MinecraftData.JavaVersion v) where TProto : Protocol {
+        if (v.ItemId.TryGetValue(item.Id.Name, out int id))
+            TypeMapper.Map<TProto>(item.Id.Full).Item(id);
     }
 }
