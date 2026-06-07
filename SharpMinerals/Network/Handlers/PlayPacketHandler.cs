@@ -276,8 +276,8 @@ public sealed class PlayPacketHandler {
         string target = $"entity {interact.TargetId}";
         foreach (var (_, context) in server.Players) {
             if (!context.World.Ecs.IsAlive(context.Entity)) continue;
-            var np = context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity);
-            if (np.EntityId == interact.TargetId) { target = np.Name; break; }
+            var np = context.GetPlayer();
+            if (np.NetId == interact.TargetId) { target = np.Name; break; }
         }
 
         Log.LogInformation("#{Client} {Verb} {Target}", client.Id, verb, target);
@@ -287,7 +287,7 @@ public sealed class PlayPacketHandler {
     void HandleSwing(NetClient client, SwingArmC2S swing) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
-        int eid = context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity).EntityId;
+        int eid = context.GetPlayer().NetId;
         var animation = swing.Hand == 0 ? EntityAnimation.SwingMainArm : EntityAnimation.SwingOffArm;
         server.NetServer.Broadcast(new EntityAnimationS2C(eid, animation), c => c.InWorld && c.Id != client.Id);
     }
@@ -297,7 +297,7 @@ public sealed class PlayPacketHandler {
     void HandleEntityAction(NetClient client, EntityActionC2S action) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
-        ref var np = ref context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity);
+        ref var np = ref context.GetPlayer();
         switch (action.Action) {
             case EntityActionKind.StartSneaking:  np.Flags |= EntityFlags.Sneaking;  break;
             case EntityActionKind.StopSneaking:   np.Flags &= ~EntityFlags.Sneaking;  break;
@@ -305,7 +305,7 @@ public sealed class PlayPacketHandler {
             case EntityActionKind.StopSprinting:  np.Flags &= ~EntityFlags.Sprinting; break;
             default: return; // leave-bed / horse / etc. not modelled
         }
-        server.NetServer.Broadcast(new EntityFlagsS2C(np.EntityId, np.Flags), c => c.InWorld && c.Id != client.Id);
+        server.NetServer.Broadcast(new EntityFlagsS2C(np.NetId, np.Flags), c => c.InWorld && c.Id != client.Id);
     }
 
 #if TEST_HARNESS

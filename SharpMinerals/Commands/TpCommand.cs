@@ -22,8 +22,8 @@ public static class TpCommand {
             .Suggests((ctx, builder) => {
                 foreach (var (_, context) in ctx.Source.Server.Players)
                     if (context.World.Ecs.IsAlive(context.Entity)) {
-                        var pname = context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity).Name;
-                        if (pname.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)) builder.Suggest(pname);
+                        var pname = context.Client.Name;
+                        if (pname != null && pname.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)) builder.Suggest(pname);
                     }
                 return builder.BuildFuture();
             })
@@ -55,7 +55,7 @@ public static class TpCommand {
     static ulong? FindPlayer(Server server, string name) {
         foreach (var (clientId, context) in server.Players)
             if (context.World.Ecs.IsAlive(context.Entity) &&
-                context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity).Name == name)
+                context.Client.Name == name)
                 return clientId;
         return null;
     }

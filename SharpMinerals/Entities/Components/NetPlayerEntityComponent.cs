@@ -7,7 +7,7 @@ public struct NetPlayerEntityComponent {
     public string Name;
     public Guid Uuid;
     /// <summary>The network entity id other clients use to refer to this player.</summary>
-    public int EntityId;
+    public int NetId;
     /// <summary>The player's shared-flags state (sneaking, sprinting, ...) - replayed to joiners as entity metadata.</summary>
     public EntityFlags Flags;
 }

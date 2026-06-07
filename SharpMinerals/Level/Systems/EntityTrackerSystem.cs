@@ -137,7 +137,7 @@ public sealed class EntityTrackerSystem : ISystem {
     /// <returns>0 = not a trackable kind.</returns>
     int ResolveOrAssignNetId(ArchWorld ecs, ArchEntity entity) {
         if (ecs.Has<NetPlayerEntityComponent>(entity))
-            return ecs.Get<NetPlayerEntityComponent>(entity).EntityId;
+            return ecs.Get<NetPlayerEntityComponent>(entity).NetId;
         if (ecs.Has<PickupEntityComponent>(entity)) {
             ref var d = ref ecs.Get<PickupEntityComponent>(entity);
             if (d.Stack.IsEmpty) return 0;

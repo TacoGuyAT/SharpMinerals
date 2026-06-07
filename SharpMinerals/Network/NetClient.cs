@@ -14,7 +14,7 @@ public abstract class NetClient {
     /// </summary>
     public Protocol Protocol { get; set; }
 
-    public string? PlayerName { get; set; }
+    public string? Name { get; set; }
 
     /// <summary>
     /// Whether this client is a spawned, in-world player that should receive world streaming and

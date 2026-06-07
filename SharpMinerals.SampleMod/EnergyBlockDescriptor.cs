@@ -20,7 +20,7 @@ public sealed class EnergyBlockDescriptor(int maxEnergy = 1000) : IInteract, IBl
         // Charging: a held redstone dust is consumed for +100 energy (up to the cap). Resolve redstone by name so
         // the mod doesn't hard-depend on the vanilla content mod.
         if (energy.Current < energy.Max
-            && actor.Held.Type is { } held && held == ItemRegistry.FromName("minecraft:redstone")
+            && actor.GetHeld().Type is { } held && held == ItemRegistry.FromName("minecraft:redstone")
             && actor.ConsumeHeld(1) > 0) {
             energy.Add(EnergyPerRedstone);
             ctx.World.MarkDirty(ctx.Position); // persist the new charge (the block entity already existed - no auto-dirty)

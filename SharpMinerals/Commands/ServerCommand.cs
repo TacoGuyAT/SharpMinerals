@@ -1,5 +1,4 @@
 using Brigadier.NET.Builder;
-using SharpMinerals.Entities.Components;
 
 namespace SharpMinerals.Commands;
 
@@ -18,7 +17,7 @@ public static class ServerCommand {
             ctx.Source.Reply($"Players online: {server.PlayerCount}");
             foreach (var (clientId, context) in server.Players)
                 if (context.World.Ecs.IsAlive(context.Entity))
-                    ctx.Source.Reply($"  {context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity).Name} (#{clientId})");
+                    ctx.Source.Reply($"  {context.Client.Name} (#{clientId})");
             return 1;
         }))
         .Then(x => x.Literal("stop").Executes(ctx => {

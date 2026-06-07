@@ -24,7 +24,7 @@ public sealed class SampleMod : Mod {
         // Greet each joiner with a tab-list header/footer, sent only to them via the audience predicate.
         server.Events.Subscribe<PlayerJoined>(e =>
             server.SetTabListHeaderFooter(
-                new TextComponent($"Hi, {e.Context.Player.Name}!").SetColor(TextColor.Gold),
+                new TextComponent($"Hi, {e.Client.Name}!").SetColor(TextColor.Gold),
                 new TextComponent($"running SharpMinerals v{server.Version}").SetColor(TextColor.Gray),
                 c => c.Id == e.Context.Client.Id));
 

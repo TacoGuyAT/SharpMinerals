@@ -9,17 +9,12 @@ namespace SharpMinerals.Events;
 /// <summary>
 /// Base for player events, handled via polymorphic dispatch.
 /// </summary>
-public record PlayerEvent {
-    readonly PlayerContext context;
-    public PlayerEvent(PlayerContext ctx) {
-        context = ctx;
-    }
-
-    public Server Server => context.Server;
-    public World World => context.World;
-    public ArchEntity Entity => context.Entity;
-    public NetClient Client => context.Client;
-    public NetPlayerEntityComponent Player => context.Player;
+public record PlayerEvent(PlayerContext Context) {
+    public Server Server => Context.Server;
+    public World World => Context.World;
+    public ArchEntity Entity => Context.Entity;
+    public NetClient Client => Context.Client;
+    public NetPlayerEntityComponent GetPlayer() => Context.GetPlayer();
 }
 
 /// <summary>

@@ -10,26 +10,35 @@ using ArchEntity = Arch.Core.Entity;
 namespace SharpMinerals.Events.Contexts;
 
 /// <summary>An <see cref="EntityContext"/> for a player entity, adding the network <see cref="Client"/>
-/// connection. Carried by player events; <see cref="Player"/> reads the live component from the world.</summary>
+/// connection. Carried by player events; <see cref="GetPlayer"/> reads the live component from the world.</summary>
 public sealed record PlayerContext(Server Server, World World, ArchEntity Entity, NetClient Client)
     : EntityContext(Server, World, Entity) {
-    public NetPlayerEntityComponent Player => World.Ecs.Get<NetPlayerEntityComponent>(Entity);
+    /// <summary>
+    /// This method queries ECS
+    /// </summary>
+    public ref NetPlayerEntityComponent GetPlayer() => ref World.Ecs.Get<NetPlayerEntityComponent>(Entity);
 
-    /// <summary>The player's inventory.</summary>
-    public InventoryEntityComponent Inventory => World.Ecs.Get<InventoryEntityComponent>(Entity);
+    /// <summary>
+    /// This method queries ECS
+    /// </summary>
+    public ref InventoryEntityComponent GetInventory() => ref World.Ecs.Get<InventoryEntityComponent>(Entity);
+
+    /// <summary>
+    /// This method queries ECS
+    /// </summary>
+    public ref ItemStack GetHeld() => ref GetInventory().Held;
 
     /// <summary>The held (selected hotbar) item, by reference, so callers can read or mutate it in place.</summary>
-    public ref ItemStack Held => ref Inventory.Held;
 
     /// <summary>Pushes the player's whole inventory window (window 0) back to the client - call after a
     /// server-side change to its contents so the client's view stays in sync.</summary>
     public void SyncInventory() =>
-        Client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(Inventory), default));
+        Client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(GetInventory()), default));
 
     /// <summary>Consumes up to <paramref name="amount"/> from the player's held stack and resyncs the inventory
     /// to the client. Returns the number actually removed (0 if the hand was empty).</summary>
     public int ConsumeHeld(int amount = 1) {
-        int removed = Inventory.ConsumeHeld(amount);
+        int removed = GetInventory().ConsumeHeld(amount);
         if (removed > 0) SyncInventory(); // TODO: sync single slot
         return removed;
     }

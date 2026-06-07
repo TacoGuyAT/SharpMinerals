@@ -81,7 +81,7 @@ public sealed class EntityTrackerWireTests {
             foreach (var (_, ctx) in server.Players)
                 if (ctx.World.Ecs.IsAlive(ctx.Entity)) {
                     var np = ctx.World.Ecs.Get<NetPlayerEntityComponent>(ctx.Entity);
-                    if (np.Name == name) return np.EntityId;
+                    if (np.Name == name) return np.NetId;
                 }
             Thread.Sleep(25);
         }

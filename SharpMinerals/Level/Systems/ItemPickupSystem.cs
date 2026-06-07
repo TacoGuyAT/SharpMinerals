@@ -59,7 +59,7 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
         foreach (var (collector, drop, netId, count, leftover) in collected) {
             // Collect animation (item flies to the collector) - sent FIRST, while the client still has the entity.
             if (ecs.IsAlive(collector))
-                Broadcast(server, new CollectItemS2C(netId, ecs.Get<NetPlayerEntityComponent>(collector).EntityId, count));
+                Broadcast(server, new CollectItemS2C(netId, ecs.Get<NetPlayerEntityComponent>(collector).NetId, count));
 
             // Then update the ground stack: a full pickup despawns the drop (the tracker's RemoveEntities now follows
             // the collect animation); a partial one just pushes the new count.

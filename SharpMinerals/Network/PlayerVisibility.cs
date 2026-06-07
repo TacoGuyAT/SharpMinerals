@@ -6,6 +6,7 @@ using SharpMinerals.Items;
 using SharpMinerals.Network.Messages;
 using ArchWorld = Arch.Core.World;
 using ArchEntity = Arch.Core.Entity;
+using Arch.Core.Extensions;
 
 namespace SharpMinerals.Network;
 
@@ -22,10 +23,10 @@ public static class PlayerVisibility {
             var server = e.Server;
             var client = e.Client;
 
-            if(!server.TryGetPlayer(client.Id, out var self) || !self.World.Ecs.IsAlive(self.Entity))
+            if(!server.TryGetPlayer(client.Id, out var self) || !self.Entity.IsAlive())
                 return;
 
-            var selfInfo = self.World.Ecs.Get<NetPlayerEntityComponent>(self.Entity);
+            var selfInfo = self.GetPlayer();
 
             // Everyone (incl. the newcomer, for its tab list) learns the new profile; the entity tracker spawns the
             // actual player entities per-view on the next flush.
@@ -37,7 +38,7 @@ public static class PlayerVisibility {
             var others = new List<PlayerListEntry>(server.PlayerCount);
             foreach(var (clientId, context) in server.Players) {
                 if(clientId != client.Id && context.World.Ecs.IsAlive(context.Entity)) {
-                    others.Add(Entry(context.World.Ecs.Get<NetPlayerEntityComponent>(context.Entity)));
+                    others.Add(Entry(context.GetPlayer()));
                 }
             }
             if(others.Count > 0) {
@@ -49,7 +50,7 @@ public static class PlayerVisibility {
 
         events.Subscribe<PlayerLeft>(static e => {
             var server = e.Server;
-            var player = e.Player;
+            var player = e.GetPlayer();
             server.NetServer.Broadcast(new PlayerInfoRemoveS2C([player.Uuid]), c => c.State == ConnectionState.Play);
         });
     }
@@ -95,7 +96,7 @@ public static class PlayerVisibility {
         if (!ecs.IsAlive(context.Entity)) return;
         var inv = ecs.Get<InventoryEntityComponent>(context.Entity);
         var synced = ecs.Get<EquipmentEntityComponent>(context.Entity).LastSent;
-        int eid = ecs.Get<NetPlayerEntityComponent>(context.Entity).EntityId;
+        int eid = context.GetPlayer().NetId;
         var current = EquipmentSnapshot(inv);
         for (int i = 0; i < current.Length; i++)
             if (!LooksSame(synced[i], current[i])) {
@@ -119,11 +120,11 @@ public static class PlayerVisibility {
         // the tick thread races that window) - sending it here makes the spawn self-contained. ADD_PLAYER is
         // idempotent, so the duplicate for an already-listed player is harmless.
         client.Send(new PlayerInfoUpdateS2C([Entry(info)]));
-        client.Send(new SpawnPlayerS2C(info.EntityId, info.Uuid, info.Name, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch));
+        client.Send(new SpawnPlayerS2C(info.NetId, info.Uuid, info.Name, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch));
         if (info.Flags != EntityFlags.None)
-            client.Send(new EntityFlagsS2C(info.EntityId, info.Flags));
+            client.Send(new EntityFlagsS2C(info.NetId, info.Flags));
         if (ecs.Has<InventoryEntityComponent>(entity))
-            foreach (var eq in Equipment(info.EntityId, ecs.Get<InventoryEntityComponent>(entity)))
+            foreach (var eq in Equipment(info.NetId, ecs.Get<InventoryEntityComponent>(entity)))
                 if (eq.Slot != EquipmentSlot.OffHand || CanSeeOffhand(client)) client.Send(eq);
     }
 }

@@ -696,7 +696,7 @@ public class PlayStateTests {
         for (int s = 0; s < InventoryEntityComponent.MainSize; s++)
             if (pickInv.Main(s).Type == VanillaMod.Cobblestone) hasCobble = true;
         Assert.True(hasCobble, "pickup: item added to inventory");
-        int pickerNetId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).EntityId;
+        int pickerNetId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).NetId;
         Assert.True(
             capture.Broadcasts.Any(m => m is CollectItemS2C c && c.CollectorEntityId == pickerNetId && c.PickupItemCount == 1),
             "pickup: collect-item animation broadcast (collector + count)");
@@ -865,14 +865,14 @@ public class PlayStateTests {
 
         // Alice must learn Bob's profile, and it must arrive BEFORE Bob's entity spawn, or her client drops the spawn.
         int aliceProfileOfBob = alice.Sent.FindIndex(m => m is PlayerInfoUpdateS2C u && u.Entries.Any(e => e.Uuid == bInfo.Uuid));
-        int aliceSpawnOfBob = alice.Sent.FindIndex(m => m is SpawnPlayerS2C s && s.EntityId == bInfo.EntityId);
+        int aliceSpawnOfBob = alice.Sent.FindIndex(m => m is SpawnPlayerS2C s && s.EntityId == bInfo.NetId);
         Assert.True(aliceProfileOfBob >= 0, "Alice received Bob's PlayerInfoUpdate");
         Assert.True(aliceSpawnOfBob >= 0, "Alice received Bob's SpawnPlayer");
         Assert.True(aliceProfileOfBob < aliceSpawnOfBob, "Bob's profile precedes his spawn for Alice");
 
         // And symmetrically Bob must learn Alice's profile before her spawn.
         int bobProfileOfAlice = bob.Sent.FindIndex(m => m is PlayerInfoUpdateS2C u && u.Entries.Any(e => e.Uuid == aInfo.Uuid));
-        int bobSpawnOfAlice = bob.Sent.FindIndex(m => m is SpawnPlayerS2C s && s.EntityId == aInfo.EntityId);
+        int bobSpawnOfAlice = bob.Sent.FindIndex(m => m is SpawnPlayerS2C s && s.EntityId == aInfo.NetId);
         Assert.True(bobProfileOfAlice >= 0, "Bob received Alice's PlayerInfoUpdate");
         Assert.True(bobSpawnOfAlice >= 0, "Bob received Alice's SpawnPlayer");
         Assert.True(bobProfileOfAlice < bobSpawnOfAlice, "Alice's profile precedes her spawn for Bob");
@@ -923,8 +923,8 @@ public class PlayStateTests {
 
         Assert.True(server.TryGetPlayer(1, out var ctx1));
         Assert.True(server.TryGetPlayer(2, out var ctx2));
-        int eid1 = world.Ecs.Get<NetPlayerEntityComponent>(ctx1.Entity).EntityId;
-        int eid2 = world.Ecs.Get<NetPlayerEntityComponent>(ctx2.Entity).EntityId;
+        int eid1 = world.Ecs.Get<NetPlayerEntityComponent>(ctx1.Entity).NetId;
+        int eid2 = world.Ecs.Get<NetPlayerEntityComponent>(ctx2.Entity).NetId;
 
         var bobSeesAlice = c2.Sent.OfType<SpawnPlayerS2C>().Where(s => s.EntityId == eid1).ToList();
         var aliceSeesBob = c1.Sent.OfType<SpawnPlayerS2C>().Where(s => s.EntityId == eid2).ToList();
@@ -1419,7 +1419,7 @@ public class PlayStateTests {
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
         Assert.True(server.TryGetPlayer(client.Id, out var context));
         var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
-        int eid = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).EntityId;
+        int eid = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).NetId;
 
         // Selecting a hotbar slot broadcasts the held item to others as main-hand equipment.
         inv.Main(2) = new ItemStack(VanillaMod.Cobblestone, 1);
@@ -1496,7 +1496,7 @@ public class PlayStateTests {
         Assert.True(server.TryGetPlayer(client.Id, out var before));
         var oldWorld = before.World;
         before.World.Ecs.Get<InventoryEntityComponent>(before.Entity).Main(5) = new ItemStack(VanillaMod.Cobblestone, 3);
-        int eid = before.World.Ecs.Get<NetPlayerEntityComponent>(before.Entity).EntityId;
+        int eid = before.World.Ecs.Get<NetPlayerEntityComponent>(before.Entity).NetId;
 
         client.Sent.Clear();
         var target = server.GetOrCreateWorld("arena", static (name, server) => new World("arena", new FlatChunkGenerator()));
@@ -1508,7 +1508,7 @@ public class PlayStateTests {
         Assert.NotSame(oldWorld, after.World);
         Assert.True(after.World.Ecs.IsAlive(after.Entity), "entity alive in the new world");
         Assert.False(oldWorld.Ecs.IsAlive(before.Entity), "old entity despawned");
-        Assert.Equal(eid, after.World.Ecs.Get<NetPlayerEntityComponent>(after.Entity).EntityId);
+        Assert.Equal(eid, after.World.Ecs.Get<NetPlayerEntityComponent>(after.Entity).NetId);
         Assert.Equal<ItemType>(VanillaMod.Cobblestone, after.World.Ecs.Get<InventoryEntityComponent>(after.Entity).Main(5).Type);
         // The client was told to respawn into the new dimension and got its fresh chunks.
         var respawn = Assert.IsType<RespawnS2C>(client.Sent.First(m => m is RespawnS2C));
@@ -1824,8 +1824,8 @@ public class PlayStateTests {
 
         Assert.True(server.TryGetPlayer(ca.Id, out var pa), "Alice present");
         Assert.True(server.TryGetPlayer(cb.Id, out var pb), "Bob present");
-        int aId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pa.Entity).EntityId;
-        int bId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pb.Entity).EntityId;
+        int aId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pa.Entity).NetId;
+        int bId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pb.Entity).NetId;
         Assert.Contains(ca.Sent, m => m is SpawnPlayerS2C s && s.EntityId == bId); // Alice sees Bob
         Assert.Contains(cb.Sent, m => m is SpawnPlayerS2C s && s.EntityId == aId); // Bob sees Alice
     }

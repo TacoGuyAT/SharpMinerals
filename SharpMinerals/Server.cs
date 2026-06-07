@@ -121,15 +121,17 @@ public class Server : ITickable {
 
         foreach (var world in Worlds.Values) {
             world.Events = Events;
-            world.NextEntityId = NextEntityId; // the tracker stamps loose entities with server-wide ids
+            world.NextEntityId = NextEntityId; // the tracker stamps loose entities (items, falling blocks) with server-wide ids
             world.LoadEntities(); // respawn dropped items etc. saved from a previous session (before any tick)
         }
 
         // Keep each world's spatial index current on any entity move (player or item).
         Events.Subscribe<EntityMoved>(OnEntityMoved);
-        Events.Subscribe<PlayerJoined>((e) => BroadcastChatMessage(new TextComponent($"{e.Context.Player.Name} joined the game").SetColor(TextColor.Yellow)));
-        Events.Subscribe<PlayerLeft>((e) => BroadcastChatMessage(new TextComponent($"{e.Context.Player.Name} left the game").SetColor(TextColor.Yellow)));
-        Events.Subscribe<PlayerLeft>((e) => commandDispatcher.Forget(e.Context.Client.Id));
+        Events.Subscribe<PlayerJoined>(e => BroadcastChatMessage(new TextComponent($"{e.Client.Name} joined the game").SetColor(TextColor.Yellow)));
+        Events.Subscribe<PlayerLeft>(e => {
+            commandDispatcher.Forget(e.Client.Id);
+            BroadcastChatMessage(new TextComponent($"{e.Client.Name} left the game").SetColor(TextColor.Yellow));
+        });
 
         // Chunk streaming registered before visibility so a joining client gets terrain before other spawns.
         Streaming.Register(Events);
@@ -140,13 +142,6 @@ public class Server : ITickable {
     public IEntityStore EntityStore => entityStore;
 
     public World DefaultWorld => Worlds.Values.First();
-
-    /// <summary>Coerce an arbitrary world name into the characters a Minecraft resource-location path allows.</summary>
-    static string SanitizeId(string name) {
-        var chars = name.ToLowerInvariant().Select(c =>
-            c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-' or '_' or '/' ? c : '_');
-        return new([.. chars]);
-    }
 
     /// <summary>Starts the transport and launches the tick loop thread.</summary>
     public void Start() {
@@ -348,7 +343,7 @@ public class Server : ITickable {
         Worlds.GetOrAdd(name, n => {
             var world = factory.Invoke(n, this);
             world.Events = Events;             // wire a dynamically-created world the same as the startup ones
-            world.NextEntityId = NextEntityId;
+            world.NextEntityId = NextEntityId; // ...incl. the loose-entity id allocator (else items/falling blocks get id 0)
             return world;
         });
 
@@ -397,7 +392,7 @@ public class Server : ITickable {
             // Carry the persistent state across (same encode as a disk save); reuse the same network entity id.
             var blob = EntityCodec.Encode(old.Ecs, ctx.Entity);
             old.DestroyEntity(ctx.Entity);
-            var entity = target.SpawnPlayer(clientId, info.Name, info.Uuid, info.EntityId, blob);
+            var entity = target.SpawnPlayer(clientId, info.Name, info.Uuid, info.NetId, blob);
             if (target.Ecs.Has<SenderEntityComponent>(entity))
                 target.Ecs.Get<SenderEntityComponent>(entity).Client = client;
             moved = new PlayerContext(this, target, entity, client);

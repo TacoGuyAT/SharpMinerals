@@ -11,6 +11,7 @@ using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Protocols.JE61;
+using Arch.Core.Extensions;
 
 namespace SharpMinerals.Network.Handlers;
 
@@ -92,7 +93,7 @@ public sealed class ServerPacketHandler {
     void EnterWorld(NetClient client, string requestedName) {
         // Offline UUIDs derive from the name, so same-account clients would collide; disambiguate.
         string name = Disambiguate(requestedName);
-        client.PlayerName = name;
+        client.Name = name;
         var uuid = OfflineUuid(name);
         Log.LogInformation("Login (offline) for {Name} -> {Uuid}", name, uuid);
 
@@ -165,7 +166,7 @@ public sealed class ServerPacketHandler {
     /// </summary>
     void HandleLegacyHandshake(NetClient client, LegacyHandshakeC2S hs) {
         if (client.Protocol is not ProtocolJE61 je61) return;
-        client.PlayerName = hs.Username;
+        client.Name = hs.Username;
         Log.LogInformation("Legacy (1.5.2) login start: {Name} (protocol {Proto})", hs.Username, hs.ProtocolVersion);
         // Verify token is required but unvalidated in offline mode, so a random one suffices.
         client.Send(new LegacyEncryptionRequestS2C("-", je61.PublicKeyDer, RandomNumberGenerator.GetBytes(4)));
@@ -188,8 +189,8 @@ public sealed class ServerPacketHandler {
     void HandleLegacyClientStatuses(NetClient client) => EnterLegacyWorld(client);
 
     void EnterLegacyWorld(NetClient client) {
-        string name = Disambiguate(client.PlayerName ?? "Player");
-        client.PlayerName = name;
+        string name = Disambiguate(client.Name ?? "Player");
+        client.Name = name;
 
         // Spawn a real ECS player (position/rotation/health/inventory, restored if they've played before).
         int entityId = server.AddPlayer(client, name, OfflineUuid(name));
@@ -212,8 +213,9 @@ public sealed class ServerPacketHandler {
 
     string Disambiguate(string name) {
         bool Taken(string n) => server.Players.Any(kv =>
-            kv.Value.World.Ecs.IsAlive(kv.Value.Entity) &&
-            kv.Value.World.Ecs.Get<NetPlayerEntityComponent>(kv.Value.Entity).Name == n);
+            kv.Value.Entity.IsAlive() &&
+            kv.Value.Client.Name == n
+        );
 
         if (!Taken(name)) return name;
         for (int i = 2; ; i++) {
