@@ -6,9 +6,19 @@
     <Version>0.1.0</Version>
   </PropertyGroup>
 
+  <!-- Package / assembly metadata (license + authorship), applied to every project from one place so each
+       built assembly (and any future NuGet) carries the Apache-2.0 expression and copyright. -->
+  <PropertyGroup>
+    <Authors>__tacoguy</Authors>
+    <Copyright>Copyright 2026 __tacoguy</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/TacoGuyAT/SharpMinerals</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/TacoGuyAT/SharpMinerals</RepositoryUrl>
+  </PropertyGroup>
+
   <!-- Build-flavor compile symbols, shared by every project under SharpMinerals/. Each is APPENDED to
        DefineConstants (never overridden), so flavors stack and so you can add one from the command line by
-       passing its boolean property — the build does the appending. (Passing -p:DefineConstants=X directly does
+       passing its boolean property - the build does the appending. (Passing -p:DefineConstants=X directly does
        NOT work: it's a global override that wipes the per-project constants like DOUBLE_PRECISION.) E.g.:
          dotnet publish                       -> JIT (auto, see below)
          dotnet build  -p:IN_MEMORY=true      -> JIT + IN_MEMORY
