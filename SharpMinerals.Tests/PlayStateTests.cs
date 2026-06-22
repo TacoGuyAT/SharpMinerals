@@ -83,6 +83,45 @@ public class PlayStateTests {
                     "overworld: same seed yields the same block");
     }
 
+    [Fact]
+    public void RequestChunkLoadsAsyncAndMatchesSyncGeneration() {
+        var pos = new Vector3i(3, 4, -2);
+        // The expected content from the blocking path (a fresh world so no shared cache colours the result).
+        var sync = new World("ovw-sync", OverworldChunkGenerator.Create(99));
+        var expected = sync.GetChunk(pos);
+
+        var asyncWorld = new World("ovw-async", OverworldChunkGenerator.Create(99));
+        Assert.False(asyncWorld.TryGetLoaded(pos, out _), "not loaded before it is requested");
+        Assert.True(asyncWorld.RequestChunk(pos), "first request enqueues");
+        Assert.False(asyncWorld.RequestChunk(pos), "a duplicate request while in flight is a no-op");
+
+        SharpMinerals.Level.Chunk loaded = null!;
+        var deadline = Environment.TickCount64 + 5000;
+        while (Environment.TickCount64 < deadline && !asyncWorld.TryGetLoaded(pos, out loaded!))
+            Thread.Sleep(5);
+        Assert.NotNull(loaded); // the background worker published it
+
+        for (int x = 0; x < 16; x++)
+            for (int y = 0; y < 16; y++)
+                for (int z = 0; z < 16; z++)
+                    Assert.True(loaded.GetBlock(x, y, z) == expected.GetBlock(x, y, z),
+                        "async-loaded chunk matches the synchronously generated one");
+        asyncWorld.Unload();
+        sync.Unload();
+    }
+
+    [Fact]
+    public void IsColumnLoadedTracksTheWholeHeight() {
+        var world = new World("ovw-col", OverworldChunkGenerator.Create(7));
+        Assert.False(world.IsColumnLoaded(0, 0), "a fresh column is not loaded");
+        world.RequestColumn(0, 0);
+        var deadline = Environment.TickCount64 + 5000;
+        while (Environment.TickCount64 < deadline && !world.IsColumnLoaded(0, 0))
+            Thread.Sleep(5);
+        Assert.True(world.IsColumnLoaded(0, 0), "every cube-chunk of the column finished loading");
+        world.Unload();
+    }
+
     // A world with only the terrain + surface shaders - no water fill and no decorators - so tests of the bare
     // heightfield are not perturbed by water filling carved channels or by trees/ground cover above the surface.
     static World TerrainOnlyWorld(string name, int seed, out BiomeSource source, out IDensity density) {
@@ -101,6 +140,7 @@ public class PlayStateTests {
         for (int x = 0; x < 16; x++) {
             int top = TopSolidY(world, x, 0);
             if (top <= 0 || !SolidColumnBelow(world, x, 0, top, 8)) continue;
+            if (source.StripSoil(x, 0)) continue; // rocky columns are bare stone, not the biome's soil surface
             var biome = source.SurfacePick(x, 0);
             var expectedTop = biome.Surface.Block(x, top, 0, depthBelowSurface: 0, VanillaMod.Stone);
             Assert.True(world.GetBlock(new Vector3i(x, top, 0)) == expectedTop, $"overworld: top is {biome.Name}'s surface");
@@ -117,6 +157,7 @@ public class PlayStateTests {
         Assert.Equal(1, BiomeWireRegistry.IdOf("forest"));
         Assert.Equal(2, BiomeWireRegistry.IdOf("badlands"));
         Assert.Equal(3, BiomeWireRegistry.IdOf("ocean"));
+        Assert.Equal(4, BiomeWireRegistry.IdOf("beach"));
         Assert.Equal(0, BiomeWireRegistry.IdOf(null));       // no-biome world -> default
         Assert.Equal(0, BiomeWireRegistry.IdOf("nonsense")); // unknown -> default
         Assert.NotNull(RegistryCodec.Default);               // login biome registry NBT builds without throwing
@@ -298,6 +339,69 @@ public class PlayStateTests {
         Assert.True(found, "river: a lowland river carves water through grass");
     }
 
+    // A base terrain that is solid everywhere, so a carve's effect (and only the carve) is what shows through.
+    sealed class SolidDensity : IDensity {
+        public const double Value = 1000.0;
+        public double At(int x, int y, int z) => Value;
+    }
+
+    [Fact]
+    public void RockyPatchesStripSoilToBareStone() {
+        int seed = 1337;
+        var world = TerrainOnlyWorld("ovw-rocky", seed, out var source, out _);
+        var heights = new BiomeDensity(seed, source); // same seed -> same surface as the world (cheap, no chunk gen)
+
+        // Cheaply (no chunk gen) find one stripped + one non-stripped dry-land column, then generate just those two.
+        (int X, int Z)? rocky = null, soft = null;
+        for (int x = 0; x < 4000 && (rocky is null || soft is null); x += 5)
+            for (int z = 0; z < 4000 && (rocky is null || soft is null); z += 5) {
+                if (heights.SurfaceHeight(x, z) < WorldDefaults.SeaLevel + 4) continue; // dry land, surface above water
+                if (source.StripSoil(x, z)) rocky ??= (x, z);
+                else soft ??= (x, z);
+            }
+        Assert.True(rocky is not null && soft is not null, "found both a stripped and a non-stripped dry column");
+
+        // The stripped column is bare stone; the non-stripped one kept its soil cap - so stripping is patchy, not global.
+        var (rx, rz) = rocky!.Value;
+        Assert.True(world.GetBlock(new Vector3i(rx, TopSolidY(world, rx, rz), rz)) == VanillaMod.Stone,
+            "stripped column surface is bare stone");
+        var (sx, sz) = soft!.Value;
+        Assert.True(world.GetBlock(new Vector3i(sx, TopSolidY(world, sx, sz), sz)) != VanillaMod.Stone,
+            "non-stripped column kept its soil surface");
+
+        world.Unload();
+    }
+
+    [Fact]
+    public void RavinesCarveDeepNarrowChasms() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed));
+        var natural = new BiomeDensity(seed, source);
+        var ravine = new RavineDensity(new SolidDensity(), natural, seed);
+
+        int carved = 0, columns = 0;
+        // Scan wide enough to cross several of the low-frequency ravine "regions" (their wavelength is hundreds of
+        // blocks), so this doesn't depend on whether one small window happens to sit in a ravine zone.
+        for (int x = 0; x < 3000; x += 4)
+            for (int z = 0; z < 3000; z += 4) {
+                columns++;
+                double surface = natural.SurfaceHeight(x, z);
+
+                // The carve never touches cells well above the natural surface.
+                Assert.Equal(SolidDensity.Value, ravine.At(x, (int)surface + 24, z), 6);
+
+                // A cell in the chasm body, where a ravine runs, is opened (density driven below zero = air); and any
+                // opened cell must sit between the floor and the surface, never above it.
+                for (int y = 12; y < surface; y += 4) {
+                    double d = ravine.At(x, y, z);
+                    if (d < SolidDensity.Value - 1e-6)
+                        Assert.True(y <= surface, $"ravine: carve at y={y} stays at or below the surface");
+                    if (d < 0.0) carved++;
+                }
+            }
+        Assert.True(carved > 0, $"ravine: at least one chasm carves over {columns} scanned columns");
+    }
+
     [Fact]
     public void BiomeSelectionFollowsClimate() {
         var source = new BiomeSource(7, BiomeRegistry.Build(7));
@@ -305,6 +409,67 @@ public class PlayStateTests {
         Assert.Equal("plains", source.DominantForClimate(new ClimatePoint(0.1, 0.0, 0.4, -0.2, 0.0)).Name);
         Assert.Equal("forest", source.DominantForClimate(new ClimatePoint(0.0, 0.6, 0.4, 0.0, 0.0)).Name);
         Assert.Equal("badlands", source.DominantForClimate(new ClimatePoint(0.7, -0.7, 0.4, 0.2, 0.0)).Name);
+    }
+
+    [Fact]
+    public void BeachIsAnElevationGatedShoreline() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed), BiomeRegistry.BuildCoastal(seed));
+        source.UseSurfaceHeight(new BiomeDensity(seed, source).SurfaceHeight); // coastline detection needs the height field
+
+        // Beach is NOT a climate-territory biome (so it never claims a wide continentalness band or shapes terrain).
+        Assert.DoesNotContain(source.Biomes, b => b.Name == "beach");
+
+        // High inland columns are never beach, whatever the climate - the elevation gate excludes them.
+        for (int x = 0; x < 128; x++)
+            Assert.NotEqual("beach", source.SurfaceBiomeAt(x, 0, WorldDefaults.SeaLevel + 80).Name);
+
+        // A deep-inland column (well into a land biome, no ocean nearby) is NOT beach even at sea-level elevation -
+        // proving placement is by OCEAN PROXIMITY, not merely elevation (the bug this fix targets).
+        bool checkedInland = false;
+        for (int x = 0; x < 8000 && !checkedInland; x += 7)
+            for (int z = 0; z < 8000 && !checkedInland; z += 7)
+                if (source.Dominant(x, z).Name == "badlands") { // badlands sits at high continentalness => far from ocean
+                    Assert.NotEqual("beach", source.SurfaceBiomeAt(x, z, WorldDefaults.SeaLevel).Name);
+                    checkedInland = true;
+                }
+        Assert.True(checkedInland, "found a deep-inland column to check");
+
+        // Somewhere a warm shoreline column (ocean within reach) IS surfaced as beach; the same column raised well
+        // above sea level is not.
+        bool foundShorelineBeach = false;
+        for (int x = 0; x < 4000 && !foundShorelineBeach; x += 3)
+            for (int z = 0; z < 4000 && !foundShorelineBeach; z += 3)
+                if (source.SurfaceBiomeAt(x, z, WorldDefaults.SeaLevel).Name == "beach") {
+                    Assert.NotEqual("beach", source.SurfaceBiomeAt(x, z, WorldDefaults.SeaLevel + 80).Name);
+                    foundShorelineBeach = true;
+                }
+        Assert.True(foundShorelineBeach, "a warm shoreline column with ocean nearby is surfaced as beach");
+    }
+
+    [Fact]
+    public void TreesDoNotGrowOnBeaches() {
+        int seed = 1337;
+        var source = new BiomeSource(seed, BiomeRegistry.Build(seed), BiomeRegistry.BuildCoastal(seed));
+        var heights = new BiomeDensity(seed, source);
+        source.UseSurfaceHeight(heights.SurfaceHeight);
+        var world = new World("ovw-beach-trees", OverworldChunkGenerator.Create(seed));
+
+        int verified = 0;
+        for (int x = 0; x < 5000 && verified < 12; x += 6)
+            for (int z = 0; z < 5000 && verified < 12; z += 6) {
+                // Cheap 2D pre-filter so we only generate chunks at likely beach columns.
+                if (!source.IsCoastal(x, z, (int)heights.SurfaceHeight(x, z))) continue;
+
+                int top = TopSolidY(world, x, z);
+                if (world.GetBlock(new Vector3i(x, top, z)) != VanillaMod.Sand) continue; // dry beach surface only
+                if (!source.IsCoastal(x, z, top)) continue;                                // confirm against real surface
+
+                Assert.True(world.GetBlock(new Vector3i(x, top + 1, z)) != VanillaMod.OakLog,
+                    $"no tree trunk roots on the beach at ({x},{top + 1},{z})");
+                verified++;
+            }
+        Assert.True(verified > 0, "found dry beach columns to verify");
     }
 
     [Fact]
