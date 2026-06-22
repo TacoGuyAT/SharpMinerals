@@ -125,7 +125,9 @@ server.CommandDispatcher
     .RegisterWorld()
     .RegisterClear()
     .RegisterGive()
-    .RegisterSummon();
+    .RegisterSummon()
+    .RegisterSpeed()
+    .RegisterFlySpeed();
 
 // Mods run OnServerStarted now (server up, core commands registered): they layer on their own commands, etc.
 modLoader.StartAll(server);

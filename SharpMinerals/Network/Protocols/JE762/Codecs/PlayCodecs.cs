@@ -86,6 +86,37 @@ internal sealed class SetHealthS2CCodec : ICodec<SetHealthS2C> {
     public SetHealthS2C Decode(MinecraftStream s) => new(s.ReadFloat(), s.ReadVarInt(), s.ReadFloat());
 }
 
+internal sealed class PlayerAbilitiesS2CCodec : ICodec<PlayerAbilitiesS2C> {
+    public void Encode(MinecraftStream s, PlayerAbilitiesS2C m) {
+        s.WriteUByte(m.Flags);
+        s.WriteFloat(m.FlyingSpeed);
+        s.WriteFloat(m.FieldOfViewModifier);
+    }
+
+    public PlayerAbilitiesS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("PlayerAbilitiesS2C is clientbound only.");
+}
+
+internal sealed class UpdateAttributesS2CCodec : ICodec<UpdateAttributesS2C> {
+    public void Encode(MinecraftStream s, UpdateAttributesS2C m) {
+        s.WriteVarInt(m.EntityId);
+        s.WriteVarInt(1);                                   // one property follows
+        s.WriteString("minecraft:generic.movement_speed");  // attribute key (Identifier)
+        s.WriteDouble(m.MovementSpeed);                     // base value
+        s.WriteVarInt(0);                                   // no modifiers
+    }
+
+    public UpdateAttributesS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("UpdateAttributesS2C is clientbound only.");
+}
+
+internal sealed class PlayerAbilitiesC2SCodec : ICodec<PlayerAbilitiesC2S> {
+    public void Encode(MinecraftStream s, PlayerAbilitiesC2S m) =>
+        throw new NotSupportedException("PlayerAbilitiesC2S is serverbound only.");
+
+    public PlayerAbilitiesC2S Decode(MinecraftStream s) => new(s.ReadUByte());
+}
+
 internal sealed class SetCenterChunkS2CCodec : ICodec<SetCenterChunkS2C> {
     public void Encode(MinecraftStream s, SetCenterChunkS2C m) {
         s.WriteVarInt(m.ChunkX);

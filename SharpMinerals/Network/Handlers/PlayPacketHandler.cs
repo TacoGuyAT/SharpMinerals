@@ -74,6 +74,10 @@ public sealed class PlayPacketHandler {
                 HandleEntityAction(client, action);
                 break;
 
+            case PlayerAbilitiesC2S abilities:
+                server.Events.Defer(() => SyncFlying(client, abilities.Flags));
+                break;
+
             case ChatMessageC2S chat:
                 if(!server.TryGetPlayer(client.Id, out var chatContext) || !chatContext.World.Ecs.IsAlive(chatContext.Entity))
                     return;
@@ -306,6 +310,17 @@ public sealed class PlayPacketHandler {
             default: return; // leave-bed / horse / etc. not modelled
         }
         server.NetServer.Broadcast(new EntityFlagsS2C(np.NetId, np.Flags), c => c.InWorld && c.Id != client.Id);
+    }
+
+    // The client reports its own ability flags when it starts/stops flying. Track only the Flying bit so a later
+    // /flyspeed re-send keeps them in the same flight state; the server stays authoritative over the other bits.
+    void SyncFlying(NetClient client, byte clientFlags) {
+        if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity)
+            || !context.World.Ecs.Has<AbilitiesEntityComponent>(context.Entity))
+            return;
+        var abilities = context.World.Ecs.Get<AbilitiesEntityComponent>(context.Entity);
+        abilities.Flags = (byte)((abilities.Flags & ~AbilitiesEntityComponent.Flying)
+                                 | (clientFlags & AbilitiesEntityComponent.Flying));
     }
 
 #if TEST_HARNESS

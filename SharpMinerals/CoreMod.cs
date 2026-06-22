@@ -52,6 +52,7 @@ public sealed class CoreMod : Mod {
                 // Object initializer, NOT a parameterless ctor - that's bypassed on Arch default-init paths.
                 new CollisionEntityComponent { Touching = new List<ArchEntity>() },
                 new ChunkViewEntityComponent(),
+                new AbilitiesEntityComponent(), // walk/fly speed + ability flags (creative defaults)
                 new EquipmentEntityComponent(),
                 new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned
                 new SenderEntityComponent(),

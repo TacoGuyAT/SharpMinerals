@@ -30,6 +30,12 @@ public sealed record KeepAliveS2C(long Id) : IMessage;
 
 public sealed record SetHealthS2C(float Health, int Food, float Saturation) : IMessage;
 
+/// <summary>Player Abilities (0x34): sets the ability flag bits, the fly speed, and the FOV/walk-speed modifier.</summary>
+public sealed record PlayerAbilitiesS2C(byte Flags, float FlyingSpeed, float FieldOfViewModifier) : IMessage;
+
+/// <summary>Update Attributes (0x6A) carrying just the player's <c>generic.movement_speed</c> (walk speed).</summary>
+public sealed record UpdateAttributesS2C(int EntityId, double MovementSpeed) : IMessage;
+
 /// <summary>Sets the centre of the client's loaded area. Required before streaming chunks, or the client discards them.</summary>
 public sealed record SetCenterChunkS2C(int ChunkX, int ChunkZ) : IMessage;
 
@@ -91,6 +97,10 @@ public sealed record KeepAliveC2S(long Id) : IMessage;
 public sealed record ConfirmTeleportationC2S(int TeleportId) : IMessage;
 
 public sealed record SetPlayerPositionC2S(double X, double Y, double Z, bool OnGround) : IMessage;
+
+/// <summary>Player Abilities (serverbound, 0x1C): the client reports its flag changes. Only the Flying bit is
+/// meaningful to the server (it toggles as the player starts/stops flying).</summary>
+public sealed record PlayerAbilitiesC2S(byte Flags) : IMessage;
 
 /// <summary>
 /// Block digging. <see cref="Status"/>: 0 started (also creative instant-break), 1 cancelled, 2 finished (survival).

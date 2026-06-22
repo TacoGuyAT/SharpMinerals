@@ -49,6 +49,8 @@ public class ProtocolJE762 : ModernJavaProtocol {
         public const int SetEntityMetadata = 0x52; // entity_metadata
         public const int SetEquipment = 0x55;     // entity_equipment (held item + armour)
         public const int SetHealth = 0x57;        // update_health  (NOT 0x5A)
+        public const int PlayerAbilities = 0x34;  // player_abilities (clientbound: flags + fly/walk speed)
+        public const int UpdateAttributes = 0x6A; // entity_update_attributes (movement speed)
         public const int TeleportEntity = 0x68;   // entity_teleport
         public const int SystemChat = 0x64;       // system_chat
         public const int PlayerListHeaderFooter = 0x65; // playerlist_header (tab-list header + footer)
@@ -82,6 +84,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         public const int SetPlayerPosition = 0x14; // position
         public const int SetPlayerPositionRotation = 0x15; // position_look
         public const int SetPlayerRotation = 0x16; // look
+        public const int PlayerAbilities = 0x1C;  // player_abilities (serverbound: client toggles flying)
         public const int PlayerAction = 0x1D;     // player_action (digging)
         public const int EntityAction = 0x1E;     // entity_action (sneak/sprint)
         public const int UseItemOn = 0x31;        // use_item_on (block placement)
@@ -142,6 +145,8 @@ public class ProtocolJE762 : ModernJavaProtocol {
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetEntityMetadata, new EntityFlagsS2CCodec()); // both encode to 0x52
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetEquipment, new SetEquipmentS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetHealth, new SetHealthS2CCodec());
+        Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.PlayerAbilities, new PlayerAbilitiesS2CCodec());
+        Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.UpdateAttributes, new UpdateAttributesS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.OpenScreen, new OpenScreenS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetContainerContent, new SetContainerContentS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetContainerSlot, new SetContainerSlotS2CCodec());
@@ -163,6 +168,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.InteractEntity, new InteractEntityC2SCodec());
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.SwingArm, new SwingArmC2SCodec());
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.EntityAction, new EntityActionC2SCodec());
+        Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.PlayerAbilities, new PlayerAbilitiesC2SCodec());
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.PlayerAction, new PlayerActionC2SCodec());
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.UseItemOn, new UseItemOnC2SCodec());
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.ClickContainer, new ClickContainerC2SCodec());
