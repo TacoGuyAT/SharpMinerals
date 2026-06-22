@@ -38,6 +38,16 @@ public static class VanillaBiomes {
             baseHeight: -10.0, heightVariation: 3.0,
             new LayeredSurfaceRule(VanillaMod.Sand, VanillaMod.Dirt, fillerDepth: 2)));
 
+        // Beach: a thin, warm, sandy shoreline. Registered as the COASTAL biome (placed by elevation near sea
+        // level, not by a climate territory), so it rings ocean coasts and river banks instead of sprawling across
+        // a wide continentalness band. Climate here only gates the warm-temperature requirement; base height /
+        // variation are unused (it never shapes terrain). Sand over sandstone.
+        BiomeRegistry.RegisterCoastal(_ => new Biome("beach",
+            new ClimatePoint(Temperature: 0.35, Humidity: 0.0, Continentalness: -0.15, Rockiness: -0.4, Weirdness: 0.0),
+            baseHeight: 4.0, heightVariation: 1.5,
+            new LayeredSurfaceRule(VanillaMod.Sand, VanillaMod.Sand, fillerDepth: 3,
+                baseBlock: VanillaMod.Sandstone, baseDepth: 3)));
+
         // Wire-side biome registry (climate + render colours), in the SAME order so the ids match the gameplay
         // biomes by name. Plains first so it is the client's empty-chunk default. Colours are vanilla-ish; grass
         // tint is computed from temperature/downfall unless overridden (badlands gets an explicit tan).
@@ -46,5 +56,6 @@ public static class VanillaBiomes {
         BiomeWireRegistry.Register("badlands", temperature: 2.0f, downfall: 0.0f, hasPrecipitation: false, skyColor: 7254527,
             grassColor: 9470285, foliageColor: 10387789);
         BiomeWireRegistry.Register("ocean", temperature: 0.5f, downfall: 0.5f, hasPrecipitation: true, skyColor: 8103167);
+        BiomeWireRegistry.Register("beach", temperature: 0.8f, downfall: 0.4f, hasPrecipitation: true, skyColor: 7907327);
     }
 }

@@ -43,6 +43,7 @@ public sealed partial class VanillaMod : Mod {
         Gravel       = blocks["minecraft:gravel"].Add(new FallingBlockDescriptor());
         RedSand      = blocks["minecraft:red_sand"].Add(new FallingBlockDescriptor());
         RedSandstone = blocks["minecraft:red_sandstone"];
+        Sandstone    = blocks["minecraft:sandstone"];
         Water        = blocks["minecraft:water"];
         OakLog       = blocks["minecraft:oak_log"];
         OakLeaves    = blocks["minecraft:oak_leaves"];
@@ -111,5 +112,6 @@ public sealed partial class VanillaMod {
     public static BlockType OxeyeDaisy { get; internal set; } = null!;
     public static BlockType DeadBush { get; internal set; } = null!;
     public static BlockType RedSandstone { get; internal set; } = null!;
+    public static BlockType Sandstone { get; internal set; } = null!;
     public static ItemType Stick { get; internal set; } = null!;
 }

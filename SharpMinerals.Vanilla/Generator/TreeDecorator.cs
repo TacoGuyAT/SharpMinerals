@@ -58,6 +58,7 @@ public sealed class TreeDecorator : IChunkDecorator {
 
                 int surfaceTop = FindSurfaceTop(ox, oz, (int)est);
                 if (surfaceTop < WorldDefaults.SeaLevel) continue; // underwater or too low -> no tree on dry grass
+                if (source.IsCoastal(ox, oz, surfaceTop)) continue; // beaches are sand - no trees on the shore
 
                 StampTree(chunk, baseX, baseY, baseZ, ox, surfaceTop + 1, oz, trunkH);
             }

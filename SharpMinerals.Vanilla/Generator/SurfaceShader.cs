@@ -19,11 +19,15 @@ public sealed class SurfaceShader : IChunkShader {
         this.source = source;
         int deepest = 0;
         foreach (var biome in source.Biomes) deepest = System.Math.Max(deepest, biome.Surface.Depth);
+        if (source.CoastalBiome is { } coastal) deepest = System.Math.Max(deepest, coastal.Surface.Depth);
         maxProbe = deepest + 1;
     }
 
     public BlockType Shade(int x, int y, int z, BlockType current) {
         if (current.IsAir) return current; // only solid cells get surfaced
+
+        // Rocky columns strip their soil cap to bare stone (alpha/beta stone cliffs/shores); current is already stone.
+        if (source.StripSoil(x, z)) return current;
 
         int depth = 0; // solid cells stacked directly above -> depth below the surface (0 = topmost)
         for (int k = 1; k <= maxProbe; k++) {
@@ -31,6 +35,7 @@ public sealed class SurfaceShader : IChunkShader {
             else break;
         }
 
-        return source.SurfacePick(x, z).Surface.Block(x, y, z, depth, current);
+        // y + depth is the column's top solid cell - the surface height the coastal (beach) rule is keyed to.
+        return source.SurfaceBiomeAt(x, z, y + depth).Surface.Block(x, y, z, depth, current);
     }
 }

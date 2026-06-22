@@ -9,14 +9,12 @@ namespace SharpMinerals.Level.Systems;
 /// player's equipment against what was last broadcast (<see cref="EquipmentEntityComponent.LastSent"/>) and
 /// sends only the changed slots - so an inventory mutation needs no announcement; the diff notices. Replaces
 /// the old PlayerInventoryChanged event.</summary>
-public sealed class EquipmentVisibilitySystem : ITickable, INetworkSystem {
+public sealed class EquipmentVisibilitySystem : INetworkSystem {
     static readonly QueryDescription PlayerQuery =
         new QueryDescription().WithAll<NetPlayerEntityComponent, InventoryEntityComponent, EquipmentEntityComponent>();
 
     readonly World world;
     public EquipmentVisibilitySystem(World world) => this.world = world;
-
-    public void Tick() { } // no simulation - projection only, in Flush
 
     public void Flush(Server server) {
         world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref NetPlayerEntityComponent net) => {
