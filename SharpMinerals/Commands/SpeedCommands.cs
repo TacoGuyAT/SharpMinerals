@@ -4,6 +4,7 @@ using Brigadier.NET.Context;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events.Contexts;
 using SharpMinerals.Network.Messages;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SharpMinerals.Commands;
 
@@ -44,7 +45,7 @@ public static class SpeedCommands {
     }
 
     // The issuing player's context + abilities, or false (with a reply) if they aren't an available online player.
-    static bool Resolve(CommandContext<SenderContext> c, out PlayerContext ctx, out AbilitiesEntityComponent abilities) {
+    static bool Resolve(CommandContext<SenderContext> c, [MaybeNullWhen(false)] out PlayerContext ctx, out AbilitiesEntityComponent abilities) {
         ctx = default!;
         abilities = null!;
         if (c.Source.Client is not { } client
