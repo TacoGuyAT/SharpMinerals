@@ -363,7 +363,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # SharpMinerals runtime data + local config (generated at run time, see ServerConfig)
-/world/
+/world*/
 /logs/
 /mods/
 /server.json
