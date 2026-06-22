@@ -140,7 +140,7 @@ public sealed class ServerPacketHandler {
         // Stream the rest of the view (skips the spawn column) and spawn the player to other players.
         server.Events.Publish(new PlayerJoined(context));
 
-        client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
+        client.Send(new SetContainerContentS2C(0, 0, server.Containers.PlayerWindow(client.Id).BuildSnapshot(), default));
         client.Send(new SetHeldItemS2C(inventory.SelectedSlot));
     }
 

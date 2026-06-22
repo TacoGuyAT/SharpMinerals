@@ -70,8 +70,7 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
             }
 
             if (ecs.IsAlive(collector) && ecs.Get<SenderEntityComponent>(collector).Client is { } client) {
-                var inventory = ecs.Get<InventoryEntityComponent>(collector);
-                server.NetServer.Send(client.Id, new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(inventory), default));
+                server.NetServer.Send(client.Id, new SetContainerContentS2C(0, 0, server.Containers.PlayerWindow(client.Id).BuildSnapshot(), default));
             }
         }
         collected.Clear();

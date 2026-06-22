@@ -1,3 +1,4 @@
+using SharpMinerals.Blocks;
 using SharpMinerals.Chat;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Items;
@@ -24,16 +25,22 @@ public sealed record PlayerContext(Server Server, World World, ArchEntity Entity
     public ref InventoryEntityComponent GetInventory() => ref World.Ecs.Get<InventoryEntityComponent>(Entity);
 
     /// <summary>
+    /// The held (selected hotbar) item, by reference, so callers can read or mutate it in place.
     /// This method queries ECS
     /// </summary>
     public ref ItemStack GetHeld() => ref GetInventory().Held;
 
-    /// <summary>The held (selected hotbar) item, by reference, so callers can read or mutate it in place.</summary>
+    /// <summary>Opens a chest (block container) for this player.</summary>
+    public void OpenChest(BlockEntity chest)
+        => Server.Containers.Open(Client.Id, chest);
 
-    /// <summary>Pushes the player's whole inventory window (window 0) back to the client - call after a
-    /// server-side change to its contents so the client's view stays in sync.</summary>
-    public void SyncInventory() =>
-        Client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(GetInventory()), default));
+    /// <summary>Forces the current chest (if any) closed, sending a close packet to the client.</summary>
+    public void CloseChest()
+        => Server.Containers.CloseCurrentChestWithPacket(Client.Id);
+
+    /// <summary>Pushes the player's whole inventory window (window 0) to the client.</summary>
+    public void SyncInventory()
+        => Server.Containers.SendPlayerInventory(Client.Id);
 
     /// <summary>Consumes up to <paramref name="amount"/> from the player's held stack and resyncs the inventory
     /// to the client. Returns the number actually removed (0 if the hand was empty).</summary>

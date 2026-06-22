@@ -76,7 +76,7 @@ public static class ChunkCodec {
         return ms.ToArray();
     }
 
-    public static Chunk Deserialize(Vector3i position, byte[] data) {
+    public static Chunk Deserialize(Vector3i position, byte[] data, World world) {
         using var ms = new MemoryStream(data, writable: false);
         var s = new MinecraftStream(ms);
         if (s.ReadUByte() is var version && version != Version)
@@ -131,7 +131,7 @@ public static class ChunkCodec {
 
         int entityCount = s.ReadVarInt();
         for (int i = 0; i < entityCount; i++)
-            chunk.SetBlockEntity(ReadEntity(s));
+            chunk.SetBlockEntity(ReadEntity(s, world));
 
         chunk.ClearDirty(); // freshly loaded - the baseline, not a pending change
         return chunk;
@@ -145,11 +145,11 @@ public static class ChunkCodec {
         ComponentBag.Write(s, entity); // its persistent components (inventory, ...) as a length-prefixed bag
     }
 
-    static BlockEntity ReadEntity(MinecraftStream s) {
+    static BlockEntity ReadEntity(MinecraftStream s, World world) {
         var pos = new Vector3i(s.ReadLong(), s.ReadLong(), s.ReadLong());
         var name = s.ReadString();
         var resolved = BlockRegistry.FromName(name);
-        var entity = new BlockEntity(pos, resolved ?? BlockRegistry.Missing);
+        var entity = new BlockEntity(world, pos, resolved ?? BlockRegistry.Missing);
         if (resolved is null) entity.Add(new UnresolvedTypeComponent(name)); // unregistered type -> missing, original kept for recovery
         ComponentBag.Read(s, entity);
         return entity;

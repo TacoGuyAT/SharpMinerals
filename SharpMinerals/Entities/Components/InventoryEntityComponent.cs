@@ -1,4 +1,3 @@
-using SharpMinerals.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Network.Buffers;
 
@@ -13,7 +12,8 @@ public sealed class InventoryEntityComponent : IPersistentComponent {
     public const int HotbarSize = 9;
     public const int ArmorSize = 4;
     public const int OffhandSize = 1;
-    public const int TotalSize = MainSize + ArmorSize + OffhandSize; // 41
+    public const int CraftingSize = 5;
+    public const int TotalSize = MainSize + ArmorSize + OffhandSize + CraftingSize; // 46
 
     // Slot ranges within the backing storage.
     const int ArmorStart = MainSize;            // 36..39

@@ -90,7 +90,7 @@ public class Server : ITickable {
     public ServerSender Sender { get; }
 
     /// <summary>Open container windows (chests) and their multiplayer sync.</summary>
-    public ContainerManager Containers { get; } = new();
+    public ContainerManager Containers { get; }
 
     /// <summary>Domain event bus (player join/move/leave, ...). Built-in systems and hosts subscribe.</summary>
     public EventBus Events { get; } = new();
@@ -111,6 +111,7 @@ public class Server : ITickable {
     public int PlayerCount => Worlds.Values.Sum(w => w.PlayerCount);
 
     public Server(ServerContext ctx) {
+        Containers = new(this);
         context = ctx;
         Sender = new(this);
         commandDispatcher = new(this);
@@ -461,7 +462,7 @@ public class Server : ITickable {
 
     /// <summary>Despawns a disconnected client's player entity and tells others it left.</summary>
     public void RemovePlayer(ulong clientId) {
-        Containers.OnLeave(this, clientId);
+        Containers.OnLeave(clientId);
         pendingTeleports.TryRemove(clientId, out _);
         if (!players.TryRemove(clientId, out var context))
             return;

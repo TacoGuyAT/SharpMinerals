@@ -9,7 +9,6 @@ using SharpMinerals.Math;
 using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Chat;
-using SharpMinerals.Commands;
 using SharpMinerals.Entities;
 
 
@@ -98,11 +97,11 @@ public sealed class PlayPacketHandler {
                 break;
 
             case ClickContainerC2S click:
-                server.Events.Defer(() => server.Containers.OnClick(server, client.Id, click));
+                server.Events.Defer(() => server.Containers.OnClick(client.Id, click));
                 break;
 
             case CloseContainerC2S close:
-                server.Events.Defer(() => server.Containers.OnClose(server, client.Id, close.WindowId));
+                server.Events.Defer(() => server.Containers.OnClose(client.Id, close.WindowId));
                 break;
 
             case SetHeldItemC2S held:
@@ -361,12 +360,12 @@ public sealed class PlayPacketHandler {
             var current = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
             if (creative.Slot == CreativeDropSlot) {
                 // Thrown from the cursor: the bad item never existed here; just clear the cursor.
-                client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(current), default));
+                client.Send(new SetContainerContentS2C(0, 0, server.Containers.PlayerWindow(client.Id).BuildSnapshot(), default));
             } else if (ContainerManager.TryPlayerWindowToStorage(creative.Slot, out int swapIndex) && !current.Storage[swapIndex].IsEmpty) {
                 // Swap onto a filled slot: the player grabbed its item onto the cursor; empty the slot, resync, drop the bad item.
                 var grabbed = current.Storage[swapIndex];
                 current.Storage[swapIndex] = default;
-                client.Send(new SetContainerContentS2C(0, 0, ContainerManager.PlayerWindow(current), grabbed));
+                client.Send(new SetContainerContentS2C(0, 0, server.Containers.PlayerWindow(client.Id).BuildSnapshot(), grabbed));
             } else {
                 // Empty/unsupported slot: revert just that slot, leaving the cursor as the client has it.
                 client.Send(new SetContainerSlotS2C(0, 0, creative.Slot, default));

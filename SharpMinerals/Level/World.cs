@@ -151,7 +151,7 @@ public class World : ITickable {
 
     Chunk LoadOrGenerate(Vector3i pos) {
         if(store is not null && store.TryLoadChunk(Name, pos, out var data)) {
-            var chunk = ChunkCodec.Deserialize(pos, data);
+            var chunk = ChunkCodec.Deserialize(pos, data, this);
             chunk.ClearDirty();
             return chunk;
         } else {
@@ -284,7 +284,7 @@ public class World : ITickable {
         if (GetBlockEntity(pos) is { } existing) return existing;
         var block = GetBlock(pos);
         if (block.GetAll<IBlockEntityDescriptor>().FirstOrDefault() is not { } descriptor) return null;
-        var entity = new BlockEntity(pos, block);
+        var entity = new BlockEntity(this, pos, block);
         descriptor.Initialize(entity);
         SetBlockEntity(entity);
         return entity;

@@ -1,5 +1,3 @@
-using SharpMinerals.Components;
-
 namespace SharpMinerals.Blocks.Descriptors;
 
 /// <summary>Marks a block that opens a container window when used. Carries a block entity (its contents).</summary>
@@ -14,9 +12,9 @@ public sealed class ContainerBlockDescriptor : IInteract, IOnBroken, IBlockEntit
     public void OnInteract(in BlockContext ctx) {
         if (ctx.Actor is not { } actor) return;
         if (ctx.World.GetOrCreateBlockEntity(ctx.Position) is { } chest)
-            actor.Server.Containers.Open(actor.Server, actor.Client.Id, chest);
+            actor.Server.Containers.Open(actor.Client.Id, chest);
     }
 
     public void OnBroken(in BlockContext ctx) =>
-        ctx.Actor?.Server.Containers.ForceCloseChest(ctx.Actor.Server, ctx.Position);
+        ctx.Actor?.Server.Containers.ForceCloseChest(ctx.World, ctx.Position);
 }
