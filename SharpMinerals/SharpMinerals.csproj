@@ -31,7 +31,7 @@
 
   <!-- HarmonyX (runtime IL patching) is JIT-only; omitted from the AOT publish, where the AOT symbol #if's out its use. -->
   <ItemGroup Condition="'$(AOT)' != 'true'">
-    <PackageReference Include="HarmonyX" Version="2.13.0" />
+    <PackageReference Include="HarmonyX" Version="2.16.1" />
   </ItemGroup>
   <PropertyGroup Condition="'$(AOT)' == 'true'">
     <IsAotCompatible>true</IsAotCompatible>
@@ -40,7 +40,7 @@
   <ItemGroup>
     <PackageReference Include="Arch" Version="2.1.0" />
     <!-- Abstractions ONLY - the concrete logging backend (ZLogger) lives in the host (SharpMinerals.CLI). -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
     <!-- Brigadier.NET: the command tree/parser (official Brigadier API), which also powers tab-completion.
          FastCache: caches parsed commands (the parse step is the costly one). Both live in core with the
          dispatcher; netstandard2.0 / no transitive deps, so the embeddable surface stays clean. -->
@@ -55,9 +55,7 @@
     <!-- Our component generator (replaces Arch.AOT.SourceGenerator): scans [Component] types and emits a
          [ModuleInitializer] registering them with ComponentRegistry (identity + Arch array), namespaced from the
          assembly's [ModInfo]. Analyzer-only; GlobalPropertiesToRemove keeps it netstandard2.0 under AOT publish. -->
-    <ProjectReference Include="..\SharpMinerals.SourceGenerator\SharpMinerals.SourceGenerator.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false"
-                      GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="..\SharpMinerals.SourceGenerator\SharpMinerals.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
     <!-- [Component] resolves to OUR marker (SharpMinerals.Components). -->
     <Using Include="SharpMinerals.Components" />
   </ItemGroup>

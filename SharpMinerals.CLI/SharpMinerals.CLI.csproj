@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Thin executable host for the SharpMinerals core library: wires a TCP server,
        worlds and the console, then starts the loop. It uses only the library's PUBLIC
@@ -36,7 +36,7 @@
   <!-- The logging backend lives here, in the host - the core library only references the abstractions. -->
   <ItemGroup>
     <PackageReference Include="Kokuban" Version="0.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
     <PackageReference Include="ZLogger" Version="2.5.10" />
   </ItemGroup>
 
