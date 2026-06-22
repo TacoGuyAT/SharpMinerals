@@ -26,6 +26,7 @@ public class World : ITickable {
     readonly IChunkGenerator chunkGenerator;
     readonly IWorldStore? store;
     readonly ConcurrentDictionary<Vector3i, Chunk> loadedChunks = new();
+    readonly ChunkLoader loader;
 
     // Every registered system (owns their lifetime), plus role-specific views so the per-tick loop and the
     // client-projection passes each iterate exactly what they need (no per-element interface test). A system
@@ -92,6 +93,8 @@ public class World : ITickable {
         Name = name;
         this.chunkGenerator = chunkGenerator;
         this.store = store;
+        // Background loader publishes via TryAdd so a stray duplicate can't clobber a loaded (edited) chunk.
+        loader = new ChunkLoader(LoadOrGenerate, (pos, chunk) => loadedChunks.TryAdd(pos, chunk));
         Entities = new SpatialIndex(this);
         Register(new Systems.ItemLifecycleSystem(this));
         Register(new Systems.EntityPhysicsSystem(this));      // gravity + terrain collision; writes block-collision feedback
@@ -105,9 +108,46 @@ public class World : ITickable {
     }
 
     // -- Chunks --------------------------------------------------------------
-    /// <summary>Gets a chunk by chunk coordinate, loading it from the store (or generating) on first access.</summary>
+    /// <summary>Gets a chunk by chunk coordinate, loading it from the store (or generating) on first access.
+    /// Blocks the caller while it generates - the synchronous path, kept for gameplay actions on definitely-loaded
+    /// chunks and as a backstop. Streaming and frontier reads should prefer <see cref="TryGetLoaded"/> +
+    /// <see cref="RequestChunk"/> so generation stays off the tick thread.</summary>
     public Chunk GetChunk(Vector3i chunkPosition) =>
         loadedChunks.GetOrAdd(chunkPosition, LoadOrGenerate);
+
+    /// <summary>Non-generating chunk read: returns a chunk only if it is already loaded, never blocking to
+    /// generate. The tick-thread consumer of the async <see cref="ChunkLoader"/> - pair with
+    /// <see cref="RequestChunk"/> to load ahead and treat a miss as "not ready yet" (skip / air at the frontier).</summary>
+    public bool TryGetLoaded(Vector3i chunkPosition, out Chunk chunk) =>
+        loadedChunks.TryGetValue(chunkPosition, out chunk!);
+
+    /// <summary>Queues a chunk to load on a background worker (no-op if already loaded or in flight). Returns
+    /// whether a new request was enqueued. The finished chunk appears via <see cref="TryGetLoaded"/> on a later tick.</summary>
+    public bool RequestChunk(Vector3i chunkPosition) =>
+        !loadedChunks.ContainsKey(chunkPosition) && loader.Request(chunkPosition);
+
+    /// <summary>True while a chunk is loaded or queued/generating in the background - so eviction won't drop a
+    /// coordinate whose load is about to land.</summary>
+    public bool IsChunkLoadedOrPending(Vector3i chunkPosition) =>
+        loadedChunks.ContainsKey(chunkPosition) || loader.IsPending(chunkPosition);
+
+    // The cube-chunk Y range a full-height column spans (mirrors the chunk serializer's section range).
+    const int MinSectionY = WorldDefaults.MinY >> Chunk.Shifts;       // -4
+    const int MaxSectionY = (WorldDefaults.MaxY >> Chunk.Shifts) - 1; // 19
+
+    /// <summary>True when every cube-chunk of a column (the full world height) is already loaded - i.e. the column
+    /// can be serialized and streamed without blocking to generate anything.</summary>
+    public bool IsColumnLoaded(int columnX, int columnZ) {
+        for (int cy = MinSectionY; cy <= MaxSectionY; cy++)
+            if (!loadedChunks.ContainsKey(new Vector3i(columnX, cy, columnZ))) return false;
+        return true;
+    }
+
+    /// <summary>Queues every not-yet-loaded cube-chunk of a column for background loading (idempotent).</summary>
+    public void RequestColumn(int columnX, int columnZ) {
+        for (int cy = MinSectionY; cy <= MaxSectionY; cy++)
+            RequestChunk(new Vector3i(columnX, cy, columnZ));
+    }
 
     Chunk LoadOrGenerate(Vector3i pos) {
         if(store is not null && store.TryLoadChunk(Name, pos, out var data)) {
@@ -423,6 +463,7 @@ public class World : ITickable {
     /// Not idempotent - the world must not be used afterwards.</summary>
     public void Unload() {
         IsActive = false;
+        loader.Dispose(); // stop background workers and drain before releasing the chunk map
         loadedChunks.Clear();
         ArchWorld.Destroy(Ecs);
     }
