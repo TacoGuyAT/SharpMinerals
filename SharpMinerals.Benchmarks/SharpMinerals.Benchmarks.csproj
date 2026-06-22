@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Micro-benchmarks for the world generator. Not part of the shipped product and not referenced by any
+       other project - run it directly (see Program.cs). Kept out of the AOT/flavor matrix: it's a dev tool that
+       always runs JIT Release under BenchmarkDotNet's own harness. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- BenchmarkDotNet insists on an optimized build; fail fast if someone runs it in Debug. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpMinerals\SharpMinerals.csproj" />
+    <ProjectReference Include="..\SharpMinerals.Vanilla\SharpMinerals.Vanilla.csproj" />
+  </ItemGroup>
+
+</Project>
