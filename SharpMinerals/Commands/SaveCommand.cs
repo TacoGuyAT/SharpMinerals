@@ -1,4 +1,3 @@
-using Brigadier.NET;
 using Brigadier.NET.Builder;
 
 namespace SharpMinerals.Commands;
@@ -9,11 +8,11 @@ public static class SaveCommand {
     public static CommandDispatcher RegisterSave(this CommandDispatcher d) => d.Register(l => l
         .Literal("save").Executes(ctx => {
             var server = ctx.Source.Server;
-            server.Events.Defer(() => {
-                int chunks = server.SaveWorlds();
-                int players = server.SavePlayers();
-                ctx.Source.Reply($"Saved {chunks} chunk(s) and {players} player(s).");
-            });
+
+            int chunks = server.SaveWorlds();
+            int players = server.SavePlayers();
+            ctx.Source.Reply($"Saved {chunks} chunk(s) and {players} player(s).");
+
             return 1;
         }));
 }

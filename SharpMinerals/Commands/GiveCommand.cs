@@ -4,8 +4,6 @@ using Brigadier.NET.Context;
 using SharpMinerals.Blocks;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Items;
-using SharpMinerals.Network.Containers;
-using SharpMinerals.Network.Messages;
 
 namespace SharpMinerals.Commands;
 

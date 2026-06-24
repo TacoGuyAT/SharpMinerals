@@ -102,15 +102,13 @@ try {
 } catch { }
 
 var context = new ServerContext {
-    NetServer = netServer,
     Worlds = worlds,
     MOTD = motd ?? ChatComponent.Text(config.Motd),
     MaxPlayers = config.MaxPlayers,
     TicksPerSecond = config.Tps,
-    EntityStore = entityStore,
 };
 
-server = new Server(context);
+server = new Server(context, netServer, entityStore);
 packetHandler = new ServerPacketHandler(server);
 
 // Ctrl+C signals shutdown; the main thread (blocked on WaitForShutdown below) does the cleanup.

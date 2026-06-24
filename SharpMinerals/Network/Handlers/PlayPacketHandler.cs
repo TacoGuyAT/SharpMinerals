@@ -42,11 +42,11 @@ public sealed class PlayPacketHandler {
             // World-mutating packets are deferred to the tick's single-writer drain phase so chunk edits
             // never race the simulation or autosave (<=1 tick of latency).
             case PlayerActionC2S action:
-                server.Events.Defer(() => HandleDigging(client, action));
+                server.Defer(() => HandleDigging(client, action));
                 break;
 
             case UseItemOnC2S use:
-                server.Events.Defer(() => HandlePlacement(client, use));
+                server.Defer(() => HandlePlacement(client, use));
                 break;
 
             case SetPlayerPositionC2S pos:
@@ -74,7 +74,7 @@ public sealed class PlayPacketHandler {
                 break;
 
             case PlayerAbilitiesC2S abilities:
-                server.Events.Defer(() => SyncFlying(client, abilities.Flags));
+                server.Defer(() => SyncFlying(client, abilities.Flags));
                 break;
 
             case ChatMessageC2S chat:
@@ -97,19 +97,19 @@ public sealed class PlayPacketHandler {
                 break;
 
             case ClickContainerC2S click:
-                server.Events.Defer(() => server.Containers.OnClick(client.Id, click));
+                server.Defer(() => server.Containers.OnClick(client.Id, click));
                 break;
 
             case CloseContainerC2S close:
-                server.Events.Defer(() => server.Containers.OnClose(client.Id, close.WindowId));
+                server.Defer(() => server.Containers.OnClose(client.Id, close.WindowId));
                 break;
 
             case SetHeldItemC2S held:
-                server.Events.Defer(() => HandleSetHeldItem(client, held));
+                server.Defer(() => HandleSetHeldItem(client, held));
                 break;
 
             case SetCreativeModeSlotC2S creative:
-                server.Events.Defer(() => HandleCreativeSlot(client, creative));
+                server.Defer(() => HandleCreativeSlot(client, creative));
                 break;
 
             case KeepAliveC2S:
@@ -127,7 +127,7 @@ public sealed class PlayPacketHandler {
             // Legacy (JE61) movement/digging decode into the generic messages above and share their cases.
             // Only placement differs: a creative legacy client carries the held item in the packet.
             case LegacyBlockPlacementC2S lplace:
-                server.Events.Defer(() => HandleLegacyPlacement(client, lplace));
+                server.Defer(() => HandleLegacyPlacement(client, lplace));
                 break;
 
 #if TEST_HARNESS

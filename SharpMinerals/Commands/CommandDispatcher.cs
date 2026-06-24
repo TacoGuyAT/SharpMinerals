@@ -81,16 +81,20 @@ public sealed class CommandDispatcher {
                 parseCache.AddOrUpdate(key, parse, CacheTtl);
         }
 
-        try {
-            brig.Execute(parse);
-        } catch (CommandSyntaxException ex) {
-            // User-facing: unknown command, bad/missing argument, or a failed .Requires.
-            sender.ReceiveMessage(new TextComponent(ex.Message));
-            Log.LogDebug(ex, "command syntax error: {Text}", text);
-        } catch (Exception ex) {
-            sender.ReceiveMessage(new TextComponent($"Error: {ex.Message}"));
-            Log.LogWarning(ex, "command '{Text}' failed", text);
-        }
+        // TODO: Ergonomic wrapper for implementing async and sync commands.
+        Server.Defer(() => {
+            try {
+                brig.Execute(parse);
+            } catch (CommandSyntaxException ex) {
+                // User-facing: unknown command, bad/missing argument, or a failed .Requires.
+                sender.ReceiveMessage(new TextComponent(ex.Message));
+                Log.LogDebug(ex, "command syntax error: {Text}", text);
+            } catch (Exception ex) {
+                sender.ReceiveMessage(new TextComponent($"Error: {ex.Message}"));
+                Log.LogWarning(ex, "command '{Text}' failed", text);
+            }
+        });
+
         return Task.CompletedTask;
     }
 

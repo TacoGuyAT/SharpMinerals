@@ -1,5 +1,6 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using SharpMinerals.Chat;
+using SharpMinerals.Commands;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
@@ -45,7 +46,7 @@ public class Server : ITickable {
     /// tick's entity systems, so a join/leave can't race the simulation's queries.</summary>
     readonly object ecsGate = new();
 
-    public INetServer NetServer => context.NetServer;
+    public INetServer NetServer { get; }
 
     /// <summary>Sends a message to an audience of clients (default: every in-world client). The transport
     /// encodes once per protocol version and drops the message for any client whose protocol can't encode it.</summary>
@@ -81,8 +82,7 @@ public class Server : ITickable {
     public void SetTabListHeaderFooter(ChatComponent? header, ChatComponent? footer, Func<NetClient, bool>? audience = null) =>
         BroadcastMessage(new PlayerListHeaderFooterS2C(header ?? new TextComponent(""), footer ?? new TextComponent("")), audience);
 
-    public CommandDispatcher CommandDispatcher { get => commandDispatcher; }
-    readonly CommandDispatcher commandDispatcher;
+    public CommandDispatcher CommandDispatcher { get; }
 
     /// <summary>The server console as a command/chat sender, owned here so every host shares one console
     /// identity. Issue console commands with <c>Console.ExecuteAsync(Commands, "/...")</c>.</summary>
@@ -92,7 +92,7 @@ public class Server : ITickable {
     public ContainerManager Containers { get; }
 
     /// <summary>Domain event bus (player join/move/leave, ...). Built-in systems and hosts subscribe.</summary>
-    public EventBus Events { get; } = new();
+    public EventBus Events { get; }
 
     public ConcurrentDictionary<string, World> Worlds => context.Worlds;
     public ChatComponent MOTD { get => context.MOTD; set => context.MOTD = value; }
@@ -109,19 +109,30 @@ public class Server : ITickable {
     /// <summary>Players summed across every world.</summary>
     public int PlayerCount => Worlds.Values.Sum(w => w.PlayerCount);
 
-    public Server(ServerContext ctx) {
+    public readonly Scheduler Scheduler = new();
+
+    public void Defer(Action work) => Scheduler.Defer(work);
+    public Task DeferAsync(Action action) => Scheduler.DeferAsync(action);
+    public Task<T> DeferAsync<T>(Func<T> func) => Scheduler.DeferAsync(func);
+    public IDisposable Later(long delayTicks, Action callback) => Scheduler.Later(delayTicks, callback);
+    public IDisposable Every(long periodTicks, Action callback) => Scheduler.Every(periodTicks, callback);
+    public Task WaitForTicks(int ticks, CancellationToken ct = default) => Scheduler.Delay(ticks, ct);
+
+    public Server(ServerContext ctx, INetServer netServer, IEntityStore? entityStore = null) {
+        NetServer = netServer;
         Containers = new(this);
+        Events = new(this);
         context = ctx;
         Sender = new(this);
-        commandDispatcher = new(this);
+        CommandDispatcher = new(this);
         if (context.TicksPerSecond <= 0)
             context.TicksPerSecond = 20.0;
         tps = new TpsTracker(context.TicksPerSecond);
-        entityStore = ctx.EntityStore ?? new InMemoryEntityStore();
+        this.entityStore = entityStore ?? new InMemoryEntityStore();
 
         foreach (var world in Worlds.Values) {
             world.Events = Events;
-            world.NextEntityId = NextEntityId; // the tracker stamps loose entities (items, falling blocks) with server-wide ids
+            world.NextEntityId = NextEntityId; // TODO: Move NextEntityId handling into world
             world.LoadEntities(); // respawn dropped items etc. saved from a previous session (before any tick)
         }
 
@@ -129,7 +140,7 @@ public class Server : ITickable {
         Events.Subscribe<EntityMoved>(OnEntityMoved);
         Events.Subscribe<PlayerJoined>(e => BroadcastChatMessage(new TextComponent($"{e.Client.Name} joined the game").SetColor(TextColor.Yellow)));
         Events.Subscribe<PlayerLeft>(e => {
-            commandDispatcher.Forget(e.Client.Id);
+            CommandDispatcher.Forget(e.Client.Id);
             BroadcastChatMessage(new TextComponent($"{e.Client.Name} left the game").SetColor(TextColor.Yellow));
         });
 
@@ -169,7 +180,7 @@ public class Server : ITickable {
         NetServer.Stop();
         loopThread?.Join(TimeSpan.FromSeconds(5));
         // Transport + loop are down: apply any work queued just before shutdown, then flush everything.
-        Events.DrainDeferred();
+        Scheduler.Run();
         SavePlayers();
         SaveWorlds();
         stopped.Set();
@@ -238,32 +249,25 @@ public class Server : ITickable {
         // Hold the ECS gate for the whole tick so a network-thread join/leave can't race the drain,
         // the parallel entity systems, or the autosave - all of which touch the ECS.
         lock (ecsGate) {
-            // Single-writer phase: apply queued mutations on THIS thread first so the rest of the tick
-            // (and autosave) sees a consistent world with no concurrent chunk edits from network threads.
-            // This drains work that arrived since the last tick, so it's simulated THIS tick (low latency).
-            Events.DrainDeferred();
+            Scheduler.Run();
 
-            // Announce newly-spawned entities BEFORE physics, so the client gets their un-decayed spawn
-            // position + velocity and mirrors the motion the server is about to run.
-            AnnounceSystems();
+            Worlds.Values.AsParallel().ForAll(world => {
+                foreach(var system in world.NetworkSystems) {
+                    system.Announce(this);
+                }
 
-            // Worlds are independent, so they tick in parallel; their systems mutate only world state.
-            Worlds.Values.AsParallel().ForAll(w => w.Tick());
+                world.Tick();
 
-            // Project this tick's simulation results to clients on this thread, after the parallel ticks settle.
-            FlushSystems();
+                foreach(var system in world.NetworkSystems) {
+                    system.Flush(this);
+                }
+            });
 
-            // Second drain: apply work the tick itself deferred (entity-index re-files, chained handler work)
-            // plus any packets that landed during this tick, so it takes effect before autosave and the next
-            // tick rather than waiting a full tick. Spawns created here are announced next tick (Announce above
-            // already ran); the simulation-result projection for them follows the same tick they're announced.
-            Events.DrainDeferred();
+            Scheduler.Run();
 
-            // Keepalive once a second; one generic packet mapped per protocol at encode.
-            if (currentTick % (long)TicksPerSecond == 0)
+            if(currentTick % (long)TicksPerSecond == 0)
                 NetServer.Broadcast(new KeepAliveS2C(currentTick), c => c.InWorld);
 
-            // Autosave/eviction - safe here because all mutations are confined to the drain phase above.
             if (currentTick > 0 && currentTick % AutosaveTicks == 0) {
                 SaveWorlds();
                 SavePlayers();
@@ -272,22 +276,6 @@ public class Server : ITickable {
             if (currentTick > 0 && currentTick % EvictTicks == 0)
                 EvictChunks();
         }
-    }
-
-    /// <summary>Pre-tick client projection: run each world's network-aware systems' <c>Announce</c> (new
-    /// entities at their un-decayed spawn state), on this thread, before the parallel world ticks.</summary>
-    public void AnnounceSystems() {
-        foreach (var world in Worlds.Values)
-            foreach (var system in world.NetworkSystems)
-                system.Announce(this);
-    }
-
-    /// <summary>Post-tick client projection: run each world's network-aware systems' <c>Flush</c> (landings,
-    /// pickups, despawns, ...), on this thread, after the parallel world ticks settle.</summary>
-    public void FlushSystems() {
-        foreach (var world in Worlds.Values)
-            foreach (var system in world.NetworkSystems)
-                system.Flush(this);
     }
 
     /// <summary>Drops chunks no online player can see (saving dirty ones first) across every world.</summary>
@@ -410,7 +398,7 @@ public class Server : ITickable {
         client.Send(new SynchronizePlayerPositionS2C(t.X, t.Y, t.Z, t.Yaw, t.Pitch, BeginTeleport(clientId)));
         client.Send(new SetHealthS2C(target.Ecs.Get<HealthEntityComponent>(moved.Entity).Current, 20, 5f));
         // World changed - invalidate cached parses so world/dimension-gated .Requires re-evaluate.
-        commandDispatcher.Invalidate(clientId);
+        CommandDispatcher.Invalidate(clientId);
         Log.LogInformation("{Name} switched to world '{World}'", info.Name, target.Name);
     }
 
