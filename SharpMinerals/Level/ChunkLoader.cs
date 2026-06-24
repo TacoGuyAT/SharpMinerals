@@ -19,6 +19,7 @@ internal sealed class ChunkLoader : IDisposable {
     readonly Action<Vector3i, Chunk> publish;  // hand the finished chunk to the world (TryAdd into the chunk map)
     readonly ConcurrentDictionary<Vector3i, byte> pending = new();
     readonly Channel<Vector3i> queue = Channel.CreateUnbounded<Vector3i>();
+    readonly ConcurrentDictionary<Vector3i, List<TaskCompletionSource<Chunk>>> waiters = new();
     readonly CancellationTokenSource cts = new();
     readonly Task[] workers;
 
@@ -40,6 +41,18 @@ internal sealed class ChunkLoader : IDisposable {
         return false;
     }
 
+    /// <summary>Awaitable form of <see cref="Request"/>: resolves once the chunk lands, whether this call started
+    /// the load or just joined one already in flight. Never faults the queue's own workers - a failed load rejects
+    /// only the waiters for that position.</summary>
+    public Task<Chunk> RequestAsync(Vector3i pos) {
+        var tcs = new TaskCompletionSource<Chunk>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var list = waiters.GetOrAdd(pos, _ => []);
+        lock(list)
+            list.Add(tcs);
+        Request(pos); // no-op (returns false) if already pending - our waiter still rides the in-flight load
+        return tcs.Task;
+    }
+
     /// <summary>True while a coordinate is queued or generating - so eviction won't drop work about to land.</summary>
     public bool IsPending(Vector3i pos) => pending.ContainsKey(pos);
 
@@ -47,16 +60,29 @@ internal sealed class ChunkLoader : IDisposable {
 
     async Task DrainAsync() {
         try {
-            await foreach (var pos in queue.Reader.ReadAllAsync(cts.Token)) {
+            await foreach(var pos in queue.Reader.ReadAllAsync(cts.Token)) {
+                Chunk? chunk = null;
                 try {
-                    publish(pos, load(pos));
-                } catch (Exception ex) {
+                    chunk = load(pos);
+                    publish(pos, chunk);
+                } catch(Exception ex) {
                     Log.LogError(ex, "Async chunk load failed for {Pos}", pos);
                 } finally {
                     pending.TryRemove(pos, out _);
+                    if(waiters.TryRemove(pos, out var due)) {
+                        lock(due) {
+                            foreach(var t in due) {
+                                if(chunk is not null) {
+                                    t.TrySetResult(chunk);
+                                } else {
+                                    t.TrySetException(new Exception($"chunk load failed for {pos}"));
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        } catch (OperationCanceledException) {
+        } catch(OperationCanceledException) {
             // shutting down - drop the rest
         }
     }
@@ -65,9 +91,10 @@ internal sealed class ChunkLoader : IDisposable {
         queue.Writer.TryComplete();
         cts.Cancel();
         try {
-            if (!Task.WaitAll(workers, TimeSpan.FromSeconds(15)))
+            if(!Task.WaitAll(workers, TimeSpan.FromSeconds(15))) {
                 Log.LogWarning("Async chunk loader did not drain within the timeout");
-        } catch (AggregateException) {
+            }
+        } catch(AggregateException) {
             // worker faulted/cancelled during teardown - nothing left to do
         }
         cts.Dispose();

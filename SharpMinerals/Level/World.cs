@@ -126,6 +126,19 @@ public class World : ITickable {
     public bool RequestChunk(Vector3i chunkPosition) =>
         !loadedChunks.ContainsKey(chunkPosition) && loader.Request(chunkPosition);
 
+    /// <summary>Awaitable chunk fetch: returns immediately if already loaded, otherwise joins/starts a background
+    /// load via <see cref="ChunkLoader"/>. Prefer this over <see cref="GetChunk"/> off the tick thread.</summary>
+    public Task<Chunk> GetChunkAsync(Vector3i chunkPosition) =>
+        TryGetLoaded(chunkPosition, out var chunk) ? Task.FromResult(chunk) : loader.RequestAsync(chunkPosition);
+
+    /// <summary>Awaitable column fetch - every section from <c>MinSectionY</c> to <c>MaxSectionY</c>.</summary>
+    public Task<Chunk[]> GetColumnAsync(int columnX, int columnZ) {
+        var tasks = new Task<Chunk>[MaxSectionY - MinSectionY + 1];
+        for(int cy = MinSectionY; cy <= MaxSectionY; cy++)
+            tasks[cy - MinSectionY] = GetChunkAsync(new Vector3i(columnX, cy, columnZ));
+        return Task.WhenAll(tasks);
+    }
+
     /// <summary>True while a chunk is loaded or queued/generating in the background - so eviction won't drop a
     /// coordinate whose load is about to land.</summary>
     public bool IsChunkLoadedOrPending(Vector3i chunkPosition) =>

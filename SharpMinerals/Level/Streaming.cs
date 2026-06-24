@@ -60,7 +60,9 @@ public static class Streaming {
         && StreamColumn(context, context.World.Ecs.Get<ChunkViewEntityComponent>(context.Entity), columnX, columnZ);
 
     static bool StreamColumn(PlayerContext context, ChunkViewEntityComponent view, Mint columnX, Mint columnZ) {
-        if (!view.Loaded.Add((columnX, columnZ))) return false; // the client already has this column
+        if (!view.Loaded.Add((columnX, columnZ))) { 
+            return false; // the client already has this column
+        } 
         context.Client.Send(context.Client.Protocol.BuildChunk(context.World, (int)columnX, (int)columnZ));
         // Terrain is on the wire; let the entity tracker spawn whatever already sits in this column to this viewer.
         context.World.RaiseViewerLoadedColumn(context.Entity, (columnX, columnZ));
@@ -70,17 +72,35 @@ public static class Streaming {
     /// <summary>Tells the client which chunk its view is centred on; must precede chunk data or off-grid
     /// columns are discarded client-side.</summary>
     static void Recenter(PlayerContext context, Mint cx, Mint cz) {
-        if (context.Client.Protocol.ChunkViewCenter((int)cx, (int)cz) is IMessage center)
+        if(context.Client.Protocol.ChunkViewCenter((int)cx, (int)cz) is IMessage center) {
             context.Client.Send(center);
+        }
     }
 
-    /// <summary>Streams the columns around a player. The wire format is resolved by the protocol, not here.
-    /// Columns are sent only once their full height has finished loading in the background (<see cref="ChunkLoader"/>);
-    /// a column still generating is left for a later tick, so generation never blocks the tick thread. Re-run each
-    /// tick by <see cref="Systems.ChunkStreamingSystem"/>; a stationary player whose whole view is sent does nothing.</summary>
+    static async void SendColumnWhenReady(PlayerContext context, Mint columnX, Mint columnZ) {
+        Chunk[] chunks;
+        try {
+            chunks = await context.World.GetColumnAsync((int)columnX, (int)columnZ);
+        } catch(Exception ex) {
+            Log.LogWarning(ex, "column load failed for ({X},{Z})", columnX, columnZ);
+            return;
+        }
+        await context.Server.DeferAsync(() => {
+            var ecs = context.World.Ecs;
+            if(!ecs.IsAlive(context.Entity)) {
+                return; // disconnected, or moved worlds since the request
+            }
+            var view = ecs.Get<ChunkViewEntityComponent>(context.Entity);
+            if(System.Math.Abs(columnX - view.CenterX) > ViewRadius || System.Math.Abs(columnZ - view.CenterZ) > ViewRadius) {
+                return; // view moved on - column no longer wanted
+            }
+            StreamColumn(context, view, columnX, columnZ); // de-dupes via view.Loaded.Add
+        });
+    }
+
     static void Stream(PlayerContext context, bool initial) {
         var ecs = context.World.Ecs;
-        if (!ecs.IsAlive(context.Entity))
+        if(!ecs.IsAlive(context.Entity))
             return;
         var view = ecs.Get<ChunkViewEntityComponent>(context.Entity);
         var transform = ecs.Get<TransformEntityComponent>(context.Entity);
@@ -88,45 +108,35 @@ public static class Streaming {
         Mint cx = (Mint)System.Math.Floor(transform.X) >> Chunk.Shifts;
         Mint cz = (Mint)System.Math.Floor(transform.Z) >> Chunk.Shifts;
         bool moved = !view.Initialized || cx != view.CenterX || cz != view.CenterZ;
-        if (!initial && !moved && view.Settled)
-            return; // stationary and the whole view is already streamed - nothing to do
-
-        if (initial || moved) {
-            view.CenterX = cx;
-            view.CenterZ = cz;
-            view.Initialized = true;
-            Recenter(context, cx, cz);
-            // Load the whole view + margin ahead in the background, so columns are ready as the player advances.
-            for (Mint dx = -(ViewRadius + RequestMargin); dx <= ViewRadius + RequestMargin; dx++)
-                for (Mint dz = -(ViewRadius + RequestMargin); dz <= ViewRadius + RequestMargin; dz++)
-                    context.World.RequestColumn((int)(cx + dx), (int)(cz + dz));
+        
+        if(!initial && !moved) {
+            return; // stationary - in-flight loads self-deliver, nothing else to do
         }
+        
+        view.CenterX = cx;
+        view.CenterZ = cz;
+        view.Initialized = true;
+        Recenter(context, cx, cz);
 
-        // Send any in-view column whose full height has finished loading; keep the rest queued and retry next tick.
-        int sent = 0, owed = 0;
-        for (Mint dx = -ViewRadius; dx <= ViewRadius; dx++)
-            for (Mint dz = -ViewRadius; dz <= ViewRadius; dz++) {
-                var column = (cx + dx, cz + dz);
-                if (view.Loaded.Contains(column)) continue;
-                if (context.World.IsColumnLoaded((int)column.Item1, (int)column.Item2)) {
-                    if (StreamColumn(context, view, column.Item1, column.Item2)) sent++;
-                } else {
-                    context.World.RequestColumn((int)column.Item1, (int)column.Item2); // still generating - keep it queued
-                    owed++;
+        for(Mint dx = -ViewRadius; dx <= ViewRadius; dx++)
+            for(Mint dz = -ViewRadius; dz <= ViewRadius; dz++) {
+                var col = (cx + dx, cz + dz);
+                if(!view.Loaded.Contains(col)) {
+                    SendColumnWhenReady(context, col.Item1, col.Item2);
                 }
             }
-        view.Settled = owed == 0;
 
-        if (initial || moved)
-            // Forget columns now outside the view so they re-send if the player returns; the tracker despawns the
-            // entities in each dropped column from this viewer.
-            view.Loaded.RemoveWhere(c => {
-                if (System.Math.Abs(c.X - cx) <= ViewRadius && System.Math.Abs(c.Z - cz) <= ViewRadius) return false;
-                context.World.RaiseViewerUnloadedColumn(context.Entity, c);
-                return true;
-            });
+        // Pure prefetch ring beyond the sent view - no waiter, just kicks generation off early.
+        for(Mint dx = -(ViewRadius + RequestMargin); dx <= ViewRadius + RequestMargin; dx++)
+            for(Mint dz = -(ViewRadius + RequestMargin); dz <= ViewRadius + RequestMargin; dz++)
+                if(System.Math.Abs(dx) > ViewRadius || System.Math.Abs(dz) > ViewRadius)
+                    context.World.RequestColumn((int)(cx + dx), (int)(cz + dz));
 
-        if (sent > 0)
-            Log.LogDebug("Streamed {Count} column(s) to #{Client} around chunk ({X},{Z})", sent, context.Client.Id, cx, cz);
+        view.Loaded.RemoveWhere(c => {
+            if(System.Math.Abs(c.X - cx) <= ViewRadius && System.Math.Abs(c.Z - cz) <= ViewRadius)
+                return false;
+            context.World.RaiseViewerUnloadedColumn(context.Entity, c);
+            return true;
+        });
     }
 }
