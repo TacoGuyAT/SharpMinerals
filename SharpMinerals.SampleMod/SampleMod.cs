@@ -25,7 +25,7 @@ public sealed class SampleMod : Mod {
         server.Events.Subscribe<PlayerJoined>(e =>
             server.SetTabListHeaderFooter(
                 new TextComponent($"Hi, {e.Client.Name}!").SetColor(TextColor.Gold),
-                new TextComponent($"running SharpMinerals v{server.Version}").SetColor(TextColor.Gray),
+                new TextComponent($" Running SharpMinerals v{server.Version} ").SetColor(TextColor.Gray),
                 c => c.Id == e.Context.Client.Id));
 
         Logger.LogInformation("Loaded!");
