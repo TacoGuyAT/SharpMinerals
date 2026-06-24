@@ -55,8 +55,8 @@ public abstract class ChatComponent {
 public abstract class ChatComponent<TSelf> : ChatComponent where TSelf : ChatComponent<TSelf> {
     private TSelf Self => (TSelf)this;
 
-    public TSelf AddExtra(params ChatComponent[] components) {
-        (Extra ??= new()).AddRange(components);
+    public TSelf With(params ChatComponent[] components) {
+        (Extra ??= []).AddRange(components);
         return Self;
     }
     public TSelf SetColor(TextColor color) { Color = color.Text(); return Self; }

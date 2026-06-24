@@ -19,7 +19,7 @@ public sealed class SampleMod : Mod {
     }
 
     public override void OnServerStarted(Server server) {
-        server.MOTD = "A SharpMinerals server - now modded! §6[Sample]";
+        server.MOTD = ChatComponent.Text("A SharpMinerals server - now modded! ").With(ChatComponent.Text("[Sample]").SetColor(TextColor.Gold));
 
         // Greet each joiner with a tab-list header/footer, sent only to them via the audience predicate.
         server.Events.Subscribe<PlayerJoined>(e =>

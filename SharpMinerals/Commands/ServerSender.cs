@@ -25,7 +25,7 @@ public sealed class ServerSender : ISender {
 
     public void SendMessage(string message) {
         server.BroadcastChatMessage(ChatComponent.Text("<")
-            .AddExtra(
+            .With(
                 ChatComponent.Text("Server").SetColor(TextColor.DarkPurple),
                 ChatComponent.Text($"> {message}")
             )
