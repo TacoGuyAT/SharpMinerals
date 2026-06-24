@@ -1,5 +1,4 @@
 using SharpMinerals.Chat;
-using System.Reflection;
 
 namespace SharpMinerals.Commands;
 
@@ -24,12 +23,11 @@ public sealed class ServerSender : ISender {
     public void ReceiveMessage(ChatComponent message) => MessageReceived?.Invoke(message);
 
     public void SendMessage(string message) {
-        server.BroadcastChatMessage(ChatComponent.Text("<")
-            .With(
-                ChatComponent.Text("Server").SetColor(TextColor.DarkPurple),
-                ChatComponent.Text($"> {message}")
-            )
-       );
+        server.BroadcastChatMessage(ChatComponent.With(
+            ChatComponent.Text("<"),
+            ChatComponent.Text("Server").SetColor(TextColor.DarkPurple),
+            ChatComponent.Text($"> {message}")
+        ));
     }
 
     public void RunCommand(string command) {

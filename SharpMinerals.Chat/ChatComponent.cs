@@ -29,6 +29,10 @@ public abstract class ChatComponent {
 
     // Fluent construction entry points; each returns the concrete type so its setters chain. They live on this
     // type rather than a `Component(s)` helper to avoid clashing with Arch's Component / the Components namespace.
+    public static ChatComponent With(ChatComponent self, params ChatComponent[] components) {
+        (self.Extra ??= []).AddRange(components);
+        return self;
+    }
     public static TextComponent Empty() => new("");
     public static TextComponent Text(string text) => new(text);
     public static TranslatableComponent Translate(string key) => new(key);
