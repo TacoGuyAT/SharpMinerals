@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
 namespace SharpMinerals.Chat;
@@ -10,6 +11,7 @@ namespace SharpMinerals.Chat;
 /// style/structure data; the fluent setters live on <see cref="ChatComponent{TSelf}"/> to return the concrete
 /// type.
 /// </summary>
+[JsonConverter(typeof(ChatComponentConverter))]
 public abstract class ChatComponent {
     // Copied FROM the source-generated context's options, so it inherits the resolver AND its settings
     // (snake_case names, public fields, omit defaults) with no reflection. The polymorphic converter is layered

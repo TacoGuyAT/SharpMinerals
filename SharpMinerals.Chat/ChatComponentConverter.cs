@@ -45,6 +45,60 @@ public sealed class ChatComponentConverter : JsonConverter<ChatComponent> {
         return (ChatComponent?)JsonSerializer.Deserialize(root, options.GetTypeInfo(concrete));
     }
 
-    public override void Write(Utf8JsonWriter writer, ChatComponent value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, value, options.GetTypeInfo(value.GetType()));
+    public override void Write(Utf8JsonWriter writer, ChatComponent value, JsonSerializerOptions options) {
+        writer.WriteStartObject();
+
+        // Concrete type content field
+        switch(value) {
+            case TextComponent text:
+                writer.WriteString("text", text.Text);
+                break;
+            case TranslatableComponent trans:
+                writer.WriteString("translate", trans.Translate);
+                if(trans.With is { Count: > 0 }) {
+                    writer.WriteStartArray("with");
+                    foreach(var w in trans.With)
+                        Write(writer, w, options); // recursive via this converter
+                    writer.WriteEndArray();
+                }
+                break;
+            case ScoreComponent score:
+                writer.WritePropertyName("score");
+                writer.WriteStartObject();
+                writer.WriteString("name", score.Score.Name);
+                writer.WriteString("objective", score.Score.Objective);
+                writer.WriteEndObject();
+                break;
+            case SelectorComponent selector:
+                writer.WriteString("selector", selector.Selector);
+                break;
+            case KeybindComponent keybind:
+                writer.WriteString("keybind", keybind.Keybind);
+                break;
+        }
+
+        // Shared style fields (write only when set, to match "omit defaults" behaviour)
+        if(value.Bold)
+            writer.WriteBoolean("bold", true);
+        if(value.Italic)
+            writer.WriteBoolean("italic", true);
+        if(value.Underline)
+            writer.WriteBoolean("underlined", true);
+        if(value.Strikethrough)
+            writer.WriteBoolean("strikethrough", true);
+        if(value.Obfuscated)
+            writer.WriteBoolean("obfuscated", true);
+        if(!string.IsNullOrEmpty(value.Color))
+            writer.WriteString("color", value.Color);
+        if(!string.IsNullOrEmpty(value.Font))
+            writer.WriteString("font", value.Font);
+        if(value.Extra is { Count: > 0 }) {
+            writer.WriteStartArray("extra");
+            foreach(var extra in value.Extra)
+                Write(writer, extra, options);
+            writer.WriteEndArray();
+        }
+
+        writer.WriteEndObject();
+    }
 }

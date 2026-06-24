@@ -28,6 +28,8 @@ using SharpMinerals.TestMod;
 #endif
 using System.Collections.Concurrent;
 using System.Net;
+using SharpMinerals.Chat;
+using System.Text.Json;
 
 var loaded = ServerConfig.Load(Path.Combine(Directory.GetCurrentDirectory(), "server.json"));
 var config = loaded.Config;
@@ -93,10 +95,16 @@ var netServer = new TcpNetServer(
     // RemovePlayer despawns under the ECS gate, so it's safe to call from the network thread.
     client => server.RemovePlayer(client.Id));
 
+ChatComponent? motd = null;
+
+try {
+    motd = JsonSerializer.Deserialize(config.Motd, ChatJsonContext.Default.ChatComponent);
+} catch { }
+
 var context = new ServerContext {
     NetServer = netServer,
     Worlds = worlds,
-    MOTD = config.Motd,
+    MOTD = motd ?? ChatComponent.Text(config.Motd),
     MaxPlayers = config.MaxPlayers,
     TicksPerSecond = config.Tps,
     EntityStore = entityStore,

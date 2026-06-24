@@ -1,17 +1,16 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+using Arch.Core.Extensions;
 using Microsoft.Extensions.Logging;
 using SharpMinerals.Commands;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Level;
 using SharpMinerals.Math;
-using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Protocols.JE61;
-using Arch.Core.Extensions;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace SharpMinerals.Network.Handlers;
 
@@ -241,9 +240,9 @@ public sealed class ServerPacketHandler {
 
         var status = new StatusResponse(
             new StatusVersion(protocol.VersionName, protocol.Version),
-            new StatusPlayers(server.MaxPlayers, server.PlayerCount, Array.Empty<StatusSample>()),
-            new StatusDescription(server.MOTD));
+            new StatusPlayers(server.MaxPlayers, server.PlayerCount, []),
+            server.MOTD);
 
-        return JsonSerializer.Serialize(status, StatusJsonContext.Default.StatusResponse);
+        return JsonSerializer.Serialize(status, StatusJsonContext.Default.Options);
     }
 }

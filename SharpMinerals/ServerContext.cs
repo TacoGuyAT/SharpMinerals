@@ -1,5 +1,6 @@
-﻿using System.Collections.Concurrent;
+﻿using SharpMinerals.Chat;
 using SharpMinerals.Level;
+using System.Collections.Concurrent;
 using SharpMinerals.Network;
 using SharpMinerals.Persistence;
 
@@ -13,7 +14,7 @@ namespace SharpMinerals;
 public struct ServerContext {
     public INetServer NetServer;
     public ConcurrentDictionary<string, World> Worlds;
-    public string MOTD;
+    public ChatComponent MOTD;
     public int MaxPlayers;
     public double TicksPerSecond;
 

@@ -21,4 +21,4 @@ namespace SharpMinerals.Chat;
 [JsonSerializable(typeof(KeybindComponent))]
 [JsonSerializable(typeof(Score))]
 [JsonSerializable(typeof(List<ChatComponent>))]
-internal sealed partial class ChatJsonContext : JsonSerializerContext;
+public sealed partial class ChatJsonContext : JsonSerializerContext;

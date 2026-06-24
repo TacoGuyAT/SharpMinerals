@@ -1,18 +1,17 @@
-﻿using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using SharpMinerals.Chat;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
 using SharpMinerals.Events.Contexts;
 using SharpMinerals.Level;
 using SharpMinerals.Math;
 using SharpMinerals.Network;
+using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Persistence;
-using PrecisionClock = PrecisionTimer.PrecisionTimer;
+using System.Collections.Concurrent;
 using ArchEntity = Arch.Core.Entity;
-using SharpMinerals.Chat;
-using SharpMinerals.Network.Containers;
-using SharpMinerals.Commands;
+using PrecisionClock = PrecisionTimer.PrecisionTimer;
 
 namespace SharpMinerals;
 
@@ -96,7 +95,7 @@ public class Server : ITickable {
     public EventBus Events { get; } = new();
 
     public ConcurrentDictionary<string, World> Worlds => context.Worlds;
-    public string MOTD { get => context.MOTD; set => context.MOTD = value; }
+    public ChatComponent MOTD { get => context.MOTD; set => context.MOTD = value; }
     public int MaxPlayers => context.MaxPlayers;
     public double TicksPerSecond => context.TicksPerSecond;
 
