@@ -27,7 +27,7 @@ public sealed class SurfaceShader : IChunkShader {
         if (current.IsAir) return current; // only solid cells get surfaced
 
         // Rocky columns strip their soil cap to bare stone (alpha/beta stone cliffs/shores); current is already stone.
-        if (source.StripSoil(x, z)) return current;
+        //if (source.StripSoil(x, z)) return current;
 
         int depth = 0; // solid cells stacked directly above -> depth below the surface (0 = topmost)
         for (int k = 1; k <= maxProbe; k++) {

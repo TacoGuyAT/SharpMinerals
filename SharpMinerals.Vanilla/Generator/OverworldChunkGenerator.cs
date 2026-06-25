@@ -27,7 +27,7 @@ public sealed class OverworldChunkGenerator : IChunkGenerator, IBiomeLookup {
         IDensity density = new RiverDensity(terrain, source, biomeDensity);
         // Rare, deep ravines carved full-resolution on top of the (already river-carved) terrain, for the same
         // anti-aliasing reason as rivers - their vertical walls would smear through the trilinear lattice.
-        density = new RavineDensity(density, biomeDensity, seed);
+        //density = new RavineDensity(density, biomeDensity, seed);
         var shaders = new IChunkShader[] {
             new TerrainShader(density), new SurfaceShader(density, source), new WaterShader(),
         };
