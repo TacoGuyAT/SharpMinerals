@@ -7,9 +7,9 @@ namespace SharpMinerals.Entities.Components;
 [Component]
 public struct NetTransformEntityComponent {
     public Vector3m Position;
-    public Mfloat X { get => Position.X; set => Position.X = value; }
-    public Mfloat Y { get => Position.Y; set => Position.Y = value; }
-    public Mfloat Z { get => Position.Z; set => Position.Z = value; }
+    public Mfloat X { readonly get => Position.X; set => Position.X = value; }
+    public Mfloat Y { readonly get => Position.Y; set => Position.Y = value; }
+    public Mfloat Z { readonly get => Position.Z; set => Position.Z = value; }
     public float Yaw, Pitch;
 
     public NetTransformEntityComponent(Vector3m position, float yaw = 0f, float pitch = 0f) {

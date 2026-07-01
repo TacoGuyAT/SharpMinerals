@@ -215,7 +215,7 @@ public class Server : ITickable {
 
     void PersistPlayer(World world, ArchEntity entity) {
         var ecs = world.Ecs;
-        var info = ecs.Get<NetPlayerEntityComponent>(entity);
+        var info = ecs.Get<PlayerEntityComponent>(entity);
         // Generic entity encode: every persistent component on the live entity (placement, health, inventory)
         // goes through the shared component bag, keyed by the player's UUID.
         entityStore.Save(info.Uuid, EntityCodec.Encode(ecs, entity));
@@ -370,7 +370,7 @@ public class Server : ITickable {
             return; // already there
         var client = ctx.Client;
         var old = ctx.World;
-        var info = old.Ecs.Get<NetPlayerEntityComponent>(ctx.Entity);
+        var info = old.Ecs.Get<PlayerEntityComponent>(ctx.Entity);
 
         // The old world's entity tracker despawns this player for its viewers once the entity leaves it (below);
         // the target world's tracker spawns it there. The tab-list entry stays (the player is still online).

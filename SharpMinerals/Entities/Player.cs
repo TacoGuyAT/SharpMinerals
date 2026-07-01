@@ -34,7 +34,7 @@ public static class Player {
         ecs.Get<NetTransformEntityComponent>(entity) = new NetTransformEntityComponent {
             Position = transform.Position, Yaw = transform.Yaw, Pitch = transform.Pitch };
         ecs.Get<SenderEntityComponent>(entity) = SenderEntityComponent.ForPlayer(name);
-        ecs.Get<NetPlayerEntityComponent>(entity) = new NetPlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, NetId = entityId };
+        ecs.Get<PlayerEntityComponent>(entity) = new PlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, NetId = entityId };
         return entity;
     }
 

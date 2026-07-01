@@ -12,13 +12,13 @@ namespace SharpMinerals.Level.Systems;
 /// per-tick diff coalesces a burst of movement packets into one broadcast and costs nothing while idle.</summary>
 public sealed class PlayerMovementSystem : INetworkSystem {
     static readonly QueryDescription PlayerQuery =
-        new QueryDescription().WithAll<NetPlayerEntityComponent, TransformEntityComponent, NetTransformEntityComponent>();
+        new QueryDescription().WithAll<PlayerEntityComponent, TransformEntityComponent, NetTransformEntityComponent>();
 
     readonly World world;
     public PlayerMovementSystem(World world) => this.world = world;
 
     public void Flush(Server server) {
-        world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref NetPlayerEntityComponent net, ref TransformEntityComponent t, ref NetTransformEntityComponent s) => {
+        world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref PlayerEntityComponent net, ref TransformEntityComponent t, ref NetTransformEntityComponent s) => {
             if (t.Position == s.Position && t.Yaw == s.Yaw && t.Pitch == s.Pitch)
                 return; // unchanged since the last broadcast
 

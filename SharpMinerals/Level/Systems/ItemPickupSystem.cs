@@ -13,7 +13,7 @@ namespace SharpMinerals.Level.Systems;
 /// and the collector's window resync are projected to clients in <see cref="Flush"/> after the tick.</summary>
 public sealed class ItemPickupSystem : ITickable, INetworkSystem {
     static readonly QueryDescription CollectorQuery =
-        new QueryDescription().WithAll<NetPlayerEntityComponent, CollisionEntityComponent, InventoryEntityComponent>();
+        new QueryDescription().WithAll<PlayerEntityComponent, CollisionEntityComponent, InventoryEntityComponent>();
 
     readonly World world;
     // Collected during the query, processed after (mutating inventories/despawning mid-iteration is unsafe).
@@ -59,7 +59,7 @@ public sealed class ItemPickupSystem : ITickable, INetworkSystem {
         foreach (var (collector, drop, netId, count, leftover) in collected) {
             // Collect animation (item flies to the collector) - sent FIRST, while the client still has the entity.
             if (ecs.IsAlive(collector))
-                Broadcast(server, new CollectItemS2C(netId, ecs.Get<NetPlayerEntityComponent>(collector).NetId, count));
+                Broadcast(server, new CollectItemS2C(netId, ecs.Get<PlayerEntityComponent>(collector).NetId, count));
 
             // Then update the ground stack: a full pickup despawns the drop (the tracker's RemoveEntities now follows
             // the collect animation); a partial one just pushes the new count.

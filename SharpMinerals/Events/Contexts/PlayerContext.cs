@@ -17,7 +17,7 @@ public sealed record PlayerContext(Server Server, World World, ArchEntity Entity
     /// <summary>
     /// This method queries ECS
     /// </summary>
-    public ref NetPlayerEntityComponent GetPlayer() => ref World.Ecs.Get<NetPlayerEntityComponent>(Entity);
+    public ref PlayerEntityComponent GetPlayer() => ref World.Ecs.Get<PlayerEntityComponent>(Entity);
 
     /// <summary>
     /// This method queries ECS

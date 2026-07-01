@@ -11,13 +11,13 @@ namespace SharpMinerals.Level.Systems;
 /// <see cref="Streaming"/> on PlayerJoined - only the on-move re-stream moved here. Replaces the PlayerMoved event.</summary>
 public sealed class ChunkStreamingSystem : INetworkSystem {
     static readonly QueryDescription PlayerQuery =
-        new QueryDescription().WithAll<NetPlayerEntityComponent, ChunkViewEntityComponent>();
+        new QueryDescription().WithAll<PlayerEntityComponent, ChunkViewEntityComponent>();
 
     readonly World world;
     public ChunkStreamingSystem(World world) => this.world = world;
 
     public void Flush(Server server) {
-        world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref NetPlayerEntityComponent net) => {
+        world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref PlayerEntityComponent net) => {
             if (server.TryGetPlayer(net.ClientId, out var ctx))
                 Streaming.Restream(ctx);
         });

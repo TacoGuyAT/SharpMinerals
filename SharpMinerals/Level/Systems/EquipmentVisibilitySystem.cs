@@ -11,13 +11,13 @@ namespace SharpMinerals.Level.Systems;
 /// the old PlayerInventoryChanged event.</summary>
 public sealed class EquipmentVisibilitySystem : INetworkSystem {
     static readonly QueryDescription PlayerQuery =
-        new QueryDescription().WithAll<NetPlayerEntityComponent, InventoryEntityComponent, EquipmentEntityComponent>();
+        new QueryDescription().WithAll<PlayerEntityComponent, InventoryEntityComponent, EquipmentEntityComponent>();
 
     readonly World world;
     public EquipmentVisibilitySystem(World world) => this.world = world;
 
     public void Flush(Server server) {
-        world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref NetPlayerEntityComponent net) => {
+        world.Ecs.Query(in PlayerQuery, (ArchEntity e, ref PlayerEntityComponent net) => {
             if (server.TryGetPlayer(net.ClientId, out var ctx))
                 PlayerVisibility.OnInventoryChanged(ctx);
         });

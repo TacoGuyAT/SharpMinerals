@@ -14,7 +14,7 @@ public record PlayerEvent(PlayerContext Context) {
     public World World => Context.World;
     public ArchEntity Entity => Context.Entity;
     public NetClient Client => Context.Client;
-    public NetPlayerEntityComponent GetPlayer() => Context.GetPlayer();
+    public PlayerEntityComponent GetPlayer() => Context.GetPlayer();
 }
 
 /// <summary>

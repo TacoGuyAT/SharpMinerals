@@ -19,7 +19,7 @@ namespace SharpMinerals.Level;
 /// <summary>A single dimension: owns an Arch ECS <see cref="ArchWorld"/> and a lazily-generated grid of
 /// cuboid chunks. <see cref="Tick"/> runs the per-tick systems; block reads/writes go through the chunk grid.</summary>
 public class World : ITickable {
-    static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
+    static readonly QueryDescription PlayerQuery = new QueryDescription().WithAll<PlayerEntityComponent>();
     static readonly QueryDescription TypedEntityQuery = new QueryDescription().WithAll<TypeEntityDescriptor>();
     const byte EntitiesVersion = 1;
 

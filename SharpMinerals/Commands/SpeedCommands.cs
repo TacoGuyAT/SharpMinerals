@@ -28,7 +28,7 @@ public static class SpeedCommands {
         if (!Resolve(c, out var ctx, out var abilities)) return 0;
         double mult = Arguments.GetDouble(c, "multiplier");
         abilities.WalkSpeed = (float)(AbilitiesEntityComponent.DefaultWalkSpeed * mult);
-        int netId = ctx.World.Ecs.Get<NetPlayerEntityComponent>(ctx.Entity).NetId;
+        int netId = ctx.World.Ecs.Get<PlayerEntityComponent>(ctx.Entity).NetId;
         ctx.Client.Send(new UpdateAttributesS2C(netId, abilities.WalkSpeed));
         c.Source.Reply($"Walk speed set to {mult:0.##}x.");
         return 1;

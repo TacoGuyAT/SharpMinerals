@@ -55,7 +55,7 @@ public static class PlayerVisibility {
         });
     }
 
-    static PlayerListEntry Entry(in NetPlayerEntityComponent p) => new(p.Uuid, p.Name, CreativeMode, Listed: true, Latency: 0);
+    static PlayerListEntry Entry(in PlayerEntityComponent p) => new(p.Uuid, p.Name, CreativeMode, Listed: true, Latency: 0);
 
     /// <summary>The non-empty equipment a player renders (held, off-hand, four armour pieces) as Set Equipment messages.</summary>
     public static IEnumerable<SetEquipmentS2C> Equipment(int entityId, InventoryEntityComponent inv) {
@@ -112,7 +112,7 @@ public static class PlayerVisibility {
     /// <summary>Sends a player's entity spawn (+ active flags + equipment) to one viewer's client - the player
     /// dispatch used by <c>EntityTrackerSystem</c> when this player comes into that viewer's view.</summary>
     public static void SendSpawn(NetClient client, ArchWorld ecs, ArchEntity entity) {
-        var info = ecs.Get<NetPlayerEntityComponent>(entity);
+        var info = ecs.Get<PlayerEntityComponent>(entity);
         var pos = ecs.Get<TransformEntityComponent>(entity);
         // The client drops a player spawn whose UUID has no tab-list entry, so (re)send the entry right before the
         // spawn. The join-time broadcast (OnJoin) populates the tab UI, but the tracker can spawn this player to a

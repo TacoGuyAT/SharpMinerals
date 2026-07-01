@@ -123,7 +123,7 @@ public sealed class EntityTrackerSystem : ISystem {
 
     // TODO: refactor into INetEntityComponent, ecs.Has<INetEntityComponent>()
     void SendSpawn(NetClient client, ArchWorld ecs, ArchEntity entity) {
-        if (ecs.Has<NetPlayerEntityComponent>(entity))
+        if (ecs.Has<PlayerEntityComponent>(entity))
             PlayerVisibility.SendSpawn(client, ecs, entity);
         else if (ecs.Has<PickupEntityComponent>(entity)) {
             var (d, t, v) = ecs.Get<PickupEntityComponent, TransformEntityComponent, VelocityEntityComponent>(entity);
@@ -136,8 +136,8 @@ public sealed class EntityTrackerSystem : ISystem {
 
     /// <returns>0 = not a trackable kind.</returns>
     int ResolveOrAssignNetId(ArchWorld ecs, ArchEntity entity) {
-        if (ecs.Has<NetPlayerEntityComponent>(entity))
-            return ecs.Get<NetPlayerEntityComponent>(entity).NetId;
+        if (ecs.Has<PlayerEntityComponent>(entity))
+            return ecs.Get<PlayerEntityComponent>(entity).NetId;
         if (ecs.Has<PickupEntityComponent>(entity)) {
             ref var d = ref ecs.Get<PickupEntityComponent>(entity);
             if (d.Stack.IsEmpty) return 0;
