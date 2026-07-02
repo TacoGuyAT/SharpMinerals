@@ -113,8 +113,8 @@ internal sealed class EntityFlagsS2CCodec : ICodec<EntityFlagsS2C> {
     public void Encode(MinecraftStream s, EntityFlagsS2C m) {
         s.WriteVarInt(m.EntityId);
         s.WriteUByte(FlagsIndex); s.WriteVarInt(ByteType); s.WriteByte2((sbyte)(byte)m.Flags);
-        int pose = m.Flags.HasFlag(EntityFlags.Swimming) ? SwimmingPose
-                 : m.Flags.HasFlag(EntityFlags.Sneaking) ? SneakingPose
+        int pose = m.Flags.HasFlag(EntityState.Swimming) ? SwimmingPose
+                 : m.Flags.HasFlag(EntityState.Sneaking) ? SneakingPose
                  : StandingPose;
         s.WriteUByte(PoseIndex);  s.WriteVarInt(PoseType); s.WriteVarInt(pose);
         s.WriteUByte(MetadataEnd);

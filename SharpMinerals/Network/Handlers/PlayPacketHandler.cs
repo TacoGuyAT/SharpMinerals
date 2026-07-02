@@ -300,15 +300,27 @@ public sealed class PlayPacketHandler {
     void HandleEntityAction(NetClient client, EntityActionC2S action) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity))
             return;
-        ref var np = ref context.GetPlayer();
+        ref var player = ref context.GetPlayer();
+        ref var state = ref context.GetState();
+
         switch (action.Action) {
-            case EntityActionKind.StartSneaking:  np.Flags |= EntityFlags.Sneaking;  break;
-            case EntityActionKind.StopSneaking:   np.Flags &= ~EntityFlags.Sneaking;  break;
-            case EntityActionKind.StartSprinting: np.Flags |= EntityFlags.Sprinting; break;
-            case EntityActionKind.StopSprinting:  np.Flags &= ~EntityFlags.Sprinting; break;
-            default: return; // leave-bed / horse / etc. not modelled
+            case EntityActionKind.StartSneaking: 
+                state.State |= EntityState.Sneaking;  
+                break;
+            case EntityActionKind.StopSneaking:
+                state.State &= ~EntityState.Sneaking;  
+                break;
+            case EntityActionKind.StartSprinting:
+                state.State |= EntityState.Sprinting; 
+                break;
+            case EntityActionKind.StopSprinting:
+                state.State &= ~EntityState.Sprinting; 
+                break;
+            default: 
+                return; // leave-bed / horse / etc. not modelled
         }
-        server.NetServer.Broadcast(new EntityFlagsS2C(np.NetId, np.Flags), c => c.InWorld && c.Id != client.Id);
+
+        server.NetServer.Broadcast(new EntityFlagsS2C(player.NetId, state.State), c => c.InWorld && c.Id != client.Id);
     }
 
     // The client reports its own ability flags when it starts/stops flying. Track only the Flying bit so a later

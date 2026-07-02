@@ -55,7 +55,8 @@ public sealed class CoreMod : Mod {
                 new EquipmentEntityComponent(),
                 new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned
                 new SenderEntityComponent(),
-                new PlayerEntityComponent()));
+                new PlayerEntityComponent(),
+                new StateEntityComponent()));
 
         EntityRegistry.FallingBlock = EntityRegistry.Register("falling_block").Blueprint(ecs => ecs.Create(
             new TransformEntityComponent(),

@@ -103,7 +103,7 @@ internal sealed class LegacyEntityEquipmentS2CMapper : ICodec<SetEquipmentS2C> {
 /// state is just the shared-flags byte (index 0, type 0=byte); only the bits 1.5.2 shares - sneak 0x02 and
 /// sprint 0x08 - are kept (modern-only bits like swimming 0x10 mean other things in 1.5.2, so mask them).</summary>
 internal sealed class LegacyEntityMetadataS2CMapper : ICodec<EntityFlagsS2C> {
-    const byte LegacyKnownFlags = (byte)(EntityFlags.Sneaking | EntityFlags.Sprinting); // 0x0A
+    const byte LegacyKnownFlags = (byte)(EntityState.Sneaking | EntityState.Sprinting); // 0x0A
 
     public void Encode(MinecraftStream s, EntityFlagsS2C m) {
         s.WriteInt(m.EntityId);

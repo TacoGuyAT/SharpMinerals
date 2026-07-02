@@ -34,7 +34,7 @@ public sealed record EntityAnimationS2C(int EntityId, EntityAnimation Animation)
 
 /// <summary>Entity Flags: an entity's shared-flags state changed (sneaking, sprinting, ...); each protocol
 /// maps it to its own entity-metadata form (modern flags byte + Pose; legacy flags byte only).</summary>
-public sealed record EntityFlagsS2C(int EntityId, EntityFlags Flags) : IMessage;
+public sealed record EntityFlagsS2C(int EntityId, EntityState Flags) : IMessage;
 
 /// <summary>An entity's equipment slots, ordered as 1.20.1's Set Equipment indices. The same packet that
 /// shows another player's held item also shows their armour - these are its slot ids.</summary>

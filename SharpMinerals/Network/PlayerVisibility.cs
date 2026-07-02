@@ -112,19 +112,20 @@ public static class PlayerVisibility {
     /// <summary>Sends a player's entity spawn (+ active flags + equipment) to one viewer's client - the player
     /// dispatch used by <c>EntityTrackerSystem</c> when this player comes into that viewer's view.</summary>
     public static void SendSpawn(NetClient client, ArchWorld ecs, ArchEntity entity) {
-        var info = ecs.Get<PlayerEntityComponent>(entity);
+        var player = ecs.Get<PlayerEntityComponent>(entity);
+        var state = ecs.Get<StateEntityComponent>(entity);
         var pos = ecs.Get<TransformEntityComponent>(entity);
         // The client drops a player spawn whose UUID has no tab-list entry, so (re)send the entry right before the
         // spawn. The join-time broadcast (OnJoin) populates the tab UI, but the tracker can spawn this player to a
         // viewer before that broadcast has run (the entity exists a few lines before PlayerJoined is published, and
         // the tick thread races that window) - sending it here makes the spawn self-contained. ADD_PLAYER is
         // idempotent, so the duplicate for an already-listed player is harmless.
-        client.Send(new PlayerInfoUpdateS2C([Entry(info)]));
-        client.Send(new SpawnPlayerS2C(info.NetId, info.Uuid, info.Name, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch));
-        if (info.Flags != EntityFlags.None)
-            client.Send(new EntityFlagsS2C(info.NetId, info.Flags));
+        client.Send(new PlayerInfoUpdateS2C([Entry(player)]));
+        client.Send(new SpawnPlayerS2C(player.NetId, player.Uuid, player.Name, pos.X, pos.Y, pos.Z, pos.Yaw, pos.Pitch));
+        if (state.State != EntityState.None)
+            client.Send(new EntityFlagsS2C(player.NetId, state.State));
         if (ecs.Has<InventoryEntityComponent>(entity))
-            foreach (var eq in Equipment(info.NetId, ecs.Get<InventoryEntityComponent>(entity)))
+            foreach (var eq in Equipment(player.NetId, ecs.Get<InventoryEntityComponent>(entity)))
                 if (eq.Slot != EquipmentSlot.OffHand || CanSeeOffhand(client)) client.Send(eq);
     }
 }

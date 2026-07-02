@@ -4,7 +4,6 @@ using SharpMinerals.Entities.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Level;
 using SharpMinerals.Network;
-using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
 using ArchEntity = Arch.Core.Entity;
 
@@ -13,7 +12,7 @@ namespace SharpMinerals.Events.Contexts;
 /// <summary>An <see cref="EntityContext"/> for a player entity, adding the network <see cref="Client"/>
 /// connection. Carried by player events; <see cref="GetPlayer"/> reads the live component from the world.</summary>
 public sealed record PlayerContext(Server Server, World World, ArchEntity Entity, NetClient Client)
-    : EntityContext(Server, World, Entity) {
+    : LivingEntityContext(Server, World, Entity) {
     /// <summary>
     /// This method queries ECS
     /// </summary>
