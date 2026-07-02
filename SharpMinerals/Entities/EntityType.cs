@@ -23,9 +23,6 @@ public sealed class EntityType : ComponentObject {
         Id = identifier;
     }
 
-    /// <summary>Max health from a <see cref="HealthEntityDescriptor"/> component (0 if this kind isn't living, e.g. an item).</summary>
-    public float MaxHealth => TryGet<HealthEntityDescriptor>(out var l) ? l.MaxHealth : 0f;
-
     /// <summary>Whether entities of this kind are saved with the world (e.g. dropped items). Off by default;
     /// players persist separately (by UUID) and transient kinds aren't worth storing.</summary>
     public bool Persisted { get; private set; }

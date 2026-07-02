@@ -37,7 +37,6 @@ public sealed class CoreMod : Mod {
             .Persist(); // dropped items are saved with the world
 
         EntityRegistry.Player = EntityRegistry.Register("player")
-            .Add(new HealthEntityDescriptor(MaxHealth: 20f))
             .Blueprint(ecs => ecs.Create(
                 new TransformEntityComponent(),
                 new NetTransformEntityComponent(),

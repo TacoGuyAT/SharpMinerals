@@ -8,9 +8,6 @@ namespace SharpMinerals.Entities;
 
 /// <summary>Prefab/factory for the components that make up a player, keeping the engine component-oriented.</summary>
 public static class Player {
-    /// <summary>The player kind's max health (from its <c>Living</c> definition component).</summary>
-    public static float MaxHealth => EntityRegistry.Player.MaxHealth;
-
     public static ArchEntity Spawn(World world, ulong clientId, string name, Guid uuid, int entityId, TransformEntityComponent spawn, byte[]? saved = null) {
         // Spawn the blueprint at the default point; a returning player's saved blob then overwrites the persistent
         // components (placement, health, inventory) generically via EntityCodec. A new player keeps the blueprint's
