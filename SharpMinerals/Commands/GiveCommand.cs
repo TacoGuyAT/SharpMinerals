@@ -19,7 +19,7 @@ public static class GiveCommand {
         .Requires(x => x.IsPlayer)
         .Then(x => x.Argument("item", ResourceLocationArgumentType.ResourceLocation())
             .Suggests((ctx, builder) => {
-                foreach(var item in ItemRegistry.All) // every block is an item, so one registry covers both
+                foreach(var item in ItemType.All) // every block is an item, so one registry covers both
                     if(item is not BlockType { IsAir: true }
                         && (item.Id.Full.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)
                             || item.Id.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)))
@@ -40,7 +40,7 @@ public static class GiveCommand {
         }
 
         var name = Arguments.GetString(ctx, "item");
-        if(ItemRegistry.FromName(name) is not { } type || type is BlockType { IsAir: true }) {
+        if(!ItemType.TryFromPath(name, out var type) || type is BlockType { IsAir: true }) {
             ctx.Source.Reply($"Unknown item '{name}'.");
             return 0;
         }

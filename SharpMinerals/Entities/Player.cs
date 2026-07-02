@@ -12,7 +12,7 @@ public static class Player {
         // Spawn the blueprint at the default point; a returning player's saved blob then overwrites the persistent
         // components (placement, health, inventory) generically via EntityCodec. A new player keeps the blueprint's
         // full health and gets a starter kit.
-        var entity = world.Spawn(EntityRegistry.Player, pos);
+        var entity = world.Spawn(CoreMod.Player, pos);
         var ecs = world.Ecs;
 
         if (saved is { } blob) {
@@ -23,9 +23,9 @@ public static class Player {
             world.Entities.Update(entity, restored.X, restored.Y, restored.Z);
         } else {
             var inventory = new InventoryEntityComponent();
-            if(ItemRegistry.FromName("minecraft:stone") is { } stone)
+            if(ItemType.TryFromPath("minecraft:stone", out var stone))
                 inventory.Main(0) = new ItemStack(stone, 64);
-            if(ItemRegistry.FromName("minecraft:chest") is { } chest)
+            if(ItemType.TryFromPath("minecraft:chest", out var chest))
                 inventory.Main(1) = new ItemStack(chest, 64);
 
             ecs.Get<InventoryEntityComponent>(entity) = inventory;

@@ -1,7 +1,7 @@
-using SharpMinerals.Components;
 using SharpMinerals.Entities.Descriptors;
 using ArchWorld = Arch.Core.World;
 using ArchEntity = Arch.Core.Entity;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SharpMinerals.Entities;
 
@@ -11,6 +11,11 @@ namespace SharpMinerals.Entities;
 /// A kind also carries a BLUEPRINT (set via <see cref="Blueprint"/>) - the recipe for its ECS components - so
 /// <see cref="Create"/> is the single source of truth for "what makes a <c>player</c>/<c>item</c>/...".</summary>
 public sealed class EntityType : ComponentObject {
+    public static IReadOnlyList<EntityType> All => Registry.All;
+    public static readonly Registry<EntityType> Registry = new();
+    public static EntityType Register(string name) => Registry.Register(name, static (id, identifier) => new EntityType(id, identifier));
+    public static bool TryFromPath(string path, [MaybeNullWhen(false)] out EntityType result) => Registry.TryFromPath(path, out result);
+
     internal int TypeId { get; }
 
     /// <summary>The namespaced identifier (e.g. <c>minecraft:falling_block</c>).</summary>

@@ -35,8 +35,8 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
         if (!block.Has<FallingBlockDescriptor>()) return;
         if (!world.GetBlock(pos + Down).IsAir) return; // still supported - stays put
 
-        world.SetBlock(pos, BlockRegistry.Air);
-        server.BroadcastInRange(world, pos.X + 0.5, pos.Z + 0.5, new BlockUpdateS2C(pos, BlockRegistry.Air));
+        world.SetBlock(pos, CoreMod.Air);
+        server.BroadcastInRange(world, pos.X + 0.5, pos.Z + 0.5, new BlockUpdateS2C(pos, CoreMod.Air));
         world.SpawnFallingBlock(pos, block);
 
         TryStartFalling(server, world, pos + Up); // the block above lost its support too - propagate up
@@ -65,7 +65,7 @@ public sealed class FallingBlockSystem : ITickable, INetworkSystem {
     /// <paramref name="send"/> - called by the entity tracker when a falling block comes into a player's view.</summary>
     public static void SendSpawn(Action<IMessage> send, int id, BlockType block, TransformEntityComponent pos) =>
         send(new SpawnEntityS2C(
-            EntityId: id, Uuid: Guid.NewGuid(), Type: EntityRegistry.FallingBlock,
+            EntityId: id, Uuid: Guid.NewGuid(), Type: CoreMod.FallingBlock,
             X: pos.X, Y: pos.Y, Z: pos.Z, Pitch: 0, Yaw: 0, HeadYaw: 0,
             Data: 0, VelocityX: 0, VelocityY: 0, VelocityZ: 0, BlockData: block));
 

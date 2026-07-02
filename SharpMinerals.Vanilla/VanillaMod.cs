@@ -29,7 +29,7 @@ public sealed partial class VanillaMod : Mod {
         // wool is the ONE block the engine models differently: a single block with a synthetic Color state,
         // where minecraft-data has 16 separate *_wool blocks (skipped by RegisterFromData). Hand-register it.
         blocks["minecraft:wool"] = Wool =
-            BlockRegistry.Register("wool").DropSelf().Add(new StatesBlockDescriptor(State.Color));
+            BlockType.Register("wool").DropSelf().Add(new StatesBlockDescriptor(State.Color));
 
         // Enrich select blocks with behavior and bind the static accessors worldgen/gameplay reference. `.Add`
         // returns the BlockType (replacing any auto component of the same type), so this both decorates and binds.
@@ -54,7 +54,9 @@ public sealed partial class VanillaMod : Mod {
         OxeyeDaisy   = blocks["minecraft:oxeye_daisy"];
         DeadBush     = blocks["minecraft:dead_bush"];
 
-        Stick = ItemRegistry.FromName("minecraft:stick")!;
+        if(ItemType.TryFromPath("minecraft:stick", out var stick)) {
+            Stick = stick;
+        }
 
         // Overworld biomes (seeded factories the generator instantiates per world).
         Generator.VanillaBiomes.Register();
@@ -71,14 +73,14 @@ public sealed partial class VanillaMod : Mod {
         var blocks = new Dictionary<string, BlockType>();
         foreach (var b in data.V763.Blocks) {
             if (Skip(b.Name)) continue;
-            var block = BlockRegistry.Register(b.Name);
+            var block = BlockType.Register(b.Name);
             if (b.Diggable && data.V763.ItemId.ContainsKey(b.Name)) block.DropSelf();
             blocks[block.Id.Full] = block;
         }
         foreach (var it in data.V763.Items) {
             if (Skip(it.Name)) continue;
-            if (ItemRegistry.FromName(it.Name) is not null) continue; // already registered as a block item
-            ItemRegistry.Register(it.Name, it.StackSize);
+            if (ItemType.Registry.Contains($"minecraft:{it.Name}")) continue; // already registered as a block item
+            ItemType.Register(it.Name, it.StackSize);
         }
         return blocks;
     }

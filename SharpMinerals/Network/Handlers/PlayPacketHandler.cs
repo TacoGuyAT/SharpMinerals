@@ -176,7 +176,7 @@ public sealed class PlayPacketHandler {
         if (broken.IsAir)
             return; // nothing was there
 
-        BroadcastBlockChange(world, new BlockUpdateS2C(action.Position, BlockRegistry.Air));
+        BroadcastBlockChange(world, new BlockUpdateS2C(action.Position, CoreMod.Air));
         // The block above may have lost its support (sand/gravel); let it fall.
         FallingBlockSystem.TryStartFalling(server, world, action.Position + new Vector3i(0, 1, 0));
     }

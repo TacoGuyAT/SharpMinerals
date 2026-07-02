@@ -26,7 +26,7 @@ public sealed class ShaderChunkGenerator : IChunkGenerator {
         int baseX = (int)(position.X * Chunk.Size);
         int baseY = (int)(position.Y * Chunk.Size);
         int baseZ = (int)(position.Z * Chunk.Size);
-        var air = BlockRegistry.Air;
+        var air = CoreMod.Air;
 
         for (int y = 0; y < Chunk.Size; y++)
             for (int z = 0; z < Chunk.Size; z++)

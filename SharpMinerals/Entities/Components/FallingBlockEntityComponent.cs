@@ -16,5 +16,5 @@ public struct FallingBlockEntityComponent : IPersistentComponent {
     public readonly void Write(MinecraftStream s) => s.WriteString(Block.Id.Full);
 
     public static FallingBlockEntityComponent Read(MinecraftStream s) =>
-        new() { Block = BlockRegistry.FromName(s.ReadString()) ?? BlockRegistry.Missing };
+        new() { Block = BlockType.TryFromPath(s.ReadString(), out var block) ? block : CoreMod.Missing };
 }

@@ -20,8 +20,8 @@ public static class SummonCommand {
         .Literal("summon")
         .Then(x => x.Argument("entity", ResourceLocationArgumentType.ResourceLocation())
             .Suggests((ctx, builder) => {
-                foreach (var type in EntityRegistry.All)
-                    if (type != EntityRegistry.Player // not summonable
+                foreach (var type in EntityType.All)
+                    if (type != CoreMod.Player // not summonable
                         && (type.Id.Full.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)
                             || type.Id.Name.StartsWith(builder.Remaining, StringComparison.OrdinalIgnoreCase)))
                         builder.Suggest(type.Id.Full); // suggest the canonical namespaced id; bare input still resolves
@@ -57,11 +57,11 @@ public static class SummonCommand {
 
     static int Summon(CommandContext<SenderContext> ctx, World world, double x, double y, double z) {
         var name = Arguments.GetString(ctx, "entity");
-        if (EntityRegistry.FromName(name) is not { } type) {
+        if (!EntityType.TryFromPath(name, out var type)) {
             ctx.Source.Reply($"Unknown entity '{name}'.");
             return 0;
         }
-        if (type == EntityRegistry.Player) {
+        if (type == CoreMod.Player) {
             ctx.Source.Reply("Players can't be summoned.");
             return 0;
         }

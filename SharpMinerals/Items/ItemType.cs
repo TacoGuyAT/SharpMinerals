@@ -1,6 +1,6 @@
 using SharpMinerals.Blocks;
-using SharpMinerals.Components;
 using SharpMinerals.Items.Components;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SharpMinerals.Items;
 
@@ -8,7 +8,13 @@ namespace SharpMinerals.Items;
 /// components. Everything beyond identity (stack size, placement, ...) lives in components.
 /// <see cref="BlockType"/> derives from this - every block is also an item.</summary>
 public class ItemType : ComponentObject {
-    internal int ItemId { get; }
+    public static IReadOnlyList<ItemType> All => Registry.All;
+    public static readonly Registry<ItemType> Registry = new();
+    public static ItemType Register(string name, int maxStackSize = 64)
+        => Registry.Register(name, (id, identifier) => new ItemType(id, identifier).Add(new Stackable(maxStackSize)));
+    public static bool TryFromPath(string path, [MaybeNullWhen(false)] out ItemType result) => Registry.TryFromPath(path, out result);
+
+    internal int ItemId { get; set; }
 
     /// <summary>The namespaced identifier (e.g. <c>minecraft:stone</c>): <c>Id.Namespace</c> + <c>Id.Name</c>,
     /// with the cached <c>Id.ToString()</c> full string used for registry lookups, persistence, and wire mapping.</summary>

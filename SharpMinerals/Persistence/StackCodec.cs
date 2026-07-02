@@ -1,4 +1,3 @@
-using SharpMinerals.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Network.Buffers;
 
@@ -28,7 +27,10 @@ internal static class StackCodec {
         return stack;
     }
 
-    static ItemType Resolve(string name) =>
-        ItemRegistry.FromName(name)
-            ?? throw new InvalidDataException($"Unknown item '{name}' in saved data.");
+    static ItemType Resolve(string name) {
+        if(!ItemType.TryFromPath(name, out var result)) {
+            throw new InvalidDataException($"Unknown item '{name}' in saved data.");
+        }
+        return result;
+    }
 }

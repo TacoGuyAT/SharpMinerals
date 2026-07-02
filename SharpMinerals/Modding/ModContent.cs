@@ -1,5 +1,4 @@
 using SharpMinerals.Blocks;
-using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Items;
 
@@ -14,12 +13,12 @@ public static class ModContent {
     /// <summary>The namespace assigned to new registry entries. Defaults to <c>minecraft</c> (built-ins); the
     /// <see cref="ModLoader"/> sets it to the loading mod's id around its <see cref="Mod.OnInitialize"/>, so a
     /// mod's content is namespaced under its id without the mod repeating it.</summary>
-    internal static string CurrentNamespace { get; set; } = "minecraft";
+    internal static string CurrentNamespace { get; set; } = "sharpminerals";
 
     public static void Freeze() {
-        BlockRegistry.Freeze();
-        ItemRegistry.Freeze();
-        EntityRegistry.Freeze();
+        BlockType.Registry.Freeze();
+        ItemType.Registry.Freeze();
+        EntityType.Registry.Freeze();
         ComponentRegistry.Freeze();
     }
 }

@@ -95,8 +95,6 @@ public sealed partial class ModLoader {
         } catch(Exception ex) {
             log.LogError(ex, "Mod \"{Id}\" OnInitialize threw - the mod may be partially loaded.", info.ModId);
             // Best-effort: keep the mod so OnServerStarted still runs, rather than aborting the whole server.
-        } finally {
-            ModContent.CurrentNamespace = "minecraft";
         }
 
         mods.Add(mod);

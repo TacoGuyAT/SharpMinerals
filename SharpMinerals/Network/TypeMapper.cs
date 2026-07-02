@@ -1,5 +1,4 @@
 using SharpMinerals.Blocks;
-using SharpMinerals.Components;
 using SharpMinerals.Entities;
 using SharpMinerals.Items;
 
@@ -15,7 +14,7 @@ namespace SharpMinerals.Network;
 /// </summary>
 public sealed class TypeMapper {
     // -- Registration (static, global) ---------------------------------------
-    static readonly List<Mapping> mappings = new();
+    static readonly List<Mapping> mappings = [];
     static bool frozen;
 
     /// <summary>Registers a wire mapping for content <paramref name="id"/>, applying to protocol
@@ -85,7 +84,7 @@ public sealed class TypeMapper {
     }
 
     int[] BuildStateTable() {
-        var all = BlockRegistry.All; // forces block registration
+        var all = BlockType.All; // forces block registration
         var table = new int[all.Count];
         for (int i = 0; i < all.Count; i++)
             table[i] = For(all[i].Id, all[i]).State?.Default ?? 0;
@@ -93,13 +92,17 @@ public sealed class TypeMapper {
     }
 
     void BuildReverseItems() {
-        _ = BlockRegistry.All; // ensure content is registered before resolving names
+        _ = BlockType.All; // ensure content is registered before resolving names
         foreach (var (idStr, r) in byId) {
             if (r.Item is not { } im) continue;
             // Engine primitives (air/missing) aren't client-sendable items and would collide with the real content
             // they map to (missing->stone's id), so skip them in the reverse table.
-            if (idStr.StartsWith(Identifier.EngineNamespace + ":", StringComparison.Ordinal)) continue;
-            if (ItemRegistry.FromName(idStr) is not { } type) continue;
+            if (idStr.StartsWith(Identifier.EngineNamespace + ":", StringComparison.Ordinal)) {
+                continue;
+            }
+            if (!ItemType.TryFromPath(idStr, out var type)) { 
+                continue; 
+            }
 
             if (im.Strides.Length == 0 || type is not BlockType bt) {
                 itemById[im.Default] = (type, null);

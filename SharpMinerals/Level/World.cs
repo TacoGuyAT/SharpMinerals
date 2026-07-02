@@ -231,13 +231,14 @@ public class World : ITickable {
         for (int i = 0; i < count; i++) {
             var typeId = s.ReadString();
             var blob = s.ReadBytes(s.ReadVarInt());
-            if (EntityRegistry.FromName(typeId) is not { } type) continue; // unknown kind - skip (its blob is consumed)
-            var entity = Spawn(type, default);          // blueprint at origin; the blob's transform overwrites it
-            EntityCodec.Apply(Ecs, entity, blob);
-            var t = Ecs.Get<TransformEntityComponent>(entity);
-            Entities.Update(entity, t.X, t.Y, t.Z);     // re-file at the restored position
-            EntitySpawned?.Invoke(this, entity);        // now fully restored - the tracker ids + tracks it
-            spawned++;
+            if(EntityType.Registry.TryFromPath(typeId, out var type)) {
+                var entity = Spawn(type, default);          // blueprint at origin; the blob's transform overwrites it
+                EntityCodec.Apply(Ecs, entity, blob);
+                var t = Ecs.Get<TransformEntityComponent>(entity);
+                Entities.Update(entity, t.X, t.Y, t.Z);     // re-file at the restored position
+                EntitySpawned?.Invoke(this, entity);        // now fully restored - the tracker ids + tracks it
+                spawned++;
+            }
         }
         return spawned;
     }
@@ -314,7 +315,7 @@ public class World : ITickable {
         if (block.IsAir)
             return block;
 
-        SetBlock(pos, BlockRegistry.Air);
+        SetBlock(pos, CoreMod.Air);
 
         var ctx = new BlockContext { World = this, Position = pos, Block = block, Actor = actor };
         foreach (var b in block.GetAll<IOnBroken>())
@@ -427,7 +428,7 @@ public class World : ITickable {
     /// <summary>Spawns a dropped-item entity at an explicit world position with an explicit velocity and
     /// pickup delay - the primitive behind both block-break drops and player tosses.</summary>
     public ArchEntity SpawnItem(double x, double y, double z, VelocityEntityComponent velocity, ItemStack stack, int pickupDelay) {
-        var entity = Spawn(EntityRegistry.Item, new TransformEntityComponent(x, y, z));
+        var entity = Spawn(CoreMod.Item, new TransformEntityComponent(x, y, z));
         Ecs.Get<VelocityEntityComponent>(entity) = velocity;
         Ecs.Get<PickupEntityComponent>(entity) = new PickupEntityComponent { Stack = stack, Age = 0, PickupDelay = pickupDelay };
         EntitySpawned?.Invoke(this, entity); // fully initialised - the tracker can now id + spawn it
@@ -456,7 +457,7 @@ public class World : ITickable {
     /// <paramref name="cell"/>. EntityPhysicsSystem pulls it down; FallingBlockSystem re-places it (or drops
     /// it) on landing. The caller must have cleared the source cell and announced that change.</summary>
     public ArchEntity SpawnFallingBlock(Vector3i cell, BlockType block) {
-        var entity = Spawn(EntityRegistry.FallingBlock, new TransformEntityComponent(cell.X + 0.5, cell.Y, cell.Z + 0.5));
+        var entity = Spawn(CoreMod.FallingBlock, new TransformEntityComponent(cell.X + 0.5, cell.Y, cell.Z + 0.5));
         Ecs.Get<FallingBlockEntityComponent>(entity).Block = block;
         EntitySpawned?.Invoke(this, entity);
         return entity;

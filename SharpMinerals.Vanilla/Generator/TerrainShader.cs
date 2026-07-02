@@ -8,7 +8,7 @@ namespace SharpMinerals.Vanilla.Generator;
 public sealed class TerrainShader : IChunkShader {
     readonly IDensity density;
     readonly BlockType stone = VanillaMod.Stone;
-    readonly BlockType air = BlockRegistry.Air;
+    readonly BlockType air = CoreMod.Air;
 
     public TerrainShader(IDensity density) => this.density = density;
 

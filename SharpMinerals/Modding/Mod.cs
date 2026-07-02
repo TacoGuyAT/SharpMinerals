@@ -57,4 +57,6 @@ public abstract class Mod {
 
     /// <summary>The server is shutting down. Release mod-owned resources.</summary>
     public virtual void OnServerStopping(Server server) { }
+
+    public Identifier Identifier(string name) => new(Info.ModId, name);
 }

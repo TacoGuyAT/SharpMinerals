@@ -1,7 +1,6 @@
 using SharpMinerals.Blocks;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
-using SharpMinerals.Entities.Descriptors;
 using SharpMinerals.Modding;
 using ArchEntity = Arch.Core.Entity;
 
@@ -15,19 +14,32 @@ namespace SharpMinerals;
 /// engine namespace. The host loads this FIRST (before vanilla) so air gets palette id 0 and missing id 1.</summary>
 [ModInfo("sharpminerals", "1.0.0", ["SharpMinerals"])]
 public sealed class CoreMod : Mod {
+    /// <summary>The empty cell (palette id 0). The chunk store and <see cref="FromState"/> depend on this id.
+    /// Registered by <see cref="CoreMod"/> (the engine mod, loaded first) - non-null after engine init.</summary>
+    public static BlockType Air { get; internal set; } = null!;
+
+    /// <summary>Placeholder for content the server can't represent (a dropped mod block, an unmappable type). It
+    /// renders as stone on the wire (the type mapper's fallback) but is a distinct, non-air block. Registered by
+    /// <see cref="CoreMod"/>.</summary>
+    public static BlockType Missing { get; internal set; } = null!;
+
+    public static EntityType Item { get; internal set; } = null!;
+    public static EntityType Player { get; internal set; } = null!;
+    public static EntityType FallingBlock { get; internal set; } = null!;
+
     public override void OnInitialize() {
         // Engine COMPONENTS are not registered here: the component source generator emits a [ModuleInitializer]
         // that registers every [Component] type in this assembly (namespaced from the [ModInfo] above) at load.
 
         // Engine blocks first: air MUST be palette id 0, missing id 1 (the chunk store + FromState depend on it).
-        BlockRegistry.Air = BlockRegistry.Register("air", isAir: true);
-        BlockRegistry.Missing = BlockRegistry.Register("missing");
+        Air = BlockType.Register("air", isAir: true);
+        Missing = BlockType.Register("missing");
 
         // Built-in entity kinds. Each declares its ECS component recipe ONCE here via .Blueprint - the single
         // source of truth for "what makes an item/player/falling block". Components whose value is per-spawn
         // (transform, the carried stack/block, ...) get a placeholder the spawn factory overwrites; the blueprint
         // just guarantees they EXIST to overwrite.
-        EntityRegistry.Item = EntityRegistry.Register("item").Blueprint(ecs => ecs.Create(
+        Item = EntityType.Register("item").Blueprint(ecs => ecs.Create(
             new TransformEntityComponent(),
             new VelocityEntityComponent(0, 0, 0),
             // A dropped item collides with terrain but doesn't block placement (Physics, not Placement).
@@ -36,7 +48,7 @@ public sealed class CoreMod : Mod {
             new PickupEntityComponent()))
             .Persist(); // dropped items are saved with the world
 
-        EntityRegistry.Player = EntityRegistry.Register("player")
+        Player = EntityType.Register("player")
             .Blueprint(ecs => ecs.Create(
                 new TransformEntityComponent(),
                 new NetTransformEntityComponent(),
@@ -58,7 +70,7 @@ public sealed class CoreMod : Mod {
                 new PlayerEntityComponent(),
                 new StateEntityComponent()));
 
-        EntityRegistry.FallingBlock = EntityRegistry.Register("falling_block").Blueprint(ecs => ecs.Create(
+        FallingBlock = EntityType.Register("falling_block").Blueprint(ecs => ecs.Create(
             new TransformEntityComponent(),
             new VelocityEntityComponent(0, 0, 0),
             // A falling block collides with terrain (so it lands) AND blocks placement while it's mid-fall.
@@ -67,7 +79,7 @@ public sealed class CoreMod : Mod {
             new BlockCollisionEntityComponent(),
             // Default to the "missing" block so a data-less spawn (e.g. /summon falling_block) still has a real
             // block to fall, render and re-place as; SpawnFallingBlock overwrites it with the actual block.
-            new FallingBlockEntityComponent { Block = BlockRegistry.Missing }))
+            new FallingBlockEntityComponent { Block = Missing }))
             .Persist(); // a falling block in flight is saved so its block isn't lost on shutdown
     }
 }

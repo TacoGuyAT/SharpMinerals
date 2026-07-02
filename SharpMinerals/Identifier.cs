@@ -37,4 +37,5 @@ public readonly struct Identifier : IEquatable<Identifier> {
     public override int GetHashCode() => Full.GetHashCode();
     public static bool operator ==(Identifier a, Identifier b) => a.Equals(b);
     public static bool operator !=(Identifier a, Identifier b) => !a.Equals(b);
+    public override string ToString() => Full;
 }

@@ -1,5 +1,4 @@
 using SharpMinerals.Blocks.Descriptors;
-using SharpMinerals.Components;
 using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Blocks;
@@ -72,8 +71,10 @@ public sealed class BlockState : IPersistentComponent {
         var values = new int[count];
         for (int i = 0; i < count; i++) values[i] = s.ReadVarInt();
 
-        var block = BlockRegistry.FromName(name)
-            ?? throw new InvalidDataException($"Unknown block '{name}' for a saved BlockState.");
+        if(!BlockType.TryFromPath(name, out var block)) {
+            throw new InvalidDataException($"Unknown block '{name}' for a saved BlockState.");
+        }
+
         // Migrate by name when the schema drifted (a reordered/renamed property); apply positionally otherwise.
         if (schema != StateSchema.Of(block)) return StateSchema.Migrate(schema, values, block);
         var state = new BlockState(block);

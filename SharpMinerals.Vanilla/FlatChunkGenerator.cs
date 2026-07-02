@@ -29,6 +29,6 @@ public sealed class FlatChunkGenerator : IChunkGenerator {
         0 => VanillaMod.Bedrock,
         >= 1 and <= 3 => VanillaMod.Dirt,
         WorldDefaults.GrassY => VanillaMod.GrassBlock,
-        _ => BlockRegistry.Air,
+        _ => CoreMod.Air,
     };
 }

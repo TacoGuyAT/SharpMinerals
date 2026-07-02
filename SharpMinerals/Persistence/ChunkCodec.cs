@@ -34,11 +34,11 @@ public static class ChunkCodec {
         for (int cell = 0; cell < Volume; cell++) {
             // An unresolved cell writes its ORIGINAL id + schema back (non-destructive); everything else its own.
             bool unknown = unresolved.TryGetValue(cell, out var u);
-            string name = unknown ? u!.Id : BlockRegistry.FromState(raw[cell]).Id.Full;
+            string name = unknown ? u!.Id : BlockType.Registry[raw[cell]].Id.Full;
             if (!indexOf.TryGetValue(name, out int index)) {
                 index = names.Count; indexOf[name] = index; names.Add(name);
                 // Each entry carries its state SCHEMA so saved state can later be migrated by name.
-                schemas.Add(unknown ? u!.Schema : StateSchema.Of(BlockRegistry.FromState(raw[cell])));
+                schemas.Add(unknown ? u!.Schema : StateSchema.Of(BlockType.Registry[raw[cell]]));
             }
             cellPalette[cell] = index;
         }
@@ -93,11 +93,11 @@ public static class ChunkCodec {
         for (int i = 0; i < paletteCount; i++) {
             var name = s.ReadString();
             var schema = s.ReadString();
-            if (BlockRegistry.FromName(name) is { } block) {
+            if (BlockType.TryFromPath(name, out var block)) {
                 palette[i] = (ushort)block.BlockId;
                 if (schema != StateSchema.Of(block)) migrate[(ushort)block.BlockId] = schema; // schema changed -> migrate by name
             } else {
-                palette[i] = (ushort)BlockRegistry.Missing.BlockId; // dropped block -> missing (id kept for recovery)
+                palette[i] = (ushort)CoreMod.Missing.BlockId; // dropped block -> missing (id kept for recovery)
                 unresolvedName[i] = name;
                 unresolvedSchema[i] = schema;
             }
@@ -119,9 +119,9 @@ public static class ChunkCodec {
             if (chunk.Unresolved.ContainsKey(cell)) {
                 chunk.SetUnresolvedState(cell, values); // unknown block: keep its raw state for later migration
             } else if (migrate.TryGetValue(raw[cell], out var oldSchema)) {
-                chunk.PutCellState(cell, StateSchema.Migrate(oldSchema, values, BlockRegistry.FromState(raw[cell]))); // schema drifted
+                chunk.PutCellState(cell, StateSchema.Migrate(oldSchema, values, BlockType.Registry[raw[cell]])); // schema drifted
             } else {
-                var block = BlockRegistry.FromState(raw[cell]);
+                var block = BlockType.Registry[raw[cell]];
                 var state = new BlockState(block);
                 if (block.TryGet<StatesBlockDescriptor>(out var sp))
                     for (int p = 0; p < sp.States.Count && p < values.Length; p++) state.Set(sp.States[p], values[p]);
@@ -148,9 +148,13 @@ public static class ChunkCodec {
     static BlockEntity ReadEntity(MinecraftStream s, World world) {
         var pos = new Vector3i(s.ReadLong(), s.ReadLong(), s.ReadLong());
         var name = s.ReadString();
-        var resolved = BlockRegistry.FromName(name);
-        var entity = new BlockEntity(world, pos, resolved ?? BlockRegistry.Missing);
-        if (resolved is null) entity.Add(new UnresolvedTypeComponent(name)); // unregistered type -> missing, original kept for recovery
+        BlockEntity entity;
+        if(BlockType.TryFromPath(name, out var resolved)) {
+            entity = new BlockEntity(world, pos, resolved);
+        } else {
+            entity = new BlockEntity(world, pos, CoreMod.Missing);
+            entity.Add(new UnresolvedTypeComponent(name));
+        }
         ComponentBag.Read(s, entity);
         return entity;
     }

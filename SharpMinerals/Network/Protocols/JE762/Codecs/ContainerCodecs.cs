@@ -34,7 +34,7 @@ internal static class SlotWire {
         int id = s.ReadVarInt();
         int count = s.ReadByte2();
         var nbt = NbtReader.ReadItemNbt(s);
-        if (nbt?.Children.GetValueOrDefault(CustomTypeKey) is NbtString marker && ItemRegistry.FromName(marker.Value) is { } custom)
+        if (nbt?.Children.GetValueOrDefault(CustomTypeKey) is NbtString marker && ItemType.TryFromPath(marker.Value, out var custom))
             return new ItemStack(custom, count);
         var stack = s.Types!.FromVanillaItem(id); // resolves colour/state too (e.g. coloured wool)
         if (stack.IsEmpty)

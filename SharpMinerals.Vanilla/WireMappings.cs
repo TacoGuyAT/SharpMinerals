@@ -30,13 +30,13 @@ internal static class WireMappings {
         // -- Bulk (modern Java): every registered minecraft block/item, per version, from the data. -------------
         // Stateful blocks (a StatesBlockDescriptor) are skipped here and get explicit striding below; engine
         // primitives (sharpminerals namespace) are skipped too.
-        foreach (var block in BlockRegistry.All) {
+        foreach (var block in BlockType.All) {
             if (block.Id.Namespace != "minecraft") continue;
             if (block.Has<StatesBlockDescriptor>()) continue;
             MapBlock<ProtocolJE763>(block, data.V763);
             MapBlock<ProtocolJE762>(block, data.V762);
         }
-        foreach (var item in ItemRegistry.All) {
+        foreach (var item in ItemType.All) {
             if (item is BlockType) continue; // block items handled above
             if (item.Id.Namespace != "minecraft") continue;
             MapItem<ProtocolJE763>(item, data.V763);

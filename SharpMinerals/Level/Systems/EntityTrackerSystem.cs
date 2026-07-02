@@ -127,7 +127,7 @@ public sealed class EntityTrackerSystem : ISystem {
             PlayerVisibility.SendSpawn(client, ecs, entity);
         else if (ecs.Has<PickupEntityComponent>(entity)) {
             var (d, t, v) = ecs.Get<PickupEntityComponent, TransformEntityComponent, VelocityEntityComponent>(entity);
-            ItemLifecycleSystem.SendSpawn(client.Send, d.EntityId, EntityRegistry.Item, d.Stack, t, v);
+            ItemLifecycleSystem.SendSpawn(client.Send, d.EntityId, CoreMod.Item, d.Stack, t, v);
         } else if (ecs.Has<FallingBlockEntityComponent>(entity)) {
             var f = ecs.Get<FallingBlockEntityComponent>(entity);
             FallingBlockSystem.SendSpawn(client.Send, f.EntityId, f.Block, ecs.Get<TransformEntityComponent>(entity));

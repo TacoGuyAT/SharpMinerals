@@ -1,7 +1,7 @@
 using SharpMinerals.Blocks.Descriptors;
-using SharpMinerals.Components;
 using SharpMinerals.Items;
 using SharpMinerals.Items.Components;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SharpMinerals.Blocks;
 
@@ -10,6 +10,19 @@ namespace SharpMinerals.Blocks;
 /// <see cref="ItemType.ItemId"/> is the unified item id; <see cref="BlockId"/> is the separate dense palette id
 /// stored in chunks. A block places itself by default; drops are NOT automatic without a <see cref="DropBlockDescriptor"/>.</summary>
 public class BlockType : ItemType {
+    public new static IReadOnlyList<BlockType> All => Registry.All;
+    public new static readonly Registry<BlockType> Registry = new();
+    public static BlockType Register(string name, bool isAir = false) {
+        var block = Registry.Register(name, (id, identifier) => new BlockType(0, id, identifier, isAir));
+        ItemType.Registry.Register(name, (id, ident) => {
+            block.ItemId = id;
+            return block;
+        });
+
+        return block;
+    }
+    public static bool TryFromPath(string path, [MaybeNullWhen(false)] out BlockType result) => Registry.TryFromPath(path, out result);
+
     /// <summary>The dense palette id stored in chunks (distinct from the unified item <see cref="ItemType.ItemId"/>).</summary>
     internal int BlockId { get; }
 

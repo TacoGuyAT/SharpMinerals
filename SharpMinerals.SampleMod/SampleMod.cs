@@ -12,10 +12,10 @@ public sealed class SampleMod : Mod {
     BlockType battery = null!;
 
     public override void OnInitialize() {
-        rubyBlock = BlockRegistry.Register("ruby_block").DropSelf();
+        rubyBlock = BlockType.Register("ruby_block").DropSelf();
         // A battery: a data-only block entity carrying an EnergyComponent. Right-click to read its charge on the
         // action bar; right-click with redstone dust to add energy. The component persists via the bag (sample:energy_component).
-        battery = BlockRegistry.Register("battery").DropSelf().Add(new EnergyBlockDescriptor(maxEnergy: 1000));
+        battery = BlockType.Register("battery").DropSelf().Add(new EnergyBlockDescriptor(maxEnergy: 1000));
     }
 
     public override void OnServerStarted(Server server) {
