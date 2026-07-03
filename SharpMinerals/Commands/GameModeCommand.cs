@@ -42,7 +42,7 @@ public static class GameModeCommands {
         ref var state = ref ctx.GetState();
         player.GameMode = match;
 
-        ctx.Client.Send(new PlayerAbilitiesS2C(player.GameMode.Flags, player.FlyingSpeed, state.WalkingSpeed, state.State.HasFlag(EntityState.Flying)));
+        ctx.Client.Send(new PlayerAbilitiesS2C(player.GameMode.Flags, player.FlyingSpeed, player.FieldOfViewModifier, state.State.HasFlag(EntityState.Flying)));
         ctx.Client.Send(new PlayerGameModeS2C(match));
 
         c.Source.Reply($"Gamemode set to '{match.Identifier}'.");

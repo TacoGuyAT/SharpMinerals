@@ -42,7 +42,7 @@ public static class SpeedCommands {
         double mult = Arguments.GetDouble(c, "multiplier");
         player.FlyingSpeed = (float)(PlayerEntityComponent.DefaultFlyingSpeed * mult);
         // Send the current flags (the tracked Flying bit keeps them in the same flight state) + the matching FOV.
-        ctx.Client.Send(new PlayerAbilitiesS2C(player.GameMode.Flags, player.FlyingSpeed, 0.1f, state.State.HasFlag(Entities.EntityState.Flying)));
+        ctx.Client.Send(new PlayerAbilitiesS2C(player.GameMode.Flags, player.FlyingSpeed, player.FieldOfViewModifier, state.State.HasFlag(Entities.EntityState.Flying)));
         c.Source.Reply($"Fly speed set to {mult:0.##}x.");
         return 1;
     }
