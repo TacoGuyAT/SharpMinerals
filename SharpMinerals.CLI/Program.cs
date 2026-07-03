@@ -31,6 +31,8 @@ using System.Net;
 using SharpMinerals.Chat;
 using System.Text.Json;
 
+Console.OutputEncoding = System.Text.Encoding.UTF8;
+
 var loaded = ServerConfig.Load(Path.Combine(Directory.GetCurrentDirectory(), "server.json"));
 var config = loaded.Config;
 // The console owns stdout; logging routes its interactive console sink through it (so logs never corrupt the prompt).
