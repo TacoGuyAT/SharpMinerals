@@ -16,6 +16,9 @@ public sealed record PlayerInfoUpdateS2C(IReadOnlyList<PlayerListEntry> Entries)
 /// <summary>Player Info Remove (0x39).</summary>
 public sealed record PlayerInfoRemoveS2C(IReadOnlyList<Guid> Uuids) : IMessage;
 
+/// <summary>Player Game Mode (custom intermediary).</summary>
+public sealed record PlayerGameModeS2C(GameMode GameMode) : IMessage;
+
 /// <summary>
 /// Spawns another player's entity, carrying both <see cref="Uuid"/> and <see cref="Name"/>: modern (0x03)
 /// keys off the UUID, legacy 1.5.2 (0x14 Spawn Named Entity) carries the name inline.

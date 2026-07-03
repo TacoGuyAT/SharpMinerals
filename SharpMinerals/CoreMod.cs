@@ -14,6 +14,9 @@ namespace SharpMinerals;
 /// engine namespace. The host loads this FIRST (before vanilla) so air gets palette id 0 and missing id 1.</summary>
 [ModInfo("sharpminerals", "1.0.0", ["SharpMinerals"])]
 public sealed class CoreMod : Mod {
+    public static GameMode Creative { get; internal set; } = null!;
+    public static GameMode Survival { get; internal set; } = null!;
+
     /// <summary>The empty cell (palette id 0). The chunk store and <see cref="FromState"/> depend on this id.
     /// Registered by <see cref="CoreMod"/> (the engine mod, loaded first) - non-null after engine init.</summary>
     public static BlockType Air { get; internal set; } = null!;
@@ -30,6 +33,23 @@ public sealed class CoreMod : Mod {
     public override void OnInitialize() {
         // Engine COMPONENTS are not registered here: the component source generator emits a [ModuleInitializer]
         // that registers every [Component] type in this assembly (namespaced from the [ModInfo] above) at load.
+
+        Creative = GameMode.Register("creative", 
+            PlayerFlags.CreativeMode | 
+            PlayerFlags.CanBreakBlocks | 
+            PlayerFlags.CanPlaceBlocks | 
+            PlayerFlags.InstantBreak | 
+            PlayerFlags.HasCollision | 
+            PlayerFlags.CanFly | 
+            PlayerFlags.Invulnerable
+        );
+
+        Survival = GameMode.Register("survival",
+            PlayerFlags.CanBreakBlocks |
+            PlayerFlags.CanPlaceBlocks |
+            PlayerFlags.HasCollision |
+            PlayerFlags.CanTakeDamage
+        );
 
         // Engine blocks first: air MUST be palette id 0, missing id 1 (the chunk store + FromState depend on it).
         Air = BlockType.Register("air", isAir: true);
@@ -63,7 +83,6 @@ public sealed class CoreMod : Mod {
                 // Object initializer, NOT a parameterless ctor - that's bypassed on Arch default-init paths.
                 new CollisionEntityComponent { Touching = new List<ArchEntity>() },
                 new ChunkViewEntityComponent(),
-                new AbilitiesEntityComponent(), // walk/fly speed + ability flags (creative defaults)
                 new EquipmentEntityComponent(),
                 new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned
                 new SenderEntityComponent(),

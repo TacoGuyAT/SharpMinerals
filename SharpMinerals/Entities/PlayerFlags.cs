@@ -8,7 +8,8 @@ public enum PlayerFlags {
     CanPlaceBlocks = 1 << 2,
     InstantBreak = 1 << 3,
     HasCollision = 1 << 4,
-    CanFly = 1 << 5,
-    Invulnerable = 1 << 6,
-    NoClip = 1 << 7,
+    CanFly = 1 << 6,
+    Invulnerable = 1 << 7,
+    NoClip = 1 << 8,
+    CreativeMode = 1 << 9,
 }

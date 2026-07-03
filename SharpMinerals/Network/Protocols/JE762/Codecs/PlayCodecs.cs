@@ -87,8 +87,27 @@ internal sealed class SetHealthS2CCodec : ICodec<SetHealthS2C> {
 }
 
 internal sealed class PlayerAbilitiesS2CCodec : ICodec<PlayerAbilitiesS2C> {
+    internal const byte Invulnerable = 0x01;
+    internal const byte Flying = 0x02;
+    internal const byte AllowFlying = 0x04;
+    internal const byte CreativeMode = 0x08;
+
     public void Encode(MinecraftStream s, PlayerAbilitiesS2C m) {
-        s.WriteUByte(m.Flags);
+        byte flags = 0;
+        if(m.Flags.HasFlag(PlayerFlags.Invulnerable)) {
+            flags |= Invulnerable;
+        }
+        if(m.Flags.HasFlag(PlayerFlags.CanFly)) {
+            flags |= AllowFlying;
+        }
+        if(m.Flags.HasFlag(PlayerFlags.InstantBreak)) {
+            flags |= CreativeMode;
+        }
+        if(m.Flying) {
+            flags |= Flying;
+        }
+
+        s.WriteUByte(flags);
         s.WriteFloat(m.FlyingSpeed);
         s.WriteFloat(m.FieldOfViewModifier);
     }

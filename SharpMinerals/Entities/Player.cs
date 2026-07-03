@@ -40,7 +40,13 @@ public static class Player {
             Pitch = transform.Pitch
         };
         ecs.Get<SenderEntityComponent>(entity) = SenderEntityComponent.ForPlayer(name);
-        ecs.Get<PlayerEntityComponent>(entity) = new PlayerEntityComponent { ClientId = clientId, Name = name, Uuid = uuid, NetId = entityId };
+        ecs.Get<PlayerEntityComponent>(entity) = new PlayerEntityComponent { 
+            ClientId = clientId, 
+            Name = name, 
+            Uuid = uuid, 
+            NetId = entityId, 
+            GameMode = CoreMod.Survival 
+        };
         return entity;
     }
 }

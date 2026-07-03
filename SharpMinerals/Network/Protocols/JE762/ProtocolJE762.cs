@@ -41,6 +41,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         public const int Respawn = 0x41;          // respawn (world switch)
         public const int SyncPlayerPosition = 0x3C; // player_position
         public const int PlayerInfoRemove = 0x39; // player_remove
+        public const int GameEvent = 0x1F; // game_event
         public const int PlayerInfoUpdate = 0x3A; // player_info
         public const int RemoveEntities = 0x3E;   // entity_destroy
         public const int EntityHeadRotation = 0x42; // entity_head_rotation
@@ -119,6 +120,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SpawnPlayer, new SpawnPlayerS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.PlayerInfoUpdate, new PlayerInfoUpdateS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.PlayerInfoRemove, new PlayerInfoRemoveS2CCodec());
+        Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.GameEvent, new PlayerGameModeS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.RemoveEntities, new RemoveEntitiesS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.TeleportEntity, new TeleportEntityS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.EntityHeadRotation, new EntityHeadRotationS2CCodec());

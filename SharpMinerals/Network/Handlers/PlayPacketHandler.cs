@@ -10,6 +10,8 @@ using SharpMinerals.Network.Containers;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Chat;
 using SharpMinerals.Entities;
+using SharpMinerals.Network.Protocols.JE762.Codecs;
+
 
 
 
@@ -217,38 +219,48 @@ public sealed class PlayPacketHandler {
     void HandlePlacement(NetClient client, UseItemOnC2S use) {
         client.Send(new AckBlockChangeS2C(use.Sequence));
 
-        if (!server.TryGetPlayer(client.Id, out var context))
+        if (!server.TryGetPlayer(client.Id, out var ctx)) {
             return;
+        }
 
         // A block with interaction behavior (e.g. a container) consumes the right-click instead of placing.
-        var clicked = context.World.GetBlock(use.Position);
-        var interaction = new BlockContext { World = context.World, Position = use.Position, Block = clicked, Actor = context };
+        var clicked = ctx.World.GetBlock(use.Position);
+        var interaction = new BlockContext { World = ctx.World, Position = use.Position, Block = clicked, Actor = ctx };
         bool interacted = false;
-        foreach (var b in clicked.GetAll<IInteract>()) { b.OnInteract(in interaction); interacted = true; }
-        if (interacted)
+        foreach(var b in clicked.GetAll<IInteract>()) { 
+            b.OnInteract(in interaction); 
+            interacted = true;
+        }
+        if(interacted)
             return;
 
-        var inventory = context.World.Ecs.Get<InventoryEntityComponent>(context.Entity);
-        var held = inventory.Held;
+        var inventory = ctx.World.Ecs.Get<InventoryEntityComponent>(ctx.Entity);
+        ref var held = ref inventory.Held;
         var block = held.Type?.PlacedBlock;
-        if (block is null)
+        if(block is null) {
             return;
+        }
+        if(!ctx.GetPlayer().GameMode.Flags.HasFlag(PlayerFlags.CreativeMode)) {
+            inventory.Held.Count--;
+        }
 
         var target = Offset(use.Position, (BlockFace)use.Face);
-        if (!context.World.PlaceBlock(target, block))
+        if (!ctx.World.PlaceBlock(target, block)) {
             return;
+        }
 
         // Prefer the variant carried by the held item (e.g. wool colour); else orient a facing block toward the player.
         BlockState? state = held.State?.Clone();
         if (state is null && block.TryGet<StatesBlockDescriptor>(out var props) && props.IndexOf(State.Facing) >= 0) {
-            var yaw = context.World.Ecs.Get<TransformEntityComponent>(context.Entity).Yaw;
+            var yaw = ctx.World.Ecs.Get<TransformEntityComponent>(ctx.Entity).Yaw;
             state = new BlockState(block).Set(State.Facing, FacingTowardPlayer(yaw));
         }
-        if (state is not null)
-            context.World.SetBlockState(target, state);
-        BroadcastBlockChange(context.World, new BlockUpdateS2C(target, block, state)); // null state => block default
+        if (state is not null) {
+            ctx.World.SetBlockState(target, state);
+        }
+        BroadcastBlockChange(ctx.World, new BlockUpdateS2C(target, block, state)); // null state => block default
 
-        FallingBlockSystem.TryStartFalling(server, context.World, target); // sand/gravel placed over air falls
+        FallingBlockSystem.TryStartFalling(server, ctx.World, target); // sand/gravel placed over air falls
     }
 
     void MovePlayer(NetClient client, double? x, double? y, double? z, float? yaw, float? pitch) {
@@ -327,11 +339,13 @@ public sealed class PlayPacketHandler {
     // /flyspeed re-send keeps them in the same flight state; the server stays authoritative over the other bits.
     void SyncFlying(NetClient client, byte clientFlags) {
         if (!server.TryGetPlayer(client.Id, out var context) || !context.World.Ecs.IsAlive(context.Entity)
-            || !context.World.Ecs.Has<AbilitiesEntityComponent>(context.Entity))
+            || !context.World.Ecs.Has<StateEntityComponent>(context.Entity))
             return;
-        var abilities = context.World.Ecs.Get<AbilitiesEntityComponent>(context.Entity);
-        abilities.Flags = (byte)((abilities.Flags & ~AbilitiesEntityComponent.Flying)
-                                 | (clientFlags & AbilitiesEntityComponent.Flying));
+        ref var state = ref context.GetState();
+        state.State = state.State & ~EntityState.Flying;
+        if((clientFlags & PlayerAbilitiesS2CCodec.Flying) == PlayerAbilitiesS2CCodec.Flying) {
+            state.State |= EntityState.Flying;
+        }
     }
 
 #if TEST_HARNESS

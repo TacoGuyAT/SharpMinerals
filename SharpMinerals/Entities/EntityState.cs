@@ -6,7 +6,7 @@ public enum EntityState : byte {
     None         = 0,
     OnFire       = 1 << 0,
     Sneaking     = 1 << 1,
-    //Unused       = 1 << 2,
+    Flying       = 1 << 2, // Unused in vanilla
     Sprinting    = 1 << 3,
     Swimming     = 1 << 4,
     Invisible    = 1 << 5,

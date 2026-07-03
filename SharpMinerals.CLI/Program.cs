@@ -133,7 +133,8 @@ server.CommandDispatcher
     .RegisterGive()
     .RegisterSummon()
     .RegisterSpeed()
-    .RegisterFlySpeed();
+    .RegisterFlySpeed()
+    .RegisterGameMode();
 
 // Mods run OnServerStarted now (server up, core commands registered): they layer on their own commands, etc.
 modLoader.StartAll(server);

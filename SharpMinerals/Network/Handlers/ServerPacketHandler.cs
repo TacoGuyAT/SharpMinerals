@@ -19,8 +19,6 @@ namespace SharpMinerals.Network.Handlers;
 /// offline-mode login, and hands Play-state packets to <see cref="PlayPacketHandler"/>.
 /// </summary>
 public sealed class ServerPacketHandler {
-    const byte CreativeMode = 1;
-
     readonly ILogger Log = Logging.For("Play");
 
     readonly Server server;
@@ -107,7 +105,7 @@ public sealed class ServerPacketHandler {
 
         client.Send(new JoinGameS2C(
             EntityId: entityId,
-            GameMode: CreativeMode,
+            GameMode: context.GetPlayer().GameMode.IntoId(),
             DimensionName: context.World.Name,
             HashedSeed: 0,
             ViewDistance: 10,
@@ -197,7 +195,7 @@ public sealed class ServerPacketHandler {
         var t = context.World.Ecs.Get<TransformEntityComponent>(context.Entity);
 
         client.Send(new LegacyLoginRequestS2C(
-            entityId, LevelType: "flat", GameMode: CreativeMode, Dimension: 0, Difficulty: 1,
+            entityId, LevelType: "flat", GameMode: context.GetPlayer().GameMode.IntoId(), Dimension: 0, Difficulty: 1,
             MaxPlayers: (byte)System.Math.Min(server.MaxPlayers, 255)));
         client.Send(new LegacySpawnPositionS2C((int)t.X, (int)t.Y, (int)t.Z));
         // Same lifecycle event as a modern join. Modern players see this legacy player; the modern packets

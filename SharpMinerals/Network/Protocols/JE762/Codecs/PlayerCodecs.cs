@@ -38,6 +38,18 @@ internal sealed class PlayerInfoRemoveS2CCodec : ICodec<PlayerInfoRemoveS2C> {
         throw new NotSupportedException("PlayerInfoRemoveS2C is clientbound only.");
 }
 
+internal sealed class PlayerGameModeS2CCodec : ICodec<PlayerGameModeS2C> {
+    public void Encode(MinecraftStream s, PlayerGameModeS2C m) {
+        const byte GAME_MODE_EVENT_ID = 3;
+        s.WriteUByte(GAME_MODE_EVENT_ID);
+
+        s.WriteFloat(m.GameMode.IntoId());
+    }
+
+    public PlayerGameModeS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("PlayerGameModeS2C is clientbound only.");
+}
+
 internal sealed class SpawnPlayerS2CCodec : ICodec<SpawnPlayerS2C> {
     public void Encode(MinecraftStream s, SpawnPlayerS2C m) {
         s.WriteVarInt(m.EntityId);

@@ -25,36 +25,47 @@ public static class SpeedCommands {
         .Then(a => a.Argument("multiplier", Arguments.Double(Min, Max)).Executes(c => SetFlySpeed(c))));
 
     static int SetWalkSpeed(CommandContext<SenderContext> c) {
-        if (!Resolve(c, out var ctx, out var abilities)) return 0;
+        if (!Resolve(c, out var ctx, out _, out var s)) return 0;
+        var state = s!.Value;
         double mult = Arguments.GetDouble(c, "multiplier");
-        abilities.WalkSpeed = (float)(AbilitiesEntityComponent.DefaultWalkSpeed * mult);
+        state.WalkingSpeed = (float)(StateEntityComponent.DefaultWalkSpeed * mult);
         int netId = ctx.World.Ecs.Get<PlayerEntityComponent>(ctx.Entity).NetId;
-        ctx.Client.Send(new UpdateAttributesS2C(netId, abilities.WalkSpeed));
+        ctx.Client.Send(new UpdateAttributesS2C(netId, state.WalkingSpeed));
         c.Source.Reply($"Walk speed set to {mult:0.##}x.");
         return 1;
     }
 
     static int SetFlySpeed(CommandContext<SenderContext> c) {
-        if (!Resolve(c, out var ctx, out var abilities)) return 0;
+        if (!Resolve(c, out var ctx, out var p, out var s)) return 0;
+        var player = p!.Value;
+        var state = s!.Value;
         double mult = Arguments.GetDouble(c, "multiplier");
-        abilities.FlyingSpeed = (float)(AbilitiesEntityComponent.DefaultFlyingSpeed * mult);
+        player.FlyingSpeed = (float)(PlayerEntityComponent.DefaultFlyingSpeed * mult);
         // Send the current flags (the tracked Flying bit keeps them in the same flight state) + the matching FOV.
-        ctx.Client.Send(new PlayerAbilitiesS2C(abilities.Flags, abilities.FlyingSpeed, abilities.WalkSpeed));
+        ctx.Client.Send(new PlayerAbilitiesS2C(player.GameMode.Flags, player.FlyingSpeed, 0.1f, state.State.HasFlag(Entities.EntityState.Flying)));
         c.Source.Reply($"Fly speed set to {mult:0.##}x.");
         return 1;
     }
 
     // The issuing player's context + abilities, or false (with a reply) if they aren't an available online player.
-    static bool Resolve(CommandContext<SenderContext> c, [MaybeNullWhen(false)] out PlayerContext ctx, out AbilitiesEntityComponent abilities) {
+    static bool Resolve(
+        CommandContext<SenderContext> c, 
+        [MaybeNullWhen(false)] out PlayerContext ctx, 
+        // TODO: Recheck nullability safety
+        [MaybeNullWhen(false)] out PlayerEntityComponent? player, 
+        [MaybeNullWhen(false)] out StateEntityComponent? state
+    ) {
         ctx = default!;
-        abilities = null!;
+        player = null!;
+        state = null!;
         if (c.Source.Client is not { } client
             || !c.Source.Server.TryGetPlayer(client.Id, out ctx)
             || !ctx.World.Ecs.IsAlive(ctx.Entity)) {
             c.Source.Reply("Only an online player can set speed.");
             return false;
         }
-        abilities = ctx.World.Ecs.Get<AbilitiesEntityComponent>(ctx.Entity);
+        player = ctx.GetPlayer();
+        state = ctx.GetState();
         return true;
     }
 }
