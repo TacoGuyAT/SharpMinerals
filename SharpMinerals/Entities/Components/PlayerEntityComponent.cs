@@ -2,7 +2,8 @@ namespace SharpMinerals.Entities.Components;
 
 [Component]
 public struct PlayerEntityComponent {
-    public const float DefaultFlyingSpeed = 0.05f; // vanilla baseline fly speed
+    public const float DefaultFlyingSpeed = 0.05f; 
+    public const float DefaultFieldOfViewModifier = 0.1f; 
 
     public ulong ClientId;
     public string Name;
