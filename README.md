@@ -6,11 +6,12 @@ While clients can connect to the server and interact with the world, keep in min
 
 I primarily design it with API in mind first, and optimizations later, but it doesn't mean we're running slow, especially since server supports NativeAOT. It should be easy and straight-forward to create and implement new content, constructing it from a pre-made components or making own ones if necessary. [Sample mod](SharpMinerals.SampleMod) got a few examples on how can you use existing ones and how to create your own object components.
 
-## Roadmap
+## Priorities
 - Gamemodes
-- Entity AI components
-- Feature parity with Vanilla server
+- Better type mapper
 - Refactor version-specific code into Vanilla mod
+- Feature parity with Vanilla server
+- Entity AI components
 - Bedrock Edition support
 - Runtime generated resource packs
 - More async and multi-threading
@@ -45,7 +46,7 @@ I will focus on performance after finishing basic feature set.
 5. Launch **Minecraft: Java Edition** (version **1.19.4–1.20.1**) and connect to `localhost:25565`.
 
 ## Contributions
-To help this project you can open issues, submit code or support me with [a small donation](). 
+To help this project you can open issues, submit code or support me with [a small donation](https://ko-fi.com/TacoGuyAT). 
 
 ## Credits
 - [MiNET](https://github.com/NiclasOlofsson/MiNET), an amazing MCBE server written in C#. It was the biggest inspiration for this project (and perhaps, think of it as a love letter).
