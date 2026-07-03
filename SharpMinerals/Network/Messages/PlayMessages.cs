@@ -31,7 +31,7 @@ public sealed record KeepAliveS2C(long Id) : IMessage;
 public sealed record SetHealthS2C(float Health, int Food, float Saturation) : IMessage;
 
 /// <summary>Player Abilities (0x34): sets the ability flag bits, the fly speed, and the FOV/walk-speed modifier.</summary>
-public sealed record PlayerAbilitiesS2C(byte Flags, float FlyingSpeed, float FieldOfViewModifier) : IMessage;
+public sealed record PlayerAbilitiesS2C(PlayerFlags Flags, float FlyingSpeed, float FieldOfViewModifier, bool Flying) : IMessage;
 
 /// <summary>Update Attributes (0x6A) carrying just the player's <c>generic.movement_speed</c> (walk speed).</summary>
 public sealed record UpdateAttributesS2C(int EntityId, double MovementSpeed) : IMessage;
