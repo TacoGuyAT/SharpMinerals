@@ -16,6 +16,10 @@ public sealed class Scheduler {
     readonly List<Timer> timers = [];
     long tick;
 
+    /// <summary>Whether any deferred work is queued (not yet drained by <see cref="Run"/>). Lets callers pump
+    /// until quiescent - e.g. a test driving async work that self-defers its continuations.</summary>
+    public bool HasDeferred => !deferred.IsEmpty;
+
     /// <summary>
     /// Defers work to run at the end of the tick or at the start of the next one.
     /// </summary>

@@ -23,16 +23,16 @@ public class DataRegistrationTests {
     [Fact]
     public void RegistersFullVanillaPalette() {
         // The whole 1.20.1 set, minus the engine air family and the 16 *_wool blocks, plus engine air/missing/wool.
-        Assert.True(BlockRegistry.All.Count > 900, $"expected ~1000 blocks, got {BlockRegistry.All.Count}");
-        Assert.True(ItemRegistry.All.Count > 1100, $"expected ~1250 items, got {ItemRegistry.All.Count}");
+        Assert.True(BlockType.All.Count > 900, $"expected ~1000 blocks, got {BlockType.All.Count}");
+        Assert.True(ItemType.All.Count > 1100, $"expected ~1250 items, got {ItemType.All.Count}");
 
         // A spread of blocks that were never hand-registered before now exist with a real identity.
         foreach (var name in new[] { "diamond_block", "oak_planks", "granite", "obsidian", "glass" })
-            Assert.NotNull(BlockRegistry.FromName(name));
+            Assert.NotNull(TestContent.FindBlock(name));
 
         // The collapsed *_wool family is NOT registered (engine models one wool); air is the engine's, not data's.
-        Assert.Null(BlockRegistry.FromName("white_wool"));
-        Assert.Equal("sharpminerals", BlockRegistry.Air.Id.Namespace);
+        Assert.Null(TestContent.FindBlock("white_wool"));
+        Assert.Equal("sharpminerals", CoreMod.Air.Id.Namespace);
     }
 
     [Fact]
@@ -41,11 +41,11 @@ public class DataRegistrationTests {
         foreach (var (name, mapper, ver) in new[] {
                      ("dirt", V763, Data.V763), ("oak_planks", V763, Data.V763), ("diamond_block", V763, Data.V763),
                      ("dirt", V762, Data.V762), ("oak_planks", V762, Data.V762), ("diamond_block", V762, Data.V762) }) {
-            var block = BlockRegistry.FromName(name)!;
+            var block = TestContent.FindBlock(name)!;
             Assert.Equal(ver.DefaultState[name], mapper.StateId(block));
         }
         // diamond_block is exactly the cross-version shift: 4272 (762) vs 4276 (763).
-        var diamond = BlockRegistry.FromName("diamond_block")!;
+        var diamond = TestContent.FindBlock("diamond_block")!;
         Assert.Equal(4272, V762.StateId(diamond));
         Assert.Equal(4276, V763.StateId(diamond));
     }
@@ -55,7 +55,7 @@ public class DataRegistrationTests {
         foreach (var (name, mapper, ver) in new[] {
                      ("stick", V763, Data.V763), ("stone", V763, Data.V763), ("chest", V763, Data.V763),
                      ("stick", V762, Data.V762), ("oak_planks", V762, Data.V762) }) {
-            var item = ItemRegistry.FromName(name)!;
+            var item = TestContent.FindItem(name)!;
             Assert.Equal(ver.ItemId[name], mapper.ItemId(item));
         }
     }

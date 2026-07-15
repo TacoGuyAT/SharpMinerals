@@ -1,6 +1,7 @@
 #if TEST_HARNESS
 using System.Collections.Concurrent;
 using System.Net;
+using SharpMinerals.Chat;
 using SharpMinerals.Commands;
 using SharpMinerals.Modding;
 using SharpMinerals.Events;
@@ -57,9 +58,8 @@ public sealed class RealClientFixture : IAsyncLifetime {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        server = new Server(new ServerContext {
-            NetServer = netServer, Worlds = worlds, MOTD = "Harness", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("Harness"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, netServer);
         packetHandler = new ServerPacketHandler(server);
         Server = server;
         dispatcher = server.CommandDispatcher;
@@ -96,7 +96,7 @@ public sealed class RealClientFixture : IAsyncLifetime {
                 $"No client connected within {JoinTimeoutSec}s. Start a SharpTester client and point it at localhost:{Port}.");
         }
         ClientId = ctx.Client.Id;
-        PlayerName = ctx.World.Ecs.Get<Entities.Components.NetPlayerEntityComponent>(ctx.Entity).Name;
+        PlayerName = ctx.World.Ecs.Get<Entities.Components.PlayerEntityComponent>(ctx.Entity).Name;
         Lobby = ctx.World;
         await Task.Delay(1500); // let initial chunks settle
     }

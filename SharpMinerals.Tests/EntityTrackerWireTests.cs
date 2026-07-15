@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using SharpMinerals.Chat;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Level;
 using SharpMinerals.Network;
@@ -42,9 +43,8 @@ public sealed class EntityTrackerWireTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        server = new Server(new ServerContext {
-            NetServer = netServer, Worlds = worlds, MOTD = "wire", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("wire"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, netServer);
         handler = new ServerPacketHandler(server);
         server.Start();
 
@@ -80,7 +80,7 @@ public sealed class EntityTrackerWireTests {
         while (DateTime.UtcNow < deadline) {
             foreach (var (_, ctx) in server.Players)
                 if (ctx.World.Ecs.IsAlive(ctx.Entity)) {
-                    var np = ctx.World.Ecs.Get<NetPlayerEntityComponent>(ctx.Entity);
+                    var np = ctx.World.Ecs.Get<PlayerEntityComponent>(ctx.Entity);
                     if (np.Name == name) return np.NetId;
                 }
             Thread.Sleep(25);

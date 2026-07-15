@@ -44,6 +44,29 @@ public class PlayStateTests {
     // The JE763 type mapper, now exposed per-protocol (was a static class).
     static readonly TypeMapper Types = new TypeMapper(typeof(ProtocolJE763));
 
+    // A player join fires fire-and-forget async-void column streaming (Streaming.SendColumnWhenReady): each op
+    // awaits a background chunk load, then a scheduler-deferred publish that actually sends the column and lets
+    // the tracker spawn its contents to the viewer. The real server pumps this every tick; a test must drive it.
+    // Settle pumps the scheduler until the deferred queue stays quiet, so the streaming completes (columns load
+    // for the viewer) AND xUnit's AsyncTestSyncContext sees the async-void ops finish (otherwise it waits on them
+    // forever and the test hangs). Bounded; flat-gen column loads settle in a few ms.
+    static void Settle(Server server) {
+        long deadline = Environment.TickCount64 + 5000;
+        int quiet = 0;
+        while (Environment.TickCount64 < deadline && quiet < 50) {
+            if (server.Scheduler.HasDeferred) { server.Scheduler.Run(); quiet = 0; }
+            else quiet++;
+            Thread.Sleep(1);
+        }
+        server.Scheduler.Run();
+    }
+
+    // Guarantees the join-triggered async-void streaming ops can never gate test completion: called BEFORE a
+    // login, it detaches this thread from xUnit's AsyncTestSyncContext, so the ops (created during the login)
+    // are never counted and the test can't hang waiting on them - independent of how far Settle's pump got. The
+    // streaming still runs (Settle drives it) for the assertions that need the columns loaded.
+    static void DetachSyncContext() => System.Threading.SynchronizationContext.SetSynchronizationContext(null);
+
     // -- Flat generation ----------------------------------------------------
     [Fact]
     public void FlatGeneration() {
@@ -704,7 +727,7 @@ public class PlayStateTests {
             Assert.Equal(112, m.StateId(VanillaMod.Sand));
             Assert.Equal(117, m.StateId(VanillaMod.RedSand));
             Assert.Equal(43, m.ItemId(VanillaMod.Bedrock));
-            Assert.Equal(54, m.EntityTypeId(EntityRegistry.Item)); // entity ids unchanged 762->763
+            Assert.Equal(54, m.EntityTypeId(CoreMod.Item)); // entity ids unchanged 762->763
         }
 
         // Block-states the 1.20 content shifted up (incl. the chest facing layout + wool colour override).
@@ -741,10 +764,10 @@ public class PlayStateTests {
     public void MissingBlockBorrowsStoneWireIdsButReadsCustom() {
         var mapper = new TypeMapper(typeof(ProtocolJE763));
         // Renders as stone on the wire (no native appearance of its own)...
-        Assert.Equal(mapper.StateId(VanillaMod.Stone), mapper.StateId(BlockRegistry.Missing));
-        Assert.Equal(mapper.ItemId(VanillaMod.Stone), mapper.ItemId(BlockRegistry.Missing));
+        Assert.Equal(mapper.StateId(VanillaMod.Stone), mapper.StateId(CoreMod.Missing));
+        Assert.Equal(mapper.ItemId(VanillaMod.Stone), mapper.ItemId(CoreMod.Missing));
         // ...but is flagged custom so the slot encoder gives it a distinct name + identity marker, unlike real stone.
-        Assert.True(BlockRegistry.Missing.IsCustom);
+        Assert.True(CoreMod.Missing.IsCustom);
         Assert.False(VanillaMod.Stone.IsCustom);
     }
 
@@ -775,15 +798,16 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "self-test", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("self-test"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
 
         // Login.
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(client.State == ConnectionState.Play, "login: switched to Play");
         Assert.True(client.Sent.Any(m => m is LoginSuccessS2C), "login: sent LoginSuccess");
         Assert.True(client.Sent.Any(m => m is JoinGameS2C), "login: sent JoinGame");
@@ -802,11 +826,11 @@ public class PlayStateTests {
         var digPos = new Vector3i(0, 4, 0);
         Assert.True(server.DefaultWorld.GetBlock(digPos) == VanillaMod.GrassBlock, "dig: target starts as grass");
         handler.Handle(client, new PlayerActionC2S(0, digPos, 1, 42));
-        server.Events.DrainDeferred(); // dig is deferred to the tick's single-writer phase
+        server.Scheduler.Run(); // dig is deferred to the tick's single-writer phase
         Assert.True(server.DefaultWorld.GetBlock(digPos).IsAir, "dig: block removed");
         Assert.True(client.Sent.Any(m => m is AckBlockChangeS2C a && a.Sequence == 42), "dig: acknowledged sequence");
         Assert.True(
-            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == digPos && b.Block == BlockRegistry.Air),
+            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == digPos && b.Block == CoreMod.Air),
             "dig: BlockUpdate broadcast");
         server.AnnounceSystems(); // assign the drop a net id
         server.FlushSystems();    // the tracker spawns it to the in-view player
@@ -817,7 +841,7 @@ public class PlayStateTests {
         var placeOn = new Vector3i(2, 4, 2);
         var placedAt = new Vector3i(2, 5, 2);
         handler.Handle(client, new UseItemOnC2S(0, placeOn, (int)BlockFace.Top, 0.5f, 1f, 0.5f, false, 43));
-        server.Events.DrainDeferred(); // placement is deferred to the tick's single-writer phase
+        server.Scheduler.Run(); // placement is deferred to the tick's single-writer phase
         Assert.True(server.DefaultWorld.GetBlock(placedAt) == VanillaMod.Stone, "place: stone placed above clicked face");
         Assert.True(
             capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == placedAt && b.Block == VanillaMod.Stone),
@@ -825,16 +849,16 @@ public class PlayStateTests {
 
         // -- Containers: open a chest, move an item in, sync to a second viewer --
         client.Sent.Clear();
-        var chestEntity = new BlockEntity(new Vector3i(10, 5, 10), VanillaMod.Chest);
+        var chestEntity = new BlockEntity(server.DefaultWorld, new Vector3i(10, 5, 10), VanillaMod.Chest);
         server.DefaultWorld.SetBlockEntity(chestEntity);
-        server.Containers.Open(server, client.Id, chestEntity);
+        server.Containers.Open(client.Id, chestEntity);
         Assert.True(client.Sent.OfType<OpenScreenS2C>().Any(), "container: open sent OpenScreen");
         Assert.True(client.Sent.OfType<SetContainerContentS2C>().Any(), "container: open sent Content");
 
         int win = client.Sent.OfType<OpenScreenS2C>().First().WindowId;
         // Pick up the hotbar stone (chest-window slot 54 = Main(0)) then drop it into chest slot 0.
-        server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 0, 54, 0, 0));
-        server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 1, 0, 0, 0));
+        server.Containers.OnClick(client.Id, new ClickContainerC2S(win, 0, 54, 0, 0));
+        server.Containers.OnClick(client.Id, new ClickContainerC2S(win, 1, 0, 0, 0));
         var chestInv = chestEntity.Get<InventoryComponent>();
         Assert.True(!chestInv[0].IsEmpty && chestInv[0].Type == VanillaMod.Stone, "container: stone moved into chest");
 
@@ -842,9 +866,9 @@ public class PlayStateTests {
         var viewer = new CaptureNetClient(2, protocol) { State = ConnectionState.Play };
         capture.Register(viewer);
         server.AddPlayer(viewer, "Steve2", ServerPacketHandler.OfflineUuid("Steve2"));
-        server.Containers.Open(server, viewer.Id, chestEntity);
+        server.Containers.Open(viewer.Id, chestEntity);
         viewer.Sent.Clear();
-        server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 2, 0, 0, 0)); // #1 picks the stack back up
+        server.Containers.OnClick(client.Id, new ClickContainerC2S(win, 2, 0, 0, 0)); // #1 picks the stack back up
         Assert.True(viewer.Sent.OfType<SetContainerContentS2C>().Any(), "container: second viewer synced");
         server.RemovePlayer(viewer.Id);
 
@@ -861,7 +885,7 @@ public class PlayStateTests {
         for (int s = 0; s < InventoryEntityComponent.MainSize; s++)
             if (pickInv.Main(s).Type == VanillaMod.Cobblestone) hasCobble = true;
         Assert.True(hasCobble, "pickup: item added to inventory");
-        int pickerNetId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).NetId;
+        int pickerNetId = server.DefaultWorld.Ecs.Get<PlayerEntityComponent>(context.Entity).NetId;
         Assert.True(
             capture.Broadcasts.Any(m => m is CollectItemS2C c && c.CollectorEntityId == pickerNetId && c.PickupItemCount == 1),
             "pickup: collect-item animation broadcast (collector + count)");
@@ -906,16 +930,17 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
 
         // A viewer near the drop: entity visibility is per-player now, so the tracker sends the spawn to it.
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Viewer", Guid.Empty));
-        server.Events.DrainDeferred();
+        Settle(server); // drive the join-triggered async column streaming to completion
+        server.Scheduler.Run();
         client.Sent.Clear();
 
         // Break a block -> drop spawns with the upward pop (DropVelocity Y = 0.2). Flush BEFORE any physics tick,
@@ -942,17 +967,18 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var world = server.DefaultWorld;
 
         // A viewer (spawn column 0,0): the sand column (1,1) is within view, so the tracker spawns/despawns it for it.
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Viewer", Guid.Empty));
-        server.Events.DrainDeferred();
+        Settle(server); // drive the join-triggered async column streaming to completion
+        server.Scheduler.Run();
 
         // A lone stone platform high above the flat terrain, with sand a few cells above it over air.
         var floor = new Vector3i(20, 100, 20);
@@ -971,7 +997,7 @@ public class PlayStateTests {
         Assert.Equal(1, world.Ecs.CountEntities(in fallingQuery));
 
         var spawn = client.Sent.OfType<SpawnEntityS2C>().First();
-        Assert.Equal(EntityRegistry.FallingBlock, spawn.Type);
+        Assert.Equal(CoreMod.FallingBlock, spawn.Type);
         Assert.Equal<BlockType>(VanillaMod.Sand, spawn.BlockData);
 
         // Landing happens inside the world tick (FallingBlockSystem fires the block's IOnLand reaction and
@@ -997,36 +1023,39 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
 
         void FullTick() {
-            server.Events.DrainDeferred();
+            server.Scheduler.Run();
             server.AnnounceSystems();
             foreach (var w in worlds.Values) w.Tick();
             server.FlushSystems();
-            server.Events.DrainDeferred();
+            server.Scheduler.Run();
         }
 
         // Alice is established first.
         var alice = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(alice);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(alice, new LoginStartC2S("Alice", Guid.NewGuid()));
+        Settle(server); // drive the join-triggered async column streaming to completion
         for (int i = 0; i < 3; i++) FullTick();
 
         // Bob joins; capture EVERYTHING Alice and Bob receive from here on (no clear).
         alice.Sent.Clear();
         var bob = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
         capture.Register(bob);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(bob, new LoginStartC2S("Bob", Guid.NewGuid()));
+        Settle(server); // drive the join-triggered async column streaming to completion
         for (int i = 0; i < 3; i++) FullTick();
 
         Assert.True(server.TryGetPlayer(1, out var pa));
         Assert.True(server.TryGetPlayer(2, out var pb));
-        var aInfo = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pa.Entity);
-        var bInfo = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pb.Entity);
+        var aInfo = server.DefaultWorld.Ecs.Get<PlayerEntityComponent>(pa.Entity);
+        var bInfo = server.DefaultWorld.Ecs.Get<PlayerEntityComponent>(pb.Entity);
 
         // Alice must learn Bob's profile, and it must arrive BEFORE Bob's entity spawn, or her client drops the spawn.
         int aliceProfileOfBob = alice.Sent.FindIndex(m => m is PlayerInfoUpdateS2C u && u.Entries.Any(e => e.Uuid == bInfo.Uuid));
@@ -1051,24 +1080,25 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
         var world = server.DefaultWorld;
 
         void FullTick() {
-            server.Events.DrainDeferred();
+            server.Scheduler.Run();
             server.AnnounceSystems();
             foreach (var w in worlds.Values) w.Tick();
             server.FlushSystems();
-            server.Events.DrainDeferred();
+            server.Scheduler.Run();
         }
 
         // Alice joins and the server runs a few ticks (she is "established").
         var c1 = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(c1);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(c1, new LoginStartC2S("Alice", Guid.NewGuid()));
+        Settle(server); // drive the join-triggered async column streaming to completion
         // Confirm the join teleport, else MovePlayer ignores her position packets as stale.
         var sync1 = c1.Sent.OfType<SynchronizePlayerPositionS2C>().First();
         handler.Handle(c1, new ConfirmTeleportationC2S(sync1.TeleportId));
@@ -1083,13 +1113,15 @@ public class PlayStateTests {
         c1.Sent.Clear();
         var c2 = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
         capture.Register(c2);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(c2, new LoginStartC2S("Bob", Guid.NewGuid()));
+        Settle(server); // drive the join-triggered async column streaming to completion
         for (int i = 0; i < 3; i++) FullTick();
 
         Assert.True(server.TryGetPlayer(1, out var ctx1));
         Assert.True(server.TryGetPlayer(2, out var ctx2));
-        int eid1 = world.Ecs.Get<NetPlayerEntityComponent>(ctx1.Entity).NetId;
-        int eid2 = world.Ecs.Get<NetPlayerEntityComponent>(ctx2.Entity).NetId;
+        int eid1 = world.Ecs.Get<PlayerEntityComponent>(ctx1.Entity).NetId;
+        int eid2 = world.Ecs.Get<PlayerEntityComponent>(ctx2.Entity).NetId;
 
         var bobSeesAlice = c2.Sent.OfType<SpawnPlayerS2C>().Where(s => s.EntityId == eid1).ToList();
         var aliceSeesBob = c1.Sent.OfType<SpawnPlayerS2C>().Where(s => s.EntityId == eid2).ToList();
@@ -1118,9 +1150,8 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
 
         // Load the test-harness mod. Under AOT (no reflection mod-discovery) use the type-safe TryLoad<T> - the same
         // compiled-in path the CLI uses; otherwise exercise the reflection-based LoadFrom (the dynamic-discovery path).
@@ -1136,6 +1167,7 @@ public class PlayStateTests {
         // OnServerStarted registers /test on the dispatcher; running it (no @id) broadcasts to play clients.
         loader.StartAll(server);
         server.Sender.RunCommand("test hello world");
+        server.Scheduler.Run(); // RunCommand -> ExecuteAsync defers brig.Execute to the scheduler
         Assert.Contains(capture.Broadcasts.OfType<TestCommandS2C>(), m => m.Command == "hello world");
     }
 
@@ -1161,7 +1193,7 @@ public class PlayStateTests {
     public void CustomItemCarriesNameAndIdentityNbt() {
         // A minecraft-namespaced item is native by default; .Custom(true) overrides that (a server item with no
         // vanilla equivalent). Real mods get custom for free (non-minecraft namespace) - see the gem test below.
-        var custom = ItemRegistry.Register("sm_custom_test").Custom(true);
+        var custom = ItemType.Register("sm_custom_test").Custom(true);
         var mapper = new TypeMapper(typeof(ProtocolJE763));
         Assert.True(custom.IsCustom);
         Assert.False(VanillaMod.Stone.IsCustom);
@@ -1189,7 +1221,7 @@ public class PlayStateTests {
     // -- Custom objects: the identity survives the wire round-trip when the client echoes the slot back --
     [Fact]
     public void CustomItemIdentitySurvivesSlotRoundTrip() {
-        var custom = ItemRegistry.Register("sm_roundtrip_item").Custom(true);
+        var custom = ItemType.Register("sm_roundtrip_item").Custom(true);
         var mapper = new TypeMapper(typeof(ProtocolJE763));
 
         using var ms = new System.IO.MemoryStream();
@@ -1214,16 +1246,16 @@ public class PlayStateTests {
         Assert.Equal(new Identifier("minecraft", "stone"), VanillaMod.Stone.Id); // value equality
 
         // A bare path defaults to minecraft; the qualified form resolves to the same instance.
-        Assert.Same(VanillaMod.Stone, ItemRegistry.FromName("stone"));
-        Assert.Same(VanillaMod.Stone, ItemRegistry.FromName("minecraft:stone"));
-        Assert.Null(ItemRegistry.FromName("nope:stone"));
+        Assert.Same(VanillaMod.Stone, TestContent.FindItem("stone"));
+        Assert.Same(VanillaMod.Stone, TestContent.FindItem("minecraft:stone"));
+        Assert.Null(TestContent.FindItem("nope:stone"));
 
         // Mod content is namespaced under the loading mod's id (ModLoader sets CurrentNamespace around OnInitialize).
         ModContent.CurrentNamespace = "ns_test_mod";
-        var gem = ItemRegistry.Register("gem");
+        var gem = ItemType.Register("gem");
         ModContent.CurrentNamespace = "minecraft";
         Assert.Equal("ns_test_mod:gem", gem.Id.Full);
-        Assert.Same(gem, ItemRegistry.FromName("ns_test_mod:gem"));
+        Assert.Same(gem, TestContent.FindItem("ns_test_mod:gem"));
         Assert.True(gem.IsCustom); // modded -> not vanilla -> falls back on the wire
 
         // Persistence writes the full namespaced id and round-trips it (portable, collision-free).
@@ -1240,10 +1272,10 @@ public class PlayStateTests {
     public void ModdedTypeWithVanillaMappingResolvesToMappedWireIds() {
         ModContent.CurrentNamespace = "ns_map_test";
         // Map to dirt (state 10 / item 15) - distinct from the stone fallback (1), so honouring is observable.
-        var moddedBlock = BlockRegistry.Register("ruby_block").Add(new VanillaMapping(VanillaMod.Dirt));
-        var copied = BlockRegistry.Register("ruby_ore").CopyMapping(moddedBlock); // borrows the same mapping
-        var moddedEntity = EntityRegistry.Register("spark").Add(new VanillaMapping(EntityRegistry.Item));
-        var unmapped = BlockRegistry.Register("void_block"); // no mapping -> stone fallback
+        var moddedBlock = BlockType.Register("ruby_block").Add(new VanillaMapping(VanillaMod.Dirt));
+        var copied = BlockType.Register("ruby_ore").CopyMapping(moddedBlock); // borrows the same mapping
+        var moddedEntity = EntityType.Register("spark").Add(new VanillaMapping(CoreMod.Item));
+        var unmapped = BlockType.Register("void_block"); // no mapping -> stone fallback
         ModContent.CurrentNamespace = "minecraft";
 
         // Constructed after registration so the precomputed block-state table includes the new blocks.
@@ -1265,7 +1297,7 @@ public class PlayStateTests {
         Assert.True(moddedBlock.IsCustom);
 
         // An unmapped modded entity has no 1.20.1 wire id and can't be spawned to a client.
-        var ghost = EntityRegistry.Register("ghost");
+        var ghost = EntityType.Register("ghost");
         Assert.Throws<ArgumentOutOfRangeException>(() => mapper.EntityTypeId(ghost));
     }
 
@@ -1284,7 +1316,7 @@ public class PlayStateTests {
         var mapper = new TypeMapper(typeof(ProtocolJE763));
         Assert.Equal(117, mapper.StateId(VanillaMod.RedSand));
         Assert.Equal(47, mapper.ItemId(VanillaMod.RedSand));
-        Assert.Same(VanillaMod.RedSand, ItemRegistry.FromName("red_sand"));
+        Assert.Same(VanillaMod.RedSand, TestContent.FindItem("red_sand"));
     }
 
     // -- Creative: an item this server can't represent is reported + corrected, honouring the cursor --
@@ -1305,13 +1337,14 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(client.Id, out var context));
         var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
 
@@ -1320,7 +1353,7 @@ public class PlayStateTests {
         inv.Main(0) = new ItemStack(VanillaMod.Stone, 5);
         client.Sent.Clear();
         handler.Handle(client, new SetCreativeModeSlotC2S(36, null));
-        server.Events.DrainDeferred(); // creative slot is deferred to the tick
+        server.Scheduler.Run(); // creative slot is deferred to the tick
 
         Assert.Contains(client.Sent, m => m is SystemChatMessageS2C s && s.Overlay); // overlay warning forwarded
         var resync = client.Sent.OfType<SetContainerContentS2C>().Last();
@@ -1333,7 +1366,7 @@ public class PlayStateTests {
         Assert.True(inv.Main(2).IsEmpty); // hotbar 2 starts empty (player spawns with items only in 0-1)
         client.Sent.Clear();
         handler.Handle(client, new SetCreativeModeSlotC2S(38, null)); // window slot 38 = hotbar 2 (empty)
-        server.Events.DrainDeferred();
+        server.Scheduler.Run();
         var slotFix = client.Sent.OfType<SetContainerSlotS2C>().Single();
         Assert.Equal(38, slotFix.Slot);
         Assert.True(slotFix.Data.IsEmpty);
@@ -1411,9 +1444,8 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, capture);
         var c1 = new CaptureNetClient(1, protocol) { State = ConnectionState.Play };
         var c2 = new CaptureNetClient(2, protocol) { State = ConnectionState.Play };
         capture.Register(c1);
@@ -1432,14 +1464,15 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         server.CommandDispatcher.RegisterClear();
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(client.Id, out var context));
 
         var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
@@ -1450,6 +1483,7 @@ public class PlayStateTests {
 
         var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
         _ = server.CommandDispatcher.ExecuteAsync(sender, "clear", client); // synchronous-bodied
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
 
         Assert.True(inv.Main(0).IsEmpty && inv.Main(5).IsEmpty && inv.Offhand.IsEmpty, "every slot cleared");
         // The emptied window is pushed back to the client so its view clears.
@@ -1466,20 +1500,22 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         server.CommandDispatcher.RegisterGive();
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(client.Id, out var context));
         var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
         var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
         client.Sent.Clear();
 
         _ = server.CommandDispatcher.ExecuteAsync(sender, "give cobblestone 10", client); // synchronous-bodied
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
 
         int total = 0;
         for (int i = 0; i < InventoryEntityComponent.MainSize; i++)
@@ -1491,6 +1527,7 @@ public class PlayStateTests {
         // is a resource-location type. Now that content is namespaced (minecraft:wool), this is the common case.
         client.Sent.Clear();
         _ = server.CommandDispatcher.ExecuteAsync(sender, "give minecraft:wool 5", client);
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
         int wool = 0;
         for (int i = 0; i < InventoryEntityComponent.MainSize; i++)
             if (inv.Main(i).Type == VanillaMod.Wool) wool += inv.Main(i).Count;
@@ -1499,6 +1536,7 @@ public class PlayStateTests {
         // An unknown item is rejected without touching the inventory.
         client.Sent.Clear();
         _ = server.CommandDispatcher.ExecuteAsync(sender, "give not_a_real_item", client);
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
         Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
     }
 
@@ -1510,14 +1548,15 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         server.CommandDispatcher.RegisterSummon();
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(client.Id, out var context));
         var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
 
@@ -1530,6 +1569,7 @@ public class PlayStateTests {
         Assert.Empty(Falling());
 
         _ = server.CommandDispatcher.ExecuteAsync(sender, "summon sharpminerals:falling_block 1 20 2", client);
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
 
         // One falling_block now exists at the exact coordinates, carrying the default "missing" block (no data yet).
         var spawned = Assert.Single(Falling());
@@ -1537,11 +1577,12 @@ public class PlayStateTests {
         Assert.Equal(1.0, t.X, 3);
         Assert.Equal(20.0, t.Y, 3);
         Assert.Equal(2.0, t.Z, 3);
-        Assert.Equal(BlockRegistry.Missing, server.DefaultWorld.Ecs.Get<FallingBlockEntityComponent>(spawned).Block);
+        Assert.Equal(CoreMod.Missing, server.DefaultWorld.Ecs.Get<FallingBlockEntityComponent>(spawned).Block);
 
         // Players can't be summoned - the registry has the kind, but the command refuses it.
         _ = server.CommandDispatcher.ExecuteAsync(sender, "summon sharpminerals:player 0 20 0", client);
-        var playerQuery = new QueryDescription().WithAll<NetPlayerEntityComponent>();
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
+        var playerQuery = new QueryDescription().WithAll<PlayerEntityComponent>();
         Assert.Equal(1, server.DefaultWorld.Ecs.CountEntities(in playerQuery)); // still just the joined Steve
     }
 
@@ -1575,22 +1616,23 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(client.Id, out var context));
         var inv = server.DefaultWorld.Ecs.Get<InventoryEntityComponent>(context.Entity);
-        int eid = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(context.Entity).NetId;
+        int eid = server.DefaultWorld.Ecs.Get<PlayerEntityComponent>(context.Entity).NetId;
 
         // Selecting a hotbar slot broadcasts the held item to others as main-hand equipment.
         inv.Main(2) = new ItemStack(VanillaMod.Cobblestone, 1);
         capture.Broadcasts.Clear();
         handler.Handle(client, new SetHeldItemC2S(2));
-        server.Events.DrainDeferred(); // the held-item change is deferred to the tick
+        server.Scheduler.Run(); // the held-item change is deferred to the tick
         server.FlushSystems();         // equipment-visibility diff broadcasts the changed slot
         Assert.Equal(2, inv.SelectedSlot);
         var held = capture.Broadcasts.OfType<SetEquipmentS2C>().Single();
@@ -1600,12 +1642,12 @@ public class PlayStateTests {
 
         // A container click that moves the held item updates the hand for others - here, picking the held
         // cobblestone up off hotbar slot 2 (chest-window slot 54 + 2) onto the cursor empties the hand.
-        var chest = new BlockEntity(new Vector3i(10, 5, 10), VanillaMod.Chest);
+        var chest = new BlockEntity(server.DefaultWorld, new Vector3i(10, 5, 10), VanillaMod.Chest);
         server.DefaultWorld.SetBlockEntity(chest);
-        server.Containers.Open(server, client.Id, chest);
+        server.Containers.Open(client.Id, chest);
         int win = client.Sent.OfType<OpenScreenS2C>().Last().WindowId;
         capture.Broadcasts.Clear();
-        server.Containers.OnClick(server, client.Id, new ClickContainerC2S(win, 0, 56, 0, 0)); // left-click held slot -> cursor
+        server.Containers.OnClick(client.Id, new ClickContainerC2S(win, 0, 56, 0, 0)); // left-click held slot -> cursor
         server.FlushSystems(); // equipment-visibility diff broadcasts the now-empty hand
         Assert.True(inv.Held.IsEmpty, "container: held item moved onto the cursor");
         var cleared = capture.Broadcasts.OfType<SetEquipmentS2C>().Single();
@@ -1651,17 +1693,18 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Steve", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(client.Id, out var before));
         var oldWorld = before.World;
         before.World.Ecs.Get<InventoryEntityComponent>(before.Entity).Main(5) = new ItemStack(VanillaMod.Cobblestone, 3);
-        int eid = before.World.Ecs.Get<NetPlayerEntityComponent>(before.Entity).NetId;
+        int eid = before.World.Ecs.Get<PlayerEntityComponent>(before.Entity).NetId;
 
         client.Sent.Clear();
         var target = server.GetOrCreateWorld("arena", static (name, server) => new World("arena", new FlatChunkGenerator()));
@@ -1673,7 +1716,7 @@ public class PlayStateTests {
         Assert.NotSame(oldWorld, after.World);
         Assert.True(after.World.Ecs.IsAlive(after.Entity), "entity alive in the new world");
         Assert.False(oldWorld.Ecs.IsAlive(before.Entity), "old entity despawned");
-        Assert.Equal(eid, after.World.Ecs.Get<NetPlayerEntityComponent>(after.Entity).NetId);
+        Assert.Equal(eid, after.World.Ecs.Get<PlayerEntityComponent>(after.Entity).NetId);
         Assert.Equal<ItemType>(VanillaMod.Cobblestone, after.World.Ecs.Get<InventoryEntityComponent>(after.Entity).Main(5).Type);
         // The client was told to respawn into the new dimension and got its fresh chunks.
         var respawn = Assert.IsType<RespawnS2C>(client.Sent.First(m => m is RespawnS2C));
@@ -1696,14 +1739,15 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
 
         var handler = new ServerPacketHandler(server);
         var c1 = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(c1);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(c1, new LoginStartC2S("Persist", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(c1.Id, out var h1), "player is present"); // TODO: change name
         ref var t = ref h1.World.Ecs.Get<TransformEntityComponent>(h1.Entity);
         t.X = 40.5; t.Y = 70.0; t.Z = -12.5; t.Yaw = 90f; t.Pitch = 30f;
@@ -1715,7 +1759,9 @@ public class PlayStateTests {
         // Reconnect with the SAME name -> same offline UUID -> restored state.
         var c2 = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
         capture.Register(c2);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(c2, new LoginStartC2S("Persist", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(server.TryGetPlayer(c2.Id, out var h2), "player is present"); // TODO: change name
         var t2 = h2.World.Ecs.Get<TransformEntityComponent>(h2.Entity);
         var inv2 = h2.World.Ecs.Get<InventoryEntityComponent>(h2.Entity);
@@ -1732,7 +1778,7 @@ public class PlayStateTests {
         var world = new World("codec", new FlatChunkGenerator());
         var ecs = world.Ecs;
 
-        var e1 = world.Spawn(EntityRegistry.Player, new TransformEntityComponent(1.5, 70.0, -3.25, 45f, 12f));
+        var e1 = world.Spawn(CoreMod.Player, new TransformEntityComponent(1.5, 70.0, -3.25, 45f, 12f));
         ecs.Get<HealthEntityComponent>(e1) = new HealthEntityComponent(15f, 20f);
         var inv = ecs.Get<InventoryEntityComponent>(e1);
         inv.SelectedSlot = 3;
@@ -1742,7 +1788,7 @@ public class PlayStateTests {
         var blob = EntityCodec.Encode(ecs, e1);
 
         // Apply onto a fresh blueprint-spawned entity (the restore path).
-        var e2 = world.Spawn(EntityRegistry.Player, new TransformEntityComponent(0, 0, 0));
+        var e2 = world.Spawn(CoreMod.Player, new TransformEntityComponent(0, 0, 0));
         EntityCodec.Apply(ecs, e2, blob);
 
         var t = ecs.Get<TransformEntityComponent>(e2);
@@ -1794,7 +1840,7 @@ public class PlayStateTests {
         w1.SetBlock(pos, VanillaMod.Wool);
         w1.SetBlockState(pos, new BlockState(VanillaMod.Wool).Set(State.Color, "red"));
         w1.SetBlock(chestPos, VanillaMod.Chest);
-        var chest = new BlockEntity(chestPos, VanillaMod.Chest);
+        var chest = new BlockEntity(w1, chestPos, VanillaMod.Chest);
         var contents = new InventoryComponent(27);
         contents[0] = new ItemStack(VanillaMod.Stone, 5);
         chest.Add(contents);
@@ -1843,9 +1889,8 @@ public class PlayStateTests {
         var worlds1 = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator(), store),
         };
-        var server1 = new Server(new ServerContext {
-            NetServer = new CaptureNetServer(protocol), Worlds = worlds1, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server1 = new Server(new ServerContext { Worlds = worlds1, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, new CaptureNetServer(protocol));
         server1.DefaultWorld.SpawnItem(8.5, 5.0, 8.5, default, new ItemStack(VanillaMod.Stone, 3), pickupDelay: 0);
         server1.SaveWorlds(); // the real save path: Server.SaveWorlds -> World.Save -> SaveEntities
 
@@ -1854,9 +1899,8 @@ public class PlayStateTests {
         var worlds2 = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator(), store),
         };
-        var server2 = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds2, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server2 = new Server(new ServerContext { Worlds = worlds2, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
 
         var loaded = server2.DefaultWorld.Entities.InChunk(SpatialIndex.CellOf(8.5, 5.0, 8.5));
         Assert.Single(loaded);
@@ -1869,10 +1913,12 @@ public class PlayStateTests {
         var handler = new ServerPacketHandler(server2);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Joiner", Guid.Empty));
-        server2.Events.DrainDeferred();
+        Settle(server2); // drive the join-triggered async column streaming to completion
+        server2.Scheduler.Run();
         server2.FlushSystems();
-        Assert.Contains(client.Sent, m => m is SpawnEntityS2C s && s.Type == EntityRegistry.Item);
+        Assert.Contains(client.Sent, m => m is SpawnEntityS2C s && s.Type == CoreMod.Item);
     }
 
     // -- Item pickup: the collect animation must reach the viewer BEFORE the entity is removed, or the item
@@ -1883,13 +1929,15 @@ public class PlayStateTests {
         var protocol = new ProtocolJE763();
         var capture = new CaptureNetServer(protocol);
         var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
-        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20 }, capture);
 
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Picker", Guid.Empty));
-        server.Events.DrainDeferred();
+        Settle(server); // drive the join-triggered async column streaming to completion
+        server.Scheduler.Run();
 
         // A drop right on the player with zero velocity + no pickup delay (deterministic, unlike the random pop of
         // SpawnDroppedItem): it overlaps immediately and is spawned to the viewer on spawn.
@@ -1915,25 +1963,27 @@ public class PlayStateTests {
         var protocol = new ProtocolJE763();
         var capture = new CaptureNetServer(protocol);
         var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
-        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20 }, capture);
 
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Opener", Guid.Empty));
-        server.Events.DrainDeferred();
+        Settle(server); // drive the join-triggered async column streaming to completion
+        server.Scheduler.Run();
 
-        var chest = new BlockEntity(new Vector3i(2, 5, 2), VanillaMod.Chest); // near the opener (in broadcast range)
+        var chest = new BlockEntity(server.DefaultWorld, new Vector3i(2, 5, 2), VanillaMod.Chest); // near the opener (in broadcast range)
         server.DefaultWorld.SetBlockEntity(chest);
 
         capture.Broadcasts.Clear();
-        server.Containers.Open(server, client.Id, chest);
+        server.Containers.Open(client.Id, chest);
         Assert.Contains(capture.Broadcasts.OfType<BlockActionS2C>(),
             b => b.Position == chest.Position && b.ActionId == 1 && b.Param == 1); // one viewer -> lid opens
 
         int win = client.Sent.OfType<OpenScreenS2C>().Last().WindowId;
         capture.Broadcasts.Clear();
-        server.Containers.OnClose(server, client.Id, win);
+        server.Containers.OnClose(client.Id, win);
         Assert.Contains(capture.Broadcasts.OfType<BlockActionS2C>(),
             b => b.Position == chest.Position && b.ActionId == 1 && b.Param == 0); // last viewer left -> lid closes
     }
@@ -1944,13 +1994,15 @@ public class PlayStateTests {
         var protocol = new ProtocolJE763();
         var capture = new CaptureNetServer(protocol);
         var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
-        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20 }, capture);
 
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Viewer", Guid.Empty)); // spawns at column (0,0)
-        server.Events.DrainDeferred();
+        Settle(server); // drive the join-triggered async column streaming to completion
+        server.Scheduler.Run();
 
         // One item in the viewer's columns, one far outside them (column ~100,100). Each is spawned to in-view
         // clients synchronously on spawn now, so clear FIRST and read the ids the tracker stamped afterwards.
@@ -1976,21 +2028,25 @@ public class PlayStateTests {
         var protocol = new ProtocolJE763();
         var capture = new CaptureNetServer(protocol);
         var worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) };
-        var server = new Server(new ServerContext { NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20 });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20 }, capture);
 
         var handler = new ServerPacketHandler(server);
         var ca = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         var cb = new CaptureNetClient(2, protocol) { State = ConnectionState.Login };
         capture.Register(ca);
         capture.Register(cb);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(ca, new LoginStartC2S("Alice", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(cb, new LoginStartC2S("Bob", Guid.Empty)); // Bob's join spawns him to Alice and Alice to him
-        server.Events.DrainDeferred();
+        Settle(server); // drive the join-triggered async column streaming to completion
+        server.Scheduler.Run();
 
         Assert.True(server.TryGetPlayer(ca.Id, out var pa), "Alice present");
         Assert.True(server.TryGetPlayer(cb.Id, out var pb), "Bob present");
-        int aId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pa.Entity).NetId;
-        int bId = server.DefaultWorld.Ecs.Get<NetPlayerEntityComponent>(pb.Entity).NetId;
+        int aId = server.DefaultWorld.Ecs.Get<PlayerEntityComponent>(pa.Entity).NetId;
+        int bId = server.DefaultWorld.Ecs.Get<PlayerEntityComponent>(pb.Entity).NetId;
         Assert.Contains(ca.Sent, m => m is SpawnPlayerS2C s && s.EntityId == bId); // Alice sees Bob
         Assert.Contains(cb.Sent, m => m is SpawnPlayerS2C s && s.EntityId == aId); // Bob sees Alice
     }
@@ -2074,13 +2130,14 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = capture, Worlds = worlds, MOTD = "t", MaxPlayers = 20, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("t"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, capture);
         var handler = new ServerPacketHandler(server);
         var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
         capture.Register(client);
+        DetachSyncContext(); // detach BEFORE the join so its async-void streaming can never gate completion
         handler.Handle(client, new LoginStartC2S("Walker", Guid.Empty));
+        Settle(server); // drive the join-triggered async column streaming to completion
         Assert.True(client.Sent.OfType<ChunkDataS2C>().Any(), "initial view streamed on join");
         var joinTeleport = client.Sent.OfType<SynchronizePlayerPositionS2C>().First();
 
@@ -2095,6 +2152,7 @@ public class PlayStateTests {
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(40.0, WorldDefaults.SurfaceY, 0.5, true));
         server.FlushSystems();
+        Settle(server); // the newly-visible columns stream via the same async SendColumnWhenReady path
         Assert.True(client.Sent.OfType<SetCenterChunkS2C>().Any(c => c.ChunkX == 2 && c.ChunkZ == 0),
             "recenters on the new chunk");
         Assert.True(client.Sent.OfType<ChunkDataS2C>().Any(), "streams newly-visible columns");
@@ -2103,13 +2161,14 @@ public class PlayStateTests {
         client.Sent.Clear();
         handler.Handle(client, new SetPlayerPositionC2S(41.0, WorldDefaults.SurfaceY, 1.0, true));
         server.FlushSystems();
+        Settle(server);
         Assert.True(!client.Sent.OfType<ChunkDataS2C>().Any(), "no chunks while staying in a column");
     }
 
     // -- EventBus: polymorphic dispatch (heavy-context + generic events together) ----
     [Fact]
     public void EventBusDispatchesToBaseTypesAndInterfaces() {
-        var bus = new EventBus();
+        var bus = BareServer().Events;
         var fired = new List<string>();
         bus.Subscribe<DamageEvent>(_ => fired.Add("any-damage"));        // generic
         bus.Subscribe<ZombieDamage>(e => fired.Add($"zombie:{e.Amount}")); // specific, full context
@@ -2131,17 +2190,18 @@ public class PlayStateTests {
     // -- EventBus: deferred publish only fires when the queue is drained -------------
     [Fact]
     public void DeferredEventsProcessOnlyOnDrain() {
-        var bus = new EventBus();
+        var server = BareServer();
+        var bus = server.Events;
         int count = 0;
         bus.Subscribe<DamageEvent>(_ => count++);
 
         bus.PublishDeferred(new DamageEvent());
         Assert.Equal(0, count); // queued, not yet run
 
-        bus.DrainDeferred();
+        server.Scheduler.Run();
         Assert.Equal(1, count); // ran on drain (the "tick thread")
 
-        bus.DrainDeferred();
+        server.Scheduler.Run();
         Assert.Equal(1, count); // nothing left to run
     }
 
@@ -2360,7 +2420,7 @@ public class PlayStateTests {
 
         // Nested Extra is concatenated; a modern hex colour quantizes to the nearest § colour.
         var compound = new TextComponent("a") { Color = "#ff5555" };       // ~ red -> §c
-        compound.AddExtra(new TextComponent("b") { Color = "green" });      // -> §a
+        compound.With(new TextComponent("b") { Color = "green" });      // -> §a
         var cf = je61.Frame(new SystemChatMessageS2C(compound, Overlay: false));
         Assert.Equal("§ca§ab", new MinecraftStream(new MemoryStream(cf[1..], writable: false)).ReadString16());
     }
@@ -2373,7 +2433,7 @@ public class PlayStateTests {
         // the client rejected ("Don't know how to turn {...} into a Component"). The runtime-type dispatch
         // must now emit the child's text.
         var message = ChatComponent.Text("<")
-            .AddExtra(ChatComponent.Text("Server").SetColor(TextColor.DarkPurple), ChatComponent.Text("> hi"));
+            .With(ChatComponent.Text("Server").SetColor(TextColor.DarkPurple), ChatComponent.Text("> hi"));
         var json = message.ToString();
         Assert.Contains("\"text\":\"Server\"", json);
         Assert.Contains("\"color\":\"dark_purple\"", json);
@@ -2496,21 +2556,21 @@ public class PlayStateTests {
     // -- Events: a non-player entity raises the generic EntityMoved when physics moves it ----
     [Fact]
     public void NonPlayerEntityRaisesEntityMoved() {
-        var events = new EventBus();
+        var world = new World("emove", new FlatChunkGenerator());
+        var server = BareServer(("emove", world)); // wires world.Events + NextEntityId + drains via the scheduler
         var moved = new List<ArchEntity>();
-        events.Subscribe<EntityMoved>(e => moved.Add(e.Entity));
+        server.Events.Subscribe<EntityMoved>(e => moved.Add(e.Entity));
 
-        var world = new World("emove", new FlatChunkGenerator()) { Events = events };
         // Spawn above the surface so gravity actually shifts it; pin a known scatter so it moves.
         var item = world.SpawnDroppedItem(new Vector3i(0, 12, 0), new ItemStack(VanillaMod.Stone, 1));
 
-        for (int i = 0; i < 5; i++) { world.Tick(); events.DrainDeferred(); }
+        for (int i = 0; i < 5; i++) { world.Tick(); server.Scheduler.Run(); }
         Assert.Contains(item, moved); // the falling item published EntityMoved (deferred -> drained)
 
         // Once it settles, the move events stop (MoveEpsilon rest cut-off).
-        for (int i = 0; i < 60; i++) { world.Tick(); events.DrainDeferred(); }
+        for (int i = 0; i < 60; i++) { world.Tick(); server.Scheduler.Run(); }
         moved.Clear();
-        for (int i = 0; i < 5; i++) { world.Tick(); events.DrainDeferred(); }
+        for (int i = 0; i < 5; i++) { world.Tick(); server.Scheduler.Run(); }
         Assert.Empty(moved); // at rest: no more move events
     }
 
@@ -2519,7 +2579,7 @@ public class PlayStateTests {
     public void TickableBlockEntityIsTickedByItsChunk() {
         var world = new World("betick", new FlatChunkGenerator());
         var pos = new Vector3i(3, 6, 3);
-        var counter = new CountingBlockEntity(pos);
+        var counter = new CountingBlockEntity(world, pos);
         world.SetBlockEntity(counter);
 
         world.Tick();
@@ -2534,11 +2594,21 @@ public class PlayStateTests {
 
     sealed class CountingBlockEntity : BlockEntity, ITickable {
         public int Ticks;
-        public CountingBlockEntity(Vector3i pos) : base(pos, VanillaMod.Chest) { }
+        public CountingBlockEntity(World world, Vector3i pos) : base(world, pos, VanillaMod.Chest) { }
         public void Tick() => Ticks++;
     }
 
     // -- Helpers -------------------------------------------------------------
+    // A minimal server (capture transport) for tests that only need its EventBus/Scheduler. Any worlds passed
+    // are registered so the Server ctor wires their Events + entity-id allocator.
+    static Server BareServer(params (string name, World world)[] worlds) {
+        var dict = new ConcurrentDictionary<string, World>();
+        foreach (var (name, world) in worlds) dict[name] = world;
+        return new Server(new ServerContext {
+            Worlds = dict, MOTD = new TextComponent("test"), MaxPlayers = 20, TicksPerSecond = 20,
+        }, new CaptureNetServer(new ProtocolJE763()));
+    }
+
     static int DropCount(World world) =>
         world.Ecs.CountEntities(in new QueryDescription().WithAll<PickupEntityComponent>());
 
@@ -2554,11 +2624,9 @@ public class PlayStateTests {
     // -- Command parse cache: a player's parses are invalidated when their .Requires inputs change --
     [Fact]
     public void CommandParseCacheInvalidatesPerPlayer() {
-        var server = new Server(new ServerContext {
-            NetServer = new CaptureNetServer(new ProtocolJE763()),
-            Worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) },
-            MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = new ConcurrentDictionary<string, World> { ["overworld"] = new World("overworld", new FlatChunkGenerator()) },
+            MOTD = new TextComponent("t"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, new CaptureNetServer(new ProtocolJE763()));
         var dispatcher = server.CommandDispatcher; // the dispatcher now needs its Server (cache scales with player count)
         bool allow = false; // stand-in for a permission / world-gate that .Requires depends on
         var replies = new List<string>();
@@ -2570,16 +2638,19 @@ public class PlayStateTests {
 
         // Denied: the literal is pruned, so it parses as unknown - and that parse is cached for this player.
         _ = dispatcher.ExecuteAsync(sender, "secret", client); // synchronous-bodied; completes before returning
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
         Assert.DoesNotContain("ok", replies);
 
         // Flipping the gate alone changes nothing: the cached (pruned) parse is re-executed verbatim.
         allow = true;
         _ = dispatcher.ExecuteAsync(sender, "secret", client); // synchronous-bodied; completes before returning
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
         Assert.DoesNotContain("ok", replies);
 
         // Invalidating the player re-keys the cache, so the next run re-parses against the new gate state.
         dispatcher.Invalidate(client.Id);
         _ = dispatcher.ExecuteAsync(sender, "secret", client); // synchronous-bodied; completes before returning
+        server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
         Assert.Contains("ok", replies);
     }
 
@@ -2589,10 +2660,9 @@ public class PlayStateTests {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
             ["nether"] = new World("nether", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = new CaptureNetServer(new ProtocolJE763()), Worlds = worlds,
-            MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds,
+            MOTD = new TextComponent("t"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, new CaptureNetServer(new ProtocolJE763()));
         server.CommandDispatcher.RegisterWorld();
         // A player source (client != null) so .Requires(IsPlayer) passes - same as HandleSuggestions builds.
         var client = new CaptureNetClient(1, new ProtocolJE763());
@@ -2613,10 +2683,9 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = new CaptureNetServer(new ProtocolJE763()), Worlds = worlds,
-            MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds,
+            MOTD = new TextComponent("t"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, new CaptureNetServer(new ProtocolJE763()));
         server.CommandDispatcher.RegisterWorld();
         var client = new CaptureNetClient(1, new ProtocolJE763());
         var sender = new CaptureSender(new());
@@ -2642,10 +2711,9 @@ public class PlayStateTests {
         var worlds = new ConcurrentDictionary<string, World> {
             ["overworld"] = new World("overworld", new FlatChunkGenerator()),
         };
-        var server = new Server(new ServerContext {
-            NetServer = new CaptureNetServer(new ProtocolJE763()), Worlds = worlds,
-            MOTD = "t", MaxPlayers = 8, TicksPerSecond = 20,
-        });
+        var server = new Server(new ServerContext { Worlds = worlds,
+            MOTD = new TextComponent("t"), MaxPlayers = 8, TicksPerSecond = 20,
+        }, new CaptureNetServer(new ProtocolJE763()));
         server.CommandDispatcher.RegisterWorld().RegisterTp();
         var client = new CaptureNetClient(1, new ProtocolJE763());
         var source = new SenderContext(new CaptureSender(new()), server.CommandDispatcher, client);
@@ -2756,3 +2824,25 @@ public class PlayStateTests {
 interface IAudited;
 record DamageEvent : IAudited;
 sealed record ZombieDamage(int Amount) : DamageEvent;
+
+// Content lookups: the old static BlockRegistry/ItemRegistry.FromName is gone; resolve by full id through
+// the per-type Registry, defaulting a bare path to the minecraft namespace (returns null if unregistered).
+static class TestContent {
+    public static BlockType? FindBlock(string name) =>
+        BlockType.TryFromPath(name.Contains(':') ? name : "minecraft:" + name, out var b) ? b : null;
+    public static ItemType? FindItem(string name) =>
+        ItemType.TryFromPath(name.Contains(':') ? name : "minecraft:" + name, out var i) ? i : null;
+}
+
+// Drives the per-world INetworkSystem phases directly, standing in for the old Server.AnnounceSystems/
+// FlushSystems helpers that Server.Tick now inlines (announce -> world tick -> flush).
+static class ServerTestExtensions {
+    public static void AnnounceSystems(this Server s) {
+        foreach (var w in s.Worlds.Values)
+            foreach (var sys in w.NetworkSystems) sys.Announce(s);
+    }
+    public static void FlushSystems(this Server s) {
+        foreach (var w in s.Worlds.Values)
+            foreach (var sys in w.NetworkSystems) sys.Flush(s);
+    }
+}

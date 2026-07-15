@@ -1,3 +1,4 @@
+using SharpMinerals.Entities;
 using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Protocols.JE763;
 using Xunit;
@@ -8,7 +9,10 @@ namespace SharpMinerals.Tests;
 public class AbilitiesPacketTests {
     [Fact]
     public void PlayerAbilitiesEncodesIdFlagsAndSpeeds() {
-        var bytes = new ProtocolJE763().EncodePayload(new PlayerAbilitiesS2C(0x0D, 0.05f, 0.1f));
+        // Flags map to the wire byte: Invulnerable->0x01, CanFly->0x04 (allow-flying), InstantBreak->0x08 (creative);
+        // together 0x0D, with Flying (0x02) left off.
+        var bytes = new ProtocolJE763().EncodePayload(new PlayerAbilitiesS2C(
+            PlayerFlags.Invulnerable | PlayerFlags.CanFly | PlayerFlags.InstantBreak, 0.05f, 0.1f, false));
         Assert.Equal((byte)0x34, bytes[0]);                 // clientbound player_abilities id
         Assert.Equal((byte)0x0D, bytes[1]);                 // flags byte (invuln|allow-fly|creative)
         Assert.Equal(1 + 1 + 4 + 4, bytes.Length);          // id + flags + flyingSpeed + fovModifier
