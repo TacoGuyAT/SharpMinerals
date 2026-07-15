@@ -4,6 +4,7 @@ using Brigadier.NET.Context;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Level;
+using SharpMinerals.Network;
 
 namespace SharpMinerals.Commands;
 
@@ -54,10 +55,12 @@ public static class SummonCommand {
     static int SummonAt(CommandContext<SenderContext> ctx, double x, double y, double z) {
         var server = ctx.Source.Server;
         // Spawn into the issuing player's world, or the default world when run from the console.
-        var world = ctx.Source.Client is { } client && server.TryGetPlayer(client.Id, out var context)
-            ? context.World
-            : server.DefaultWorld;
-        return Summon(ctx, world, x, y, z);
+        if(ctx.Source.Client is NetClient client && server.TryGetPlayer(client.Id, out var context)) {
+            return Summon(ctx, context.World, x, y, z);
+        } else {
+            ctx.Source.Reply("Non-player senders can't summon entities.");
+            return 0;
+        }
     }
 
     static int Summon(CommandContext<SenderContext> ctx, World world, double x, double y, double z) {
