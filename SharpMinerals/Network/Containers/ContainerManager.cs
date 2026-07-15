@@ -105,6 +105,18 @@ public sealed class ContainerManager(Server server) {
         }
     }
 
+    /// <summary>A player changed worlds: forget their cached windows so they rebuild against the NEW world's
+    /// inventory component. The player-inventory window (id 0) captures the entity's inventory when first built;
+    /// a world switch replaces the entity (and its inventory), so a stale window would resync the client from,
+    /// and apply clicks to, the previous world's inventory. Any open chest belonged to the old world, so drop it.</summary>
+    public void OnPlayerWorldChanged(ulong clientId) {
+        lock(gate) {
+            if(openByClient.Remove(clientId, out var session))
+                UpdateChestViewers(session.Chest.World, session.Chest.Position);
+            playerWindows.Remove(clientId);
+        }
+    }
+
     /// <summary>A disconnecting player: drop any open session (cursor is lost with the connection).</summary>
     public void OnLeave(ulong clientId) {
         lock(gate) {

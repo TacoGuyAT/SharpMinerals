@@ -399,6 +399,9 @@ public class Server : ITickable {
         client.Send(new SetHealthS2C(target.Ecs.Get<HealthEntityComponent>(moved.Entity).Current, 20, 5f));
         // World changed - invalidate cached parses so world/dimension-gated .Requires re-evaluate.
         CommandDispatcher.Invalidate(clientId);
+        // ...and forget the cached inventory window: it captured the OLD entity's inventory, but the switch
+        // re-spawned the player with a fresh one, so a stale window would sync/apply against the wrong inventory.
+        Containers.OnPlayerWorldChanged(clientId);
         Log.LogInformation("{Name} switched to world '{World}'", info.Name, target.Name);
     }
 
