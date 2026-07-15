@@ -2,7 +2,6 @@ using SharpMinerals.Blocks;
 using SharpMinerals.Entities;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Modding;
-using ArchEntity = Arch.Core.Entity;
 
 namespace SharpMinerals;
 
@@ -80,8 +79,8 @@ public sealed class CoreMod : Mod {
                 new HitboxEntityComponent(0.6, 1.8, CollisionUsage.Placement),
                 // A wider proximity box for nearby interactions (item pickup today); larger than the hitbox.
                 new InteractionReachEntityComponent(1.5, 2.0),
-                // Object initializer, NOT a parameterless ctor - that's bypassed on Arch default-init paths.
-                new CollisionEntityComponent { Touching = new List<ArchEntity>() },
+                // Its Touching list is a per-tick scratch buffer that CollisionFeedbackSystem lazily creates.
+                new CollisionEntityComponent(),
                 new ChunkViewEntityComponent(),
                 new EquipmentEntityComponent(),
                 new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned

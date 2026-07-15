@@ -25,7 +25,7 @@ namespace SharpMinerals.Network.Handlers;
 /// Handles Play-state serverbound packets (digging, placement, movement, keep-alive, chat, containers):
 /// the seam where wire messages drive the ECS world. Block changes are broadcast to all in-game clients.
 /// </summary>
-public sealed class PlayPacketHandler {
+public sealed class PlayPacketHandler(Server server) {
     static readonly ILogger Log = Logging.For("Play");
 
     // Player Action status codes (PlayerActionC2S.Status).
@@ -35,9 +35,7 @@ public sealed class PlayPacketHandler {
     const int DropItem = 4;         // drop one of the held item (Q)
     const int CreativeDropSlot = -1; // SetCreativeModeSlot slot meaning "throw the carried item out"
 
-    readonly Server server;
-
-    public PlayPacketHandler(Server server) => this.server = server;
+    readonly Server server = server;
 
     public void Handle(NetClient client, IMessage message) {
         switch (message) {

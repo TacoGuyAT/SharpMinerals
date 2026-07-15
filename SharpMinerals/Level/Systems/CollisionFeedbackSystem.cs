@@ -23,7 +23,7 @@ public sealed class CollisionFeedbackSystem : ITickable {
         var ecs = world.Ecs;
 
         world.Ecs.Query(in ColliderQuery, (ArchEntity self, ref TransformEntityComponent t, ref CollisionEntityComponent c, ref InteractionReachEntityComponent reachBox) => {
-            c.Touching.Clear(); // never null: Player.Spawn always constructs the list
+            (c.Touching ??= []).Clear(); // this system is the only writer; lazily create the scratch buffer
 
             candidates.Clear();
             index.Near(t.X, t.Y, t.Z, QueryRadius, candidates);

@@ -55,7 +55,7 @@ public sealed class TcpNetServer : NetServer<TcpNetClient> {
             var client = new TcpNetClient(NextClientId(), tcp, Registry);
             Register(client);
 
-            new Thread(() => {
+            Task.Run(() => {
                 try {
                     client.Receive(handler);
                 } catch (Exception ex) {
@@ -66,10 +66,7 @@ public sealed class TcpNetServer : NetServer<TcpNetClient> {
                     client.Disconnect();
                     onDisconnect?.Invoke(client);
                 }
-            }) {
-                Name = $"TCP Client {client.Id}",
-                IsBackground = true,
-            }.Start();
+            });
         }
     }
 }
