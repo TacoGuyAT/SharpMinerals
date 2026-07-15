@@ -123,7 +123,10 @@ public sealed class ServerPacketHandler {
         // Advertise the command tree (filtered to what this player may run) for tab-completion.
         client.Send(new DeclareCommandsS2C(new SenderContext(ecs.Get<SenderEntityComponent>(context.Entity), server.CommandDispatcher, client)));
 
-        client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, WorldDefaults.SurfaceY, 0), 0f));
+        var worldSpawn = context.World.GetSpawn();
+        client.Send(new SetDefaultSpawnPositionS2C(
+            new Vector3i((int)System.Math.Floor(worldSpawn.X), (int)System.Math.Floor(worldSpawn.Y), (int)System.Math.Floor(worldSpawn.Z)),
+            worldSpawn.Yaw));
 
         // Send the player's own chunk column first so the client can place it on loaded terrain immediately,
         // instead of free-falling through empty space until terrain arrives. The position sync rides the same

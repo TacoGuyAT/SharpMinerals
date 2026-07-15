@@ -45,7 +45,7 @@ public static class Player {
             Name = name, 
             Uuid = uuid, 
             NetId = entityId, 
-            GameMode = CoreMod.Survival,
+            GameMode = world.DefaultGameMode ?? CoreMod.Survival,
             FlyingSpeed = PlayerEntityComponent.DefaultFlyingSpeed,
             FieldOfViewModifier = PlayerEntityComponent.DefaultFieldOfViewModifier,
         };

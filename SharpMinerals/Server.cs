@@ -374,6 +374,8 @@ public class Server : ITickable {
 
         // The old world's entity tracker despawns this player for its viewers once the entity leaves it (below);
         // the target world's tracker spawns it there. The tab-list entry stays (the player is still online).
+        // Resolve the target's spawn before taking the gate - the surface-scan path may generate a chunk.
+        var spawn = target.GetSpawn();
         PlayerContext moved;
         lock (ecsGate) {
             if (!old.Ecs.IsAlive(ctx.Entity)) return;
@@ -383,13 +385,24 @@ public class Server : ITickable {
             var entity = target.SpawnPlayer(clientId, info.Name, info.Uuid, info.NetId, blob);
             if (target.Ecs.Has<SenderEntityComponent>(entity))
                 target.Ecs.Get<SenderEntityComponent>(entity).Client = client;
+            // The restored blob carried OLD-world coordinates - a switch enters through the target's spawn.
+            target.Ecs.Get<TransformEntityComponent>(entity) = spawn;
+            target.Ecs.Get<NetTransformEntityComponent>(entity) = new NetTransformEntityComponent {
+                Position = spawn.Position, Yaw = spawn.Yaw, Pitch = spawn.Pitch
+            };
+            target.Entities.Update(entity, spawn.X, spawn.Y, spawn.Z);
+            // Adopt the target's imposed mode; without one, keep the mode carried from the old world
+            // (SpawnPlayer rebuilt the session component, which resets it).
+            target.Ecs.Get<PlayerEntityComponent>(entity).GameMode = target.DefaultGameMode ?? info.GameMode;
             moved = new PlayerContext(this, target, entity, client);
             players[clientId] = moved;
         }
 
         // Reload the client into the target world (WorldName = target's unique key forces the teardown).
-        client.Send(new RespawnS2C("minecraft:overworld", target.Name, HashedSeed: 0, GameMode: 1, IsFlat: true));
-        client.Send(new SetDefaultSpawnPositionS2C(new Vector3i(0, WorldDefaults.SurfaceY, 0), 0f));
+        byte modeId = target.Ecs.Get<PlayerEntityComponent>(moved.Entity).GameMode.IntoId();
+        client.Send(new RespawnS2C("minecraft:overworld", target.Name, HashedSeed: 0, GameMode: modeId, IsFlat: true));
+        client.Send(new SetDefaultSpawnPositionS2C(
+            new Vector3i((int)System.Math.Floor(spawn.X), (int)System.Math.Floor(spawn.Y), (int)System.Math.Floor(spawn.Z)), spawn.Yaw));
         // Send the spawn column synchronously (like the join flow) so the client lands on loaded terrain in the new
         // world immediately; the surrounding columns then stream in from the background loader.
         Streaming.StreamSpawnColumn(moved);

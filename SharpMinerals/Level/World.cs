@@ -45,8 +45,10 @@ public class World : ITickable {
     /// packets - the server drives these in its pre-/post-tick passes.</summary>
     public IReadOnlyList<INetworkSystem> NetworkSystems => networkSystems;
 
-    // Files a system under each role it implements. One call per system keeps registration order across the views.
-    void Register(ISystem system) {
+    /// <summary>Registers a system with this world, filing it under each role it implements (one call per
+    /// system keeps registration order across the views). Public so mods can add per-world systems; call it
+    /// before players enter the world - the lists are not guarded against a concurrent tick.</summary>
+    public void AddSystem(ISystem system) {
         systems.Add(system);
         if (system is ITickable tickable) tickables.Add(tickable);
         if (system is INetworkSystem network) networkSystems.Add(network);
@@ -57,6 +59,19 @@ public class World : ITickable {
     public ArchWorld Ecs { get; } = ArchWorld.Create();
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Where players enter this world (fresh joins and world switches). Null (the default) means
+    /// "scan the surface at the origin", which is the sensible answer for generated terrain; a curated world
+    /// (lobby, arena) sets an explicit point.</summary>
+    public TransformEntityComponent? SpawnPoint { get; set; }
+
+    /// <summary>The game mode this world imposes on players entering it (join or switch). Null (the default)
+    /// means players keep their current mode; a curated world (e.g. an adventure-mode lobby) sets one.</summary>
+    public GameMode? DefaultGameMode { get; set; }
+
+    /// <summary>The effective spawn transform: the explicit <see cref="SpawnPoint"/>, or the terrain surface
+    /// at the origin. May load/generate the origin chunk on the surface-scan path.</summary>
+    public TransformEntityComponent GetSpawn() => SpawnPoint ?? SurfaceSpawn(0.5, 0.5);
 
     /// <summary>The domain event bus the simulation publishes to (null in standalone use, e.g. tests).
     /// Systems publish deferred, since worlds tick on parallel threads.</summary>
@@ -96,15 +111,15 @@ public class World : ITickable {
         // Background loader publishes via TryAdd so a stray duplicate can't clobber a loaded (edited) chunk.
         loader = new ChunkLoader(LoadOrGenerate, (pos, chunk) => loadedChunks.TryAdd(pos, chunk));
         Entities = new SpatialIndex(this);
-        Register(new Systems.ItemLifecycleSystem(this));
-        Register(new Systems.EntityPhysicsSystem(this));      // gravity + terrain collision; writes block-collision feedback
-        Register(new Systems.FallingBlockSystem(this));       // lands falling blocks using that ground-contact feedback
-        Register(new Systems.CollisionFeedbackSystem(this));  // entity-vs-entity overlap, on settled positions
-        Register(new Systems.ItemPickupSystem(this));         // collects overlapped drops into player inventories
-        Register(new Systems.EquipmentVisibilitySystem(this));// diffs each player's equipment -> others (post-tick)
-        Register(new Systems.PlayerMovementSystem(this));     // relays each player's movement -> others (post-tick)
-        Register(new Systems.ChunkStreamingSystem(this));     // streams columns as a player crosses chunks (post-tick)
-        Register(new Systems.EntityTrackerSystem(this));      // per-player entity spawn/despawn - event-driven (no per-tick work); registered so it's constructed + subscribed
+        AddSystem(new Systems.ItemLifecycleSystem(this));
+        AddSystem(new Systems.EntityPhysicsSystem(this));      // gravity + terrain collision; writes block-collision feedback
+        AddSystem(new Systems.FallingBlockSystem(this));       // lands falling blocks using that ground-contact feedback
+        AddSystem(new Systems.CollisionFeedbackSystem(this));  // entity-vs-entity overlap, on settled positions
+        AddSystem(new Systems.ItemPickupSystem(this));         // collects overlapped drops into player inventories
+        AddSystem(new Systems.EquipmentVisibilitySystem(this));// diffs each player's equipment -> others (post-tick)
+        AddSystem(new Systems.PlayerMovementSystem(this));     // relays each player's movement -> others (post-tick)
+        AddSystem(new Systems.ChunkStreamingSystem(this));     // streams columns as a player crosses chunks (post-tick)
+        AddSystem(new Systems.EntityTrackerSystem(this));      // per-player entity spawn/despawn - event-driven (no per-tick work); registered so it's constructed + subscribed
     }
 
     // -- Chunks --------------------------------------------------------------
@@ -409,7 +424,7 @@ public class World : ITickable {
     /// saved transform overwrites the spawn position, so the column is only scanned for genuinely new players.</summary>
     public ArchEntity SpawnPlayer(ulong clientId, string name, Guid uuid, int entityId, byte[]? saved = null) {
         var spawn = saved is null
-            ? SurfaceSpawn(0.5, 0.5)
+            ? GetSpawn()
             : new TransformEntityComponent(0.5, WorldDefaults.SurfaceY, 0.5); // overwritten from saved below
         var entity = Player.Spawn(this, clientId, name, uuid, entityId, spawn, saved);
         // Player.Spawn has stamped the net id / position / inventory; the tracker can now spawn this player to any
