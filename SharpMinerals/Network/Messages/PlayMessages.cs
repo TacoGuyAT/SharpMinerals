@@ -10,6 +10,10 @@ namespace SharpMinerals.Network.Messages;
 /// <summary>Bundle delimiter (0x00): brackets a group of packets the client must apply together in one tick.</summary>
 public sealed record BundleDelimiterS2C : IMessage;
 
+/// <summary>Game Event (0x1F): a single (event, value) pair - weather toggles, game-mode change, and the
+/// like. Higher-level intermediary messages lower to a sequence of these.</summary>
+public sealed record GameEventS2C(byte Event, float Value) : IMessage;
+
 /// <summary>The first play packet (minimal field subset).</summary>
 public sealed record JoinGameS2C(
     int EntityId,

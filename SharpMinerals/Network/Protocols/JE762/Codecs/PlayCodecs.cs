@@ -1,3 +1,4 @@
+using SharpMinerals.Entities;
 using SharpMinerals.Math;
 using SharpMinerals.Network.Buffers;
 using SharpMinerals.Network.Messages;
@@ -10,6 +11,16 @@ namespace SharpMinerals.Network.Protocols.JE762.Codecs;
 internal sealed class BundleDelimiterS2CCodec : ICodec<BundleDelimiterS2C> {
     public void Encode(MinecraftStream s, BundleDelimiterS2C m) { } // no payload
     public BundleDelimiterS2C Decode(MinecraftStream s) => new();
+}
+
+internal sealed class GameEventS2CCodec : ICodec<GameEventS2C> {
+    public void Encode(MinecraftStream s, GameEventS2C m) {
+        s.WriteUByte(m.Event);
+        s.WriteFloat(m.Value);
+    }
+
+    public GameEventS2C Decode(MinecraftStream s) =>
+        throw new NotSupportedException("GameEventS2C is clientbound only.");
 }
 
 internal sealed class JoinGameS2CCodec : ICodec<JoinGameS2C> {

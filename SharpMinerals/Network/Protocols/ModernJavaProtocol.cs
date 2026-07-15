@@ -14,6 +14,17 @@ public abstract class ModernJavaProtocol : Protocol {
     static readonly ILogger Log = Logging.For("Net.Protocol");
 
     public override byte[] Frame(IMessage message) {
+        // An intermediary message with no single wire packet lowers to a sequence of real packets;
+        // their frames concatenate (the client reads each one independently by its length prefix).
+        if (TryExpand(message, out var parts)) {
+            using var multi = new MemoryStream();
+            foreach (var part in parts) {
+                byte[] sub = Frame(part);
+                multi.Write(sub, 0, sub.Length);
+            }
+            return multi.ToArray();
+        }
+
         byte[] payload = EncodePayload(message); // VarInt id + codec body
         using var ms = new MemoryStream(payload.Length + MinecraftStream.VarIntMaxBytes);
         var s = new MinecraftStream(ms, leaveOpen: true);

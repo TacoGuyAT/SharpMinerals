@@ -1,4 +1,5 @@
-﻿using SharpMinerals.Level;
+﻿using System.Diagnostics.CodeAnalysis;
+using SharpMinerals.Level;
 using SharpMinerals.Network.Buffers;
 
 namespace SharpMinerals.Network;
@@ -62,7 +63,18 @@ public abstract class Protocol {
     /// Whether this protocol can encode a message type. Callers silently drop ones it can't (e.g. a
     /// modern packet sent to a legacy client with no equivalent), so each protocol speaks only its own forms.
     /// </summary>
-    public bool CanEncode(IMessage message) => byType.ContainsKey(message.GetType());
+    public bool CanEncode(IMessage message) => byType.ContainsKey(message.GetType()) || TryExpand(message, out _);
+
+    /// <summary>
+    /// Lowers an intermediary message that has no single wire packet into the sequence of real packets
+    /// that represent it for this version (e.g. Rain -> a Begin/End Raining game event plus the level
+    /// changes). Returns false for the common case of a message that maps 1:1 to one packet;
+    /// <see cref="Frame"/> concatenates the frames of the lowered parts when it returns true.
+    /// </summary>
+    protected virtual bool TryExpand(IMessage message, [MaybeNullWhen(false)] out IReadOnlyList<IMessage> parts) {
+        parts = null;
+        return false;
+    }
 
     public ICodec? CodecFor(ConnectionState state, PacketDirection direction, int id) =>
         byWire.TryGetValue(new WireKey(state, direction, id), out var e) ? e.Codec : null;

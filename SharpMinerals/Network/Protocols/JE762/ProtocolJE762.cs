@@ -114,6 +114,7 @@ public class ProtocolJE762 : ModernJavaProtocol {
 
         // -- Play: clientbound -----------------------------------------------
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.BundleDelimiter, new BundleDelimiterS2CCodec());
+        Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.GameEvent, new GameEventS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SpawnEntity, new SpawnEntityS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.SetEntityVelocity, new SetEntityVelocityS2CCodec());
         Register(ConnectionState.Play, PacketDirection.Clientbound, Cb.CollectItem, new CollectItemS2CCodec());
