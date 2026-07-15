@@ -23,6 +23,9 @@ public sealed record PlayerContext(Server Server, World World, ArchEntity Entity
     /// </summary>
     public ref InventoryEntityComponent GetInventory() => ref World.Ecs.Get<InventoryEntityComponent>(Entity);
 
+    /// <summary>The player's in-progress survival dig, by reference (queries ECS).</summary>
+    public ref DiggingEntityComponent GetDigging() => ref World.Ecs.Get<DiggingEntityComponent>(Entity);
+
     /// <summary>
     /// The held (selected hotbar) item, by reference, so callers can read or mutate it in place.
     /// This method queries ECS

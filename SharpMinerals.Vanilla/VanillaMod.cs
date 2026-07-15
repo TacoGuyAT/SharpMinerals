@@ -75,6 +75,8 @@ public sealed partial class VanillaMod : Mod {
             if (Skip(b.Name)) continue;
             var block = BlockType.Register(b.Name);
             if (b.Diggable && data.V763.ItemId.ContainsKey(b.Name)) block.DropSelf();
+            // Diggable blocks with a real hardness are breakable in survival; the rest (bedrock) stay unbreakable.
+            if (b.Diggable && b.Hardness >= 0f) block.Add(new BreakableBlockDescriptor(b.Hardness, b.RequiresTool));
             blocks[block.Id.Full] = block;
         }
         foreach (var it in data.V763.Items) {

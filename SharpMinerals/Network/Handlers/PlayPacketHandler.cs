@@ -3,6 +3,7 @@ using SharpMinerals.Blocks;
 using SharpMinerals.Blocks.Descriptors;
 using SharpMinerals.Entities.Components;
 using SharpMinerals.Events;
+using SharpMinerals.Events.Contexts;
 using SharpMinerals.Level;
 using SharpMinerals.Level.Systems;
 using SharpMinerals.Math;
@@ -29,11 +30,15 @@ public sealed class PlayPacketHandler(Server server) {
     static readonly ILogger Log = Logging.For("Play");
 
     // Player Action status codes (PlayerActionC2S.Status).
-    const int DiggingStarted = 0;   // creative / instant break
-    const int DiggingFinished = 2;  // survival break completed
+    const int DiggingStarted = 0;    // start digging: creative/instant break, or the start of a survival dig
+    const int DiggingCancelled = 1;  // survival dig aborted (button released before the block broke)
+    const int DiggingFinished = 2;   // survival break completed (client's mining timer elapsed)
     const int DropItemStack = 3;    // drop the whole held stack (Ctrl+Q)
     const int DropItem = 4;         // drop one of the held item (Q)
     const int CreativeDropSlot = -1; // SetCreativeModeSlot slot meaning "throw the carried item out"
+
+    // A survival finish is accepted this many ticks early, to absorb latency/rounding rather than reject a real break.
+    const int DigLeniencyTicks = 2;
 
     readonly Server server = server;
 
@@ -163,24 +168,88 @@ public sealed class PlayPacketHandler(Server server) {
             HandleDropHeld(client, wholeStack: action.Status == DropItemStack);
             return;
         }
-        if (action.Status is not (DiggingStarted or DiggingFinished)) {
-            client.Send(new AckBlockChangeS2C(action.Sequence)); // cancelled/other stage: just ack
-            return;
-        }
         if(!server.TryGetPlayer(client.Id, out var breaker)) {
             throw new Exception($"Player {client.Name} isn't registered properly");
         }
 
-        var world = breaker.World;
-        var broken = world.BreakBlock(action.Position, breaker);
+        switch (action.Status) {
+            case DiggingStarted:
+                StartDigging(client, breaker, action);
+                break;
+            case DiggingFinished:
+                FinishDigging(client, breaker, action);
+                break;
+            case DiggingCancelled:
+                breaker.GetDigging().Active = false;
+                client.Send(new AckBlockChangeS2C(action.Sequence));
+                break;
+            default:
+                client.Send(new AckBlockChangeS2C(action.Sequence)); // other stages: just ack
+                break;
+        }
+    }
 
+    // Start Digging (status 0). Creative instant-breaks; survival begins a timed dig (or instant-breaks a
+    // zero-hardness block, for which the client only ever sends this start action).
+    void StartDigging(NetClient client, PlayerContext breaker, PlayerActionC2S action) {
+        if (breaker.GetPlayer().GameMode.Flags.HasFlag(PlayerFlags.InstantBreak)) {
+            ApplyBreak(client, breaker, action.Position, action.Sequence);
+            return;
+        }
+
+        var block = breaker.World.GetBlock(action.Position);
+        // No breakable descriptor -> unbreakable in survival (bedrock): ack and ignore.
+        if (!block.TryGet<BreakableBlockDescriptor>(out var breakable)) {
+            breaker.GetDigging().Active = false;
+            client.Send(new AckBlockChangeS2C(action.Sequence));
+            return;
+        }
+
+        int required = breakable.BreakTicks;
+        if (required <= 0) { // instant blocks (flowers, tall grass): no finish action follows
+            ApplyBreak(client, breaker, action.Position, action.Sequence);
+            return;
+        }
+
+        ref var dig = ref breaker.GetDigging();
+        dig.Active = true;
+        dig.Position = action.Position;
+        dig.StartTick = server.CurrentTick;
+        dig.RequiredTicks = required;
         client.Send(new AckBlockChangeS2C(action.Sequence));
+    }
+
+    // Finish Digging (status 2): survival only. Break the block if the recorded dig matches this position and
+    // enough ticks have elapsed; otherwise reject it and re-send the still-present block so the client rolls back.
+    void FinishDigging(NetClient client, PlayerContext breaker, PlayerActionC2S action) {
+        ref var dig = ref breaker.GetDigging();
+        bool valid = dig.Active
+            && dig.Position == action.Position
+            && server.CurrentTick - dig.StartTick >= dig.RequiredTicks - DigLeniencyTicks;
+        dig.Active = false;
+
+        if (!valid) {
+            client.Send(new AckBlockChangeS2C(action.Sequence));
+            var present = breaker.World.GetBlock(action.Position);
+            client.Send(new BlockUpdateS2C(action.Position, present, breaker.World.GetBlockState(action.Position)));
+            return;
+        }
+
+        ApplyBreak(client, breaker, action.Position, action.Sequence);
+    }
+
+    // Breaks the block, acks the action, and broadcasts the change (with a falling-block check above it).
+    void ApplyBreak(NetClient client, PlayerContext breaker, Vector3i pos, int sequence) {
+        var world = breaker.World;
+        var broken = world.BreakBlock(pos, breaker);
+
+        client.Send(new AckBlockChangeS2C(sequence));
         if (broken.IsAir)
             return; // nothing was there
 
-        BroadcastBlockChange(world, new BlockUpdateS2C(action.Position, CoreMod.Air));
+        BroadcastBlockChange(world, new BlockUpdateS2C(pos, CoreMod.Air));
         // The block above may have lost its support (sand/gravel); let it fall.
-        FallingBlockSystem.TryStartFalling(server, world, action.Position + new Vector3i(0, 1, 0));
+        FallingBlockSystem.TryStartFalling(server, world, pos + new Vector3i(0, 1, 0));
     }
 
     /// <summary>Drop key (Q): toss the held item (whole stack on Ctrl+Q, else one), resync the window, update the visible hand.</summary>
@@ -209,11 +278,14 @@ public sealed class PlayPacketHandler(Server server) {
             return; // "use item" / empty hand
         if (client.Protocol.Types.FromItemId(place.ItemId) is not BlockType placed || placed.PlacedBlock is not { } block)
             return; // not a placeable block we know
-        var target = Offset(new Vector3i(place.X, place.Y, place.Z), (BlockFace)place.Direction);
-        if (!server.DefaultWorld.PlaceBlock(target, block))
+        if (!server.TryGetPlayer(client.Id, out var ctx))
             return;
-        BroadcastBlockChange(server.DefaultWorld, new BlockUpdateS2C(target, block));
-        FallingBlockSystem.TryStartFalling(server, server.DefaultWorld, target); // sand/gravel placed over air falls
+        var world = ctx.World; // place into the player's own world, not always the default one
+        var target = Offset(new Vector3i(place.X, place.Y, place.Z), (BlockFace)place.Direction);
+        if (!world.PlaceBlock(target, block))
+            return;
+        BroadcastBlockChange(world, new BlockUpdateS2C(target, block));
+        FallingBlockSystem.TryStartFalling(server, world, target); // sand/gravel placed over air falls
     }
 
     void HandlePlacement(NetClient client, UseItemOnC2S use) {

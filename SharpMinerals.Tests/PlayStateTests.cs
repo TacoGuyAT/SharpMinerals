@@ -790,6 +790,66 @@ public class PlayStateTests {
         Assert.Equal(c763.Length + 1, c762.Length);
     }
 
+    // -- Block breaking: bare-hand mining time from hardness --------------------------
+    [Fact]
+    public void BreakTicksFollowsBareHandHardness() {
+        // Vanilla bare-hand: 30 ticks per hardness when hand-harvestable, 100 when a tool is required.
+        Assert.True(VanillaMod.Dirt.TryGet<BreakableBlockDescriptor>(out var dirt), "dirt is breakable");
+        Assert.Equal(15, dirt.BreakTicks);   // 0.5 * 30 (no tool needed to harvest)
+        Assert.True(VanillaMod.Stone.TryGet<BreakableBlockDescriptor>(out var stone), "stone is breakable");
+        Assert.Equal(150, stone.BreakTicks); // 1.5 * 100 (needs a pickaxe)
+        Assert.False(VanillaMod.Bedrock.TryGet<BreakableBlockDescriptor>(out _), "bedrock is unbreakable");
+    }
+
+    // -- Block breaking: survival enforces the mining delay server-side ----------------
+    [Fact]
+    public void SurvivalDiggingEnforcesDelay() {
+        var protocol = new ProtocolJE763();
+        var capture = new CaptureNetServer(protocol);
+        var worlds = new ConcurrentDictionary<string, World> {
+            ["overworld"] = new World("overworld", new FlatChunkGenerator()),
+        };
+        var server = new Server(new ServerContext { Worlds = worlds, MOTD = new TextComponent("dig-test"), MaxPlayers = 20, TicksPerSecond = 20 }, capture);
+        var handler = new ServerPacketHandler(server);
+        var client = new CaptureNetClient(1, protocol) { State = ConnectionState.Login };
+        capture.Register(client);
+
+        DetachSyncContext();
+        handler.Handle(client, new LoginStartC2S("Digger", Guid.Empty));
+        Settle(server);
+        Assert.True(server.TryGetPlayer(client.Id, out var ctx), "player resolved"); // players join in survival
+
+        var pos = new Vector3i(0, 4, 0);
+        Assert.True(server.DefaultWorld.GetBlock(pos) == VanillaMod.GrassBlock, "target is grass (hardness 0.6)");
+
+        // Start digging: the block is NOT removed; a timed dig is recorded (0.6 * 30 = 18 ticks).
+        handler.Handle(client, new PlayerActionC2S(0, pos, 1, 10));
+        server.Scheduler.Run();
+        Assert.True(server.DefaultWorld.GetBlock(pos) == VanillaMod.GrassBlock, "start does not break in survival");
+        Assert.True(ctx.GetDigging().Active && ctx.GetDigging().RequiredTicks == 18, "dig recorded, 18 ticks required");
+
+        // Finishing too early is rejected: the block stays and the server re-sends it so the client rolls back.
+        client.Sent.Clear();
+        handler.Handle(client, new PlayerActionC2S(2, pos, 1, 11));
+        server.Scheduler.Run();
+        Assert.True(server.DefaultWorld.GetBlock(pos) == VanillaMod.GrassBlock, "premature finish rejected");
+        Assert.True(
+            client.Sent.Any(m => m is BlockUpdateS2C b && b.Position == pos && b.Block == VanillaMod.GrassBlock),
+            "rejected finish re-sends the still-present block");
+
+        // Restart the dig, then simulate the required time passing (backdate the start): the finish now breaks it.
+        handler.Handle(client, new PlayerActionC2S(0, pos, 1, 12));
+        server.Scheduler.Run();
+        ctx.GetDigging().StartTick -= 1000; // pretend well over 18 ticks elapsed
+        capture.Broadcasts.Clear();
+        handler.Handle(client, new PlayerActionC2S(2, pos, 1, 13));
+        server.Scheduler.Run();
+        Assert.True(server.DefaultWorld.GetBlock(pos).IsAir, "finish after the delay breaks the block");
+        Assert.True(
+            capture.Broadcasts.Any(m => m is BlockUpdateS2C b && b.Position == pos && b.Block == CoreMod.Air),
+            "valid break is broadcast");
+    }
+
     // -- Handler flow over an in-memory transport ----------------------------
     [Fact]
     public void HandlerFlow() {
@@ -823,6 +883,8 @@ public class PlayStateTests {
         // Digging (creative instant break, status 0).
         client.Sent.Clear();
         capture.Broadcasts.Clear();
+        Assert.True(server.TryGetPlayer(client.Id, out var digger), "dig: player resolved");
+        digger.GetPlayer().GameMode = CoreMod.Creative; // creative instant-breaks on the start action
         var digPos = new Vector3i(0, 4, 0);
         Assert.True(server.DefaultWorld.GetBlock(digPos) == VanillaMod.GrassBlock, "dig: target starts as grass");
         handler.Handle(client, new PlayerActionC2S(0, digPos, 1, 42));

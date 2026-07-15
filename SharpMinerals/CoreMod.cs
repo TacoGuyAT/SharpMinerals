@@ -64,29 +64,30 @@ public sealed class CoreMod : Mod {
             // A dropped item collides with terrain but doesn't block placement (Physics, not Placement).
             new HitboxEntityComponent(0.25, 0.25, CollisionUsage.Physics),
             new GravityEntityComponent(),
-            new PickupEntityComponent()))
-            .Persist(); // dropped items are saved with the world
+            new PickupEntityComponent()
+        )).Persist(); // dropped items are saved with the world
 
-        Player = EntityType.Register("player")
-            .Blueprint(ecs => ecs.Create(
-                new TransformEntityComponent(),
-                new NetTransformEntityComponent(),
-                new VelocityEntityComponent(0, 0, 0),
-                new HealthEntityComponent(20f),
-                new InventoryEntityComponent(),
-                // The true 0.6x1.8 player hitbox, used to block placement. Players are physics-excluded
-                // (client-driven), so it has no Physics usage.
-                new HitboxEntityComponent(0.6, 1.8, CollisionUsage.Placement),
-                // A wider proximity box for nearby interactions (item pickup today); larger than the hitbox.
-                new InteractionReachEntityComponent(1.5, 2.0),
-                // Its Touching list is a per-tick scratch buffer that CollisionFeedbackSystem lazily creates.
-                new CollisionEntityComponent(),
-                new ChunkViewEntityComponent(),
-                new EquipmentEntityComponent(),
-                new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned
-                new SenderEntityComponent(),
-                new PlayerEntityComponent(),
-                new StateEntityComponent()));
+        Player = EntityType.Register("player") .Blueprint(ecs => ecs.Create(
+            new TransformEntityComponent(),
+            new NetTransformEntityComponent(),
+            new VelocityEntityComponent(0, 0, 0),
+            new HealthEntityComponent(20f),
+            new InventoryEntityComponent(),
+            // The true 0.6x1.8 player hitbox, used to block placement. Players are physics-excluded
+            // (client-driven), so it has no Physics usage.
+            new HitboxEntityComponent(0.6, 1.8, CollisionUsage.Placement),
+            // A wider proximity box for nearby interactions (item pickup today); larger than the hitbox.
+            new InteractionReachEntityComponent(1.5, 2.0),
+            // Its Touching list is a per-tick scratch buffer that CollisionFeedbackSystem lazily creates.
+            new CollisionEntityComponent(),
+            new ChunkViewEntityComponent(),
+            new EquipmentEntityComponent(),
+            new EntityTrackerComponent(), // per-player view: which entities its client currently has spawned
+            new SenderEntityComponent(),
+            new PlayerEntityComponent(),
+            new StateEntityComponent(),
+            new DiggingEntityComponent()
+        ));
 
         FallingBlock = EntityType.Register("falling_block").Blueprint(ecs => ecs.Create(
             new TransformEntityComponent(),
@@ -97,7 +98,7 @@ public sealed class CoreMod : Mod {
             new BlockCollisionEntityComponent(),
             // Default to the "missing" block so a data-less spawn (e.g. /summon falling_block) still has a real
             // block to fall, render and re-place as; SpawnFallingBlock overwrites it with the actual block.
-            new FallingBlockEntityComponent { Block = Missing }))
-            .Persist(); // a falling block in flight is saved so its block isn't lost on shutdown
+            new FallingBlockEntityComponent { Block = Missing }
+        )).Persist(); // a falling block in flight is saved so its block isn't lost on shutdown
     }
 }
