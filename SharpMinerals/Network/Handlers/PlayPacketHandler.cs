@@ -169,9 +169,11 @@ public sealed class PlayPacketHandler {
             client.Send(new AckBlockChangeS2C(action.Sequence)); // cancelled/other stage: just ack
             return;
         }
+        if(!server.TryGetPlayer(client.Id, out var breaker)) {
+            throw new Exception($"Player {client.Name} isn't registered properly");
+        }
 
-        var world = server.DefaultWorld;
-        server.TryGetPlayer(client.Id, out var breaker);
+        var world = breaker.World;
         var broken = world.BreakBlock(action.Position, breaker);
 
         client.Send(new AckBlockChangeS2C(action.Sequence));
