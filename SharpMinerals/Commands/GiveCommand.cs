@@ -40,6 +40,12 @@ public static class GiveCommand {
         }
 
         var name = Arguments.GetString(ctx, "item");
+        // A namespace is required: a bare name is ambiguous (several namespaces may register the same path), so
+        // it only powers tab-suggestions - resolution needs the qualified id.
+        if(!name.Contains(':')) {
+            ctx.Source.Reply($"'{name}' needs a namespace (e.g. sharpminerals:{name}).");
+            return 0;
+        }
         if(!ItemType.TryFromPath(name, out var type) || type is BlockType { IsAir: true }) {
             ctx.Source.Reply($"Unknown item '{name}'.");
             return 0;

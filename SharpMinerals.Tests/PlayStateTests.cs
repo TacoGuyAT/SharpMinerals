@@ -1514,7 +1514,10 @@ public class PlayStateTests {
         var sender = server.DefaultWorld.Ecs.Get<SenderEntityComponent>(context.Entity);
         client.Sent.Clear();
 
-        _ = server.CommandDispatcher.ExecuteAsync(sender, "give cobblestone 10", client); // synchronous-bodied
+        // Give takes a NAMESPACED id (Brigadier's word() chokes on the ':', so the item arg is a resource-location
+        // type). A namespace is required - bare names only power tab-suggestions, since several namespaces may
+        // register the same path.
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "give minecraft:cobblestone 10", client);
         server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
 
         int total = 0;
@@ -1523,8 +1526,6 @@ public class PlayStateTests {
         Assert.Equal(10, total);                                              // the 10 cobblestone landed in the inventory
         Assert.NotEmpty(client.Sent.OfType<SetContainerContentS2C>());        // window resynced to the client
 
-        // A NAMESPACED id (with a colon) parses - Brigadier's word() chokes on the ':', so the give item argument
-        // is a resource-location type. Now that content is namespaced (minecraft:wool), this is the common case.
         client.Sent.Clear();
         _ = server.CommandDispatcher.ExecuteAsync(sender, "give minecraft:wool 5", client);
         server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
@@ -1533,9 +1534,15 @@ public class PlayStateTests {
             if (inv.Main(i).Type == VanillaMod.Wool) wool += inv.Main(i).Count;
         Assert.Equal(5, wool);
 
-        // An unknown item is rejected without touching the inventory.
+        // A bare (namespace-less) name is rejected even though it names a real item - a namespace is required.
         client.Sent.Clear();
-        _ = server.CommandDispatcher.ExecuteAsync(sender, "give not_a_real_item", client);
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "give cobblestone", client);
+        server.Scheduler.Run();
+        Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
+
+        // An unknown (but namespaced) item is likewise rejected without touching the inventory.
+        client.Sent.Clear();
+        _ = server.CommandDispatcher.ExecuteAsync(sender, "give minecraft:not_a_real_item", client);
         server.Scheduler.Run(); // ExecuteAsync now defers brig.Execute to the scheduler
         Assert.Empty(client.Sent.OfType<SetContainerContentS2C>());
     }
@@ -2499,14 +2506,14 @@ public class PlayStateTests {
     // -- Collision: a spawned player's CollisionFeedback is reliably constructed (no null list) --
     [Fact]
     public void PlayerCollisionFeedbackIsInitialized() {
-        // The production NRE came from a parameterless struct ctor (bypassed under the Release JIT)
-        // leaving Touching null. Player.Spawn now sets it via an object initializer, so it's always
-        // present - and the collision pass runs without dereferencing null.
+        // The production NRE came from a parameterless struct ctor (bypassed under the Release JIT) leaving
+        // Touching null. It's now a per-tick scratch buffer that CollisionFeedbackSystem (its only writer)
+        // lazily creates, so it's null until the first collision pass - and that pass never dereferences null.
         var world = new World("collide", new FlatChunkGenerator());
         var player = world.SpawnPlayer(1, "P", Guid.NewGuid(), 1);
 
-        Assert.NotNull(world.Ecs.Get<CollisionEntityComponent>(player).Touching);
-        Assert.Null(Record.Exception(() => world.Tick()));
+        Assert.Null(Record.Exception(() => world.Tick()));                        // collision pass runs on a fresh player, no NRE
+        Assert.NotNull(world.Ecs.Get<CollisionEntityComponent>(player).Touching); // lazily created by that first pass
     }
 
     // -- Spatial index: chunk-bucketed lookups + incremental move/remove maintenance --------
