@@ -14,6 +14,16 @@ public sealed record BundleDelimiterS2C : IMessage;
 /// like. Higher-level intermediary messages lower to a sequence of these.</summary>
 public sealed record GameEventS2C(byte Event, float Value) : IMessage;
 
+/// <summary>Weather state (custom intermediary). There is no single "rain" packet: the protocol lowers this
+/// into the Begin/End Raining game event plus the rain (and, for a thunderstorm, thunder) level changes.</summary>
+public sealed record RainS2C(RainType Type, float Level) : IMessage;
+
+public enum RainType {
+    None,
+    Rain,
+    Thunderstorm,
+}
+
 /// <summary>The first play packet (minimal field subset).</summary>
 public sealed record JoinGameS2C(
     int EntityId,

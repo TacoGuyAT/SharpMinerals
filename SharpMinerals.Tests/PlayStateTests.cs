@@ -2286,6 +2286,45 @@ public class PlayStateTests {
         Assert.True(first.Length > 0, "produced framed wire bytes");
     }
 
+    // -- Rain: one intermediary message lowers to several Game Event (0x1F) packets ---
+    [Fact]
+    public void RainLowersToGameEventPackets() {
+        var protocol = new ProtocolJE763();
+
+        // Reads back every [VarInt len][VarInt id][UByte event][Float value] frame concatenated by Frame.
+        static List<(int Id, byte Event, float Value)> ReadEvents(byte[] framed) {
+            using var s = new MinecraftStream(new MemoryStream(framed, writable: false));
+            var events = new List<(int, byte, float)>();
+            while (s.Position < framed.Length) {
+                int len = s.ReadVarInt();
+                long end = s.Position + len;
+                events.Add((s.ReadVarInt(), s.ReadUByte(), s.ReadFloat()));
+                Assert.Equal(end, s.Position); // each frame's declared length is exact
+            }
+            return events;
+        }
+
+        const int GameEvent = 0x1F;
+
+        // Rain -> Begin Raining (event 2) then a Rain Level Change (event 7) carrying the strength.
+        Assert.Equal(
+            new[] { (GameEvent, (byte)2, 0f), (GameEvent, (byte)7, 0.5f) },
+            ReadEvents(protocol.Frame(new RainS2C(RainType.Rain, 0.5f))));
+
+        // Thunderstorm additionally raises the thunder gradient (event 8).
+        Assert.Equal(
+            new[] { (GameEvent, (byte)2, 0f), (GameEvent, (byte)7, 1f), (GameEvent, (byte)8, 1f) },
+            ReadEvents(protocol.Frame(new RainS2C(RainType.Thunderstorm, 1f))));
+
+        // Clear weather -> a single End Raining (event 1).
+        Assert.Equal(
+            new[] { (GameEvent, (byte)1, 0f) },
+            ReadEvents(protocol.Frame(new RainS2C(RainType.None, 0f))));
+
+        // The intermediary has no direct codec, but the protocol still reports it as encodable.
+        Assert.True(protocol.CanEncode(new RainS2C(RainType.Rain, 0.5f)));
+    }
+
     // -- Legacy (JE61 / 1.5.2) framing: detection + non-VarInt wire format ----------
     [Fact]
     public void LegacyProtocolDetectionAndFraming() {

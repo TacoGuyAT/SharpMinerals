@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using SharpMinerals.Network.Messages;
 using SharpMinerals.Network.Protocols.JE762.Codecs;
 
 namespace SharpMinerals.Network.Protocols.JE762;
@@ -179,4 +181,34 @@ public class ProtocolJE762 : ModernJavaProtocol {
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.SetHeldItem, new SetHeldItemC2SCodec());
         Register(ConnectionState.Play, PacketDirection.Serverbound, Sb.SetCreativeModeSlot, new SetCreativeModeSlotC2SCodec());
     }
+
+    // Game Event (0x1F) sub-event ids. Weather has no single packet - it is expressed as these events.
+    const byte EndRaining = 1;
+    const byte BeginRaining = 2;
+    const byte RainLevelChange = 7;    // value 0..1: the rain gradient strength (set immediately)
+    const byte ThunderLevelChange = 8; // value 0..1: the thunder/darkness gradient strength
+
+    protected override bool TryExpand(IMessage message, [MaybeNullWhen(false)] out IReadOnlyList<IMessage> parts) {
+        if (message is RainS2C rain) {
+            parts = ExpandRain(rain);
+            return true;
+        }
+        return base.TryExpand(message, out parts);
+    }
+
+    // Begin/End Raining toggles the raining state; the level changes then snap the gradient(s) to strength.
+    // A thunderstorm is rain plus thunder, so it also raises the thunder gradient.
+    static IReadOnlyList<IMessage> ExpandRain(RainS2C rain) => rain.Type switch {
+        RainType.None => [new GameEventS2C(EndRaining, 0f)],
+        RainType.Rain => [
+            new GameEventS2C(BeginRaining, 0f),
+            new GameEventS2C(RainLevelChange, rain.Level),
+        ],
+        RainType.Thunderstorm => [
+            new GameEventS2C(BeginRaining, 0f),
+            new GameEventS2C(RainLevelChange, rain.Level),
+            new GameEventS2C(ThunderLevelChange, rain.Level),
+        ],
+        _ => [],
+    };
 }
