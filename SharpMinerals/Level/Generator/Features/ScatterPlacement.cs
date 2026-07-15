@@ -90,7 +90,7 @@ public sealed class ScatterPlacement : FeaturePlacement {
                     if (est + TerrainFinder.ScanMargin + 1 + up < baseY) continue;
                     if (est - TerrainFinder.ScanMargin + 1 >= baseY + size) continue;
 
-                    if (!finder.TryAnchor(ox, oz, est, out var anchor)) continue;
+                    if (!finder.TryAnchor(ox, oz, out var anchor)) continue;
 
                     var ctx = new PlaceContext(ox, oz, anchor, biome, source, rng);
                     if (!rule.Test(ctx)) continue;
@@ -106,31 +106,27 @@ public sealed class ScatterPlacement : FeaturePlacement {
 /// <summary>Resolves a column's surface from the terrain density field: a cheap 2D height estimate seeds a short
 /// vertical scan for the true highest solid cell. Block-blind (a density field has no block type), so its anchors
 /// carry air as the surface - callers that need the block use a <see cref="PlacementTarget.Solid"/> target. Works
-/// at any column regardless of cube boundaries, which is why it is the border-safe scatter target.</summary>
+/// at any column regardless of cube boundaries, which is why it is the border-safe scatter target. A thin facade
+/// over the world's shared <see cref="TerrainSurfaceCache"/>, so the estimate and scan are memoised once per
+/// column across every cube and every scatter feature.</summary>
 public sealed class TerrainFinder {
     /// <summary>Half-height of the vertical scan window around the 2D estimate, in blocks.</summary>
-    public const int ScanMargin = 16;
+    public const int ScanMargin = TerrainSurfaceCache.ScanMargin;
 
-    readonly BiomeDensity heights;
-    readonly IDensity density;
+    readonly TerrainSurfaceCache cache;
 
-    public TerrainFinder(FeatureWorld world) {
-        heights = world.Heights;
-        density = world.Density;
-    }
+    public TerrainFinder(FeatureWorld world) => cache = world.TerrainSurface;
 
     /// <summary>The cheap 2D surface estimate at a column (the scan centre; also drives the cube-reach cull).</summary>
-    public double Estimate(int x, int z) => heights.SurfaceHeight(x, z);
+    public double Estimate(int x, int z) => cache.Estimate(x, z);
 
-    /// <summary>Scans a <see cref="ScanMargin"/> window around <paramref name="estimate"/> for the highest solid
-    /// cell. Returns false (leaving <paramref name="anchor"/> defaulted) when none is found in range.</summary>
-    public bool TryAnchor(int x, int z, double estimate, out Anchor anchor) {
-        int e = (int)estimate;
-        for (int y = e + ScanMargin; y >= e - ScanMargin; y--)
-            if (density.At(x, y, z) > 0) {
-                anchor = new Anchor(y, CoreMod.Air);
-                return true;
-            }
+    /// <summary>The highest solid cell at a column. Returns false (leaving <paramref name="anchor"/> defaulted)
+    /// when none is found in range.</summary>
+    public bool TryAnchor(int x, int z, out Anchor anchor) {
+        if (cache.TryResolve(x, z, out int y)) {
+            anchor = new Anchor(y, CoreMod.Air);
+            return true;
+        }
         anchor = default;
         return false;
     }

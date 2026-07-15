@@ -13,10 +13,15 @@ public sealed class FeatureWorld {
     public BiomeDensity Heights { get; }
     public IDensity Density { get; }
 
+    /// <summary>The shared terrain-surface memo for density-derived (scatter) placement: one estimate and one scan
+    /// per column, reused across every scatter feature and every cube that reaches the column.</summary>
+    public TerrainSurfaceCache TerrainSurface { get; }
+
     public FeatureWorld(int seed, BiomeSource source, BiomeDensity heights, IDensity density) {
         Seed = seed;
         Source = source;
         Heights = heights;
         Density = density;
+        TerrainSurface = new TerrainSurfaceCache(heights, density);
     }
 }
