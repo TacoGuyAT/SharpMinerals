@@ -1,6 +1,7 @@
 using SharpMinerals.Level;
 using SharpMinerals.Level.Generator;
 using SharpMinerals.Level.Generator.Biomes;
+using SharpMinerals.Level.Generator.Features;
 using SharpMinerals.Math;
 
 namespace SharpMinerals.Vanilla.Generator;
@@ -29,11 +30,21 @@ public sealed class OverworldChunkGenerator : IChunkGenerator, IBiomeLookup {
         // anti-aliasing reason as rivers - their vertical walls would smear through the trilinear lattice.
         //density = new RavineDensity(density, biomeDensity, seed); // coarse-skipped now: cheap to re-enable
         var shaders = new IChunkShader[] {
-            new TerrainShader(density), new SurfaceShader(density, source), new WaterShader(),
+            new TerrainShader(density), 
+            new SurfaceShader(density, source), 
+            new WaterShader(),
         };
+        // Features describe the shape (WHAT); the fluent chain describes placement (WHERE). Bound to this world.
+        var featureWorld = new FeatureWorld(seed, source, biomeDensity, density);
         var decorators = new IChunkDecorator[] {
-            new TreeDecorator(seed, source, biomeDensity, density),
-            new PlantDecorator(seed, source), // after trees, so it skips columns capped by trunks/canopy
+            new OakTreeFeature()
+                .Scatter(spacing: 6, jitter: 3)
+                .Where(SurfaceRule.AboveSea & SurfaceRule.NotCoastal)
+                .Rarity(b => b.TreeDensity, featureMap: true)
+                .Bind(featureWorld),
+            new GroundCoverFeature()
+                .PerColumn()
+                .Bind(featureWorld), // after trees, so it skips columns capped by trunks/canopy
         };
         generator = new ShaderChunkGenerator(shaders, decorators);
     }
