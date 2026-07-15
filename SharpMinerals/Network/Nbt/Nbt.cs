@@ -147,7 +147,7 @@ public sealed class NbtList : NbtTag {
 }
 
 public sealed class NbtCompound : NbtTag {
-    public readonly Dictionary<string, NbtTag> Children = new();
+    public readonly Dictionary<string, NbtTag> Children = [];
     public override NbtTagType Type => NbtTagType.Compound;
 
     public NbtTag this[string name] {

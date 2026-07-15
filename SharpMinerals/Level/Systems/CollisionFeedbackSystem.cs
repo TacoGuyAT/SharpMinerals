@@ -14,7 +14,7 @@ public sealed class CollisionFeedbackSystem : ITickable {
     const double QueryRadius = 3.0;
 
     readonly World world;
-    readonly List<ArchEntity> candidates = new(); // reused scratch buffer; no per-tick alloc
+    readonly List<ArchEntity> candidates = []; // reused scratch buffer; no per-tick alloc
 
     public CollisionFeedbackSystem(World world) => this.world = world;
 

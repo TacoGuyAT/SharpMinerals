@@ -1,5 +1,4 @@
 using Arch.Core;
-using Arch.Core.Utils;
 using System.Text;
 using SharpMinerals.Network.Buffers;
 
@@ -12,9 +11,9 @@ namespace SharpMinerals.Components;
 /// /<see cref="Register{T}(string, Func{MinecraftStream, object})"/> call per <c>[Component]</c> type, namespaced
 /// from the mod's <c>[ModInfo]</c>); sealed by <see cref="Modding.ModContent.Freeze"/>.</summary>
 public static class ComponentRegistry {
-    static readonly Dictionary<Type, string> ids = new();
-    static readonly Dictionary<string, Type> byId = new();
-    static readonly Dictionary<string, Func<MinecraftStream, object>> readers = new();
+    static readonly Dictionary<Type, string> ids = [];
+    static readonly Dictionary<string, Type> byId = [];
+    static readonly Dictionary<string, Func<MinecraftStream, object>> readers = [];
     static bool frozen;
 
     /// <summary>Registers a non-persistent component (an ECS struct, or a data component not yet made to persist):

@@ -32,7 +32,12 @@ public static class SummonCommand {
             .Then(x => x.Argument("x", Arguments.Double(-Limit, Limit))
                 .Then(x => x.Argument("y", Arguments.Double(-Limit, Limit))
                     .Then(x => x.Argument("z", Arguments.Double(-Limit, Limit)).Executes(c =>
-                        SummonAt(c, Arguments.GetDouble(c, "x"), Arguments.GetDouble(c, "y"), Arguments.GetDouble(c, "z"))))))));
+                        SummonAt(c, Arguments.GetDouble(c, "x"), Arguments.GetDouble(c, "y"), Arguments.GetDouble(c, "z"))
+                    ))
+                )
+            )
+        )
+    );
 
     static int SummonAtSender(CommandContext<SenderContext> ctx) {
         var server = ctx.Source.Server;

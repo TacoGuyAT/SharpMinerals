@@ -55,6 +55,7 @@ public sealed class CustomWindow : BaseWindow {
     }
 
     static Slot StorageSlot(InventoryEntityComponent inventory, int storageIndex) => new() {
+        // TODO: When player is disconnected this will throw an NRE
         Get = () => inventory.Storage[storageIndex],
         Set = v => { if(inventory is { } pinv) pinv.Storage[storageIndex] = v; }
     };
