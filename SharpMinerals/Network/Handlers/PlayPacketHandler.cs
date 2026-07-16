@@ -172,6 +172,15 @@ public sealed class PlayPacketHandler(Server server) {
             throw new Exception($"Player {client.Name} isn't registered properly");
         }
 
+        // A mode without break rights (adventure): refuse server-side regardless of what the client predicts,
+        // and re-send the still-present block so a predicted break rolls back.
+        if (!breaker.GetPlayer().GameMode.Flags.HasFlag(PlayerFlags.CanBreakBlocks)) {
+            breaker.GetDigging().Active = false;
+            client.Send(new AckBlockChangeS2C(action.Sequence));
+            client.Send(new BlockUpdateS2C(action.Position, breaker.World.GetBlock(action.Position), breaker.World.GetBlockState(action.Position)));
+            return;
+        }
+
         switch (action.Status) {
             case DiggingStarted:
                 StartDigging(client, breaker, action);
@@ -305,6 +314,14 @@ public sealed class PlayPacketHandler(Server server) {
         }
         if(interacted)
             return;
+
+        // A mode without place rights (adventure): interactions above still work, but nothing gets placed;
+        // re-send the target cell so a predicted placement rolls back.
+        if (!ctx.GetPlayer().GameMode.Flags.HasFlag(PlayerFlags.CanPlaceBlocks)) {
+            var cell = Offset(use.Position, (BlockFace)use.Face);
+            client.Send(new BlockUpdateS2C(cell, ctx.World.GetBlock(cell), ctx.World.GetBlockState(cell)));
+            return;
+        }
 
         var inventory = ctx.World.Ecs.Get<InventoryEntityComponent>(ctx.Entity);
         ref var held = ref inventory.Held;

@@ -15,6 +15,7 @@ namespace SharpMinerals;
 public sealed class CoreMod : Mod {
     public static GameMode Creative { get; internal set; } = null!;
     public static GameMode Survival { get; internal set; } = null!;
+    public static GameMode Adventure { get; internal set; } = null!;
 
     /// <summary>The empty cell (palette id 0). The chunk store and <see cref="FromState"/> depend on this id.
     /// Registered by <see cref="CoreMod"/> (the engine mod, loaded first) - non-null after engine init.</summary>
@@ -46,6 +47,13 @@ public sealed class CoreMod : Mod {
         Survival = GameMode.Register("survival",
             PlayerFlags.CanBreakBlocks |
             PlayerFlags.CanPlaceBlocks |
+            PlayerFlags.HasCollision |
+            PlayerFlags.CanTakeDamage
+        );
+
+        // No build rights (maps to client gamemode 2, see GameMode.IntoId): the client blocks edits visually
+        // and the dig/place handlers refuse them server-side. The protection mode for curated worlds (lobby).
+        Adventure = GameMode.Register("adventure",
             PlayerFlags.HasCollision |
             PlayerFlags.CanTakeDamage
         );
