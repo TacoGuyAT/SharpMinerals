@@ -5,28 +5,29 @@ using SharpMinerals.Math;
 namespace SharpMinerals.Persistence.RocksDb;
 
 /// <summary>
-/// Disk-backed <see cref="IWorldStore"/> on RocksDB: one key per chunk
-/// (<c>"&lt;world&gt;:x,y,z"</c> bytes), value is the <see cref="ChunkCodec"/> blob. Survives
-/// restarts. Lives in the adapter assembly so the core carries no native dependency.
+/// Disk-backed <see cref="IWorldStore"/> on RocksDB, one database (directory) per world: one key per chunk
+/// (<c>"x,y,z"</c> bytes), value is the <see cref="ChunkCodec"/> blob. Survives restarts. Lives in the
+/// adapter assembly so the core carries no native dependency.
 /// </summary>
 public sealed class RocksDbWorldStore : IWorldStore, IDisposable {
     // Fully qualified: the enclosing namespace ends in ".RocksDb", shadowing the type name.
     readonly RocksDbSharp.RocksDb db;
 
+    /// <summary>Opens the world's database directory, creating it if missing.</summary>
     public RocksDbWorldStore(string path) {
         Directory.CreateDirectory(path);
         var options = new DbOptions().SetCreateIfMissing(true);
         db = RocksDbSharp.RocksDb.Open(options, path);
     }
 
-    static byte[] Key(string world, Vector3i c) => Encoding.UTF8.GetBytes($"{world}:{c.X},{c.Y},{c.Z}");
-    // The '#' delimiter never collides with a chunk key's ':' (so "<world>#entities" is its own slot).
-    static byte[] EntityKey(string world) => Encoding.UTF8.GetBytes($"{world}#entities");
+    static byte[] Key(Vector3i c) => Encoding.UTF8.GetBytes($"{c.X},{c.Y},{c.Z}");
+    // Never collides with a chunk key (those are only digits, '-' and ',').
+    static readonly byte[] EntitiesKey = "entities"u8.ToArray();
 
-    public void SaveChunk(string world, Vector3i chunk, byte[] data) => db.Put(Key(world, chunk), data);
+    public void SaveChunk(Vector3i chunk, byte[] data) => db.Put(Key(chunk), data);
 
-    public bool TryLoadChunk(string world, Vector3i chunk, out byte[] data) {
-        var bytes = db.Get(Key(world, chunk));
+    public bool TryLoadChunk(Vector3i chunk, out byte[] data) {
+        var bytes = db.Get(Key(chunk));
         if (bytes is null) {
             data = default!;
             return false;
@@ -35,9 +36,9 @@ public sealed class RocksDbWorldStore : IWorldStore, IDisposable {
         return true;
     }
 
-    public void SaveWorldEntities(string world, byte[] data) => db.Put(EntityKey(world), data);
+    public void SaveEntities(byte[] data) => db.Put(EntitiesKey, data);
 
-    public byte[]? LoadWorldEntities(string world) => db.Get(EntityKey(world));
+    public byte[]? LoadEntities() => db.Get(EntitiesKey);
 
     public void Dispose() => db.Dispose();
 }

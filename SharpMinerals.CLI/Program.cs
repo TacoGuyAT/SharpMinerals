@@ -69,23 +69,24 @@ TypeMapper.Freeze();  // seal the wire mappings - protocols build their TypeMapp
 var protocols = new ProtocolRegistry(new ProtocolJE763(), new ProtocolJE762(), new ProtocolJE61());
 var endpoint = new IPEndPoint(IPAddress.Parse(config.Host), config.Port);
 
-// Persistence behind write-behind queues so saves never block hot paths. The backing store is chosen at
+// Persistence: each world owns its own store (its own database directory) behind a write-behind queue so
+// saves never block hot paths; the world drains and closes it on Unload. The backing store is chosen at
 // compile time: IN_MEMORY = ephemeral (no disk), AOT = the AOT-safe MinRocksDb binding, else RocksDbSharp.
 // MinRocksDb and RocksDbSharp share an on-disk layout, so a world is portable between them.
 #if IN_MEMORY
-var worldStore = new AsyncWorldStore(new InMemoryWorldStore());
+Func<string, IWorldStore> worldStoreFactory = _ => new AsyncWorldStore(new InMemoryWorldStore());
 var entityStore = new AsyncEntityStore(new InMemoryEntityStore());
 #elif AOT
-var worldStore = new AsyncWorldStore(new MinRocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
+Func<string, IWorldStore> worldStoreFactory = name => new AsyncWorldStore(new MinRocksDbWorldStore(Path.Combine(config.DataDir, "worlds", name)));
 var entityStore = new AsyncEntityStore(new MinRocksDbEntityStore(Path.Combine(config.DataDir, "players")));
 #else
-var worldStore = new AsyncWorldStore(new RocksDbWorldStore(Path.Combine(config.DataDir, "chunks")));
+Func<string, IWorldStore> worldStoreFactory = name => new AsyncWorldStore(new RocksDbWorldStore(Path.Combine(config.DataDir, "worlds", name)));
 var entityStore = new AsyncEntityStore(new RocksDbEntityStore(Path.Combine(config.DataDir, "players")));
 #endif
 
 // The configured main world, a persisted procedural overworld (seed fixed for now; config to follow).
 var worlds = new ConcurrentDictionary<string, World>();
-worlds[config.World] = new World(config.World, OverworldChunkGenerator.Create(1337), worldStore);
+worlds[config.World] = new World(config.World, OverworldChunkGenerator.Create(1337), worldStoreFactory(config.World));
 
 // Forward-declared for the transport callbacks below; both are assigned before any client connects.
 Server server = null!;
@@ -105,6 +106,7 @@ try {
 
 var context = new ServerContext {
     Worlds = worlds,
+    WorldStoreFactory = worldStoreFactory, // runtime-created worlds (games, islands) get their own store
     MOTD = motd ?? ChatComponent.Text(config.Motd),
     MaxPlayers = config.MaxPlayers,
     TicksPerSecond = config.Tps,
@@ -154,5 +156,6 @@ if (!string.IsNullOrEmpty(config.Startup))
 server.WaitForShutdown();
 modLoader.StopAll(server); // let mods release anything they own before the stores close
 entityStore.Dispose();
-worldStore.Dispose();
+foreach (var world in worlds.Values)
+    world.Unload(); // each world disposes its own store - drains write-behind and closes the backend
 return 0;

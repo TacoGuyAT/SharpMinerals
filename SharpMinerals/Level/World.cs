@@ -178,7 +178,7 @@ public class World : ITickable {
     }
 
     Chunk LoadOrGenerate(Vector3i pos) {
-        if(store is not null && store.TryLoadChunk(Name, pos, out var data)) {
+        if(store is not null && store.TryLoadChunk(pos, out var data)) {
             var chunk = ChunkCodec.Deserialize(pos, data, this);
             chunk.ClearDirty();
             return chunk;
@@ -199,7 +199,7 @@ public class World : ITickable {
         int saved = 0;
         foreach (var chunk in loadedChunks.Values)
             if (chunk.Dirty) {
-                store.SaveChunk(Name, chunk.Position, ChunkCodec.Serialize(chunk));
+                store.SaveChunk(chunk.Position, ChunkCodec.Serialize(chunk));
                 chunk.ClearDirty();
                 saved++;
             }
@@ -227,7 +227,7 @@ public class World : ITickable {
             s.WriteVarInt(blob.Length);
             s.Write(blob, 0, blob.Length);
         }
-        store.SaveWorldEntities(Name, ms.ToArray());
+        store.SaveEntities(ms.ToArray());
         return persisted.Count;
     }
 
@@ -235,7 +235,7 @@ public class World : ITickable {
     /// before the world ticks (spawning is a structural ECS change). Returns the number spawned; no-op without a
     /// store or saved data. An entity of an unregistered kind (a removed mod's) is skipped.</summary>
     public int LoadEntities() {
-        if (store is null || store.LoadWorldEntities(Name) is not { } data) return 0;
+        if (store is null || store.LoadEntities() is not { } data) return 0;
         using var ms = new MemoryStream(data, writable: false);
         var s = new MinecraftStream(ms);
         if (s.ReadUByte() is var version && version != EntitiesVersion)
@@ -267,7 +267,7 @@ public class World : ITickable {
                 continue;
             if (chunk.Dirty) {
                 if (store is null) continue; // no backend - keep it rather than lose the edit
-                store.SaveChunk(Name, pos, ChunkCodec.Serialize(chunk));
+                store.SaveChunk(pos, ChunkCodec.Serialize(chunk));
             }
             loadedChunks.TryRemove(pos, out _);
             evicted++;
@@ -495,6 +495,8 @@ public class World : ITickable {
         loader.Dispose(); // stop background workers and drain before releasing the chunk map
         loadedChunks.Clear();
         ArchWorld.Destroy(Ecs);
+        // The world owns its store: for a write-behind store this drains queued saves and closes the backend.
+        (store as IDisposable)?.Dispose();
     }
 
     public void Tick() {

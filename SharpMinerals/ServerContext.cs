@@ -1,5 +1,6 @@
 ﻿using SharpMinerals.Chat;
 using SharpMinerals.Level;
+using SharpMinerals.Persistence;
 using System.Collections.Concurrent;
 
 namespace SharpMinerals;
@@ -11,6 +12,9 @@ namespace SharpMinerals;
 /// </summary>
 public struct ServerContext {
     public ConcurrentDictionary<string, World> Worlds;
+    /// <summary>Creates the store a world created at runtime should own (the same backend the host gave the
+    /// startup worlds). Null = a host without persistence; runtime worlds are then in-memory.</summary>
+    public Func<string, IWorldStore>? WorldStoreFactory;
     public ChatComponent MOTD;
     public int MaxPlayers;
     public double TicksPerSecond;

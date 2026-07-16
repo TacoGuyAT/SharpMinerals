@@ -2308,7 +2308,7 @@ public class PlayStateTests {
 
         // Evict everything (no centres) - the dirty near chunk must be saved before it goes.
         world.EvictChunks(new List<(long, long)>(), keepRadius: 1);
-        Assert.True(store.TryLoadChunk("evict", new Vector3i(0, 0, 0), out _),
+        Assert.True(store.TryLoadChunk(new Vector3i(0, 0, 0), out _),
             "dirty chunk was saved on eviction");
     }
 

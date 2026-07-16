@@ -6,15 +6,14 @@ namespace SharpMinerals.Persistence;
 /// <summary><see cref="IWorldStore"/> backed by a dictionary for the process lifetime - exercises the
 /// save/load path without a disk backend.</summary>
 public sealed class InMemoryWorldStore : IWorldStore {
-    readonly ConcurrentDictionary<(string World, Vector3i Chunk), byte[]> chunks = new();
-    readonly ConcurrentDictionary<string, byte[]> entities = new();
+    readonly ConcurrentDictionary<Vector3i, byte[]> chunks = new();
+    volatile byte[]? entities;
 
-    public void SaveChunk(string world, Vector3i chunk, byte[] data) => chunks[(world, chunk)] = data;
+    public void SaveChunk(Vector3i chunk, byte[] data) => chunks[chunk] = data;
 
-    public bool TryLoadChunk(string world, Vector3i chunk, out byte[] data) =>
-        chunks.TryGetValue((world, chunk), out data!);
+    public bool TryLoadChunk(Vector3i chunk, out byte[] data) => chunks.TryGetValue(chunk, out data!);
 
-    public void SaveWorldEntities(string world, byte[] data) => entities[world] = data;
+    public void SaveEntities(byte[] data) => entities = data;
 
-    public byte[]? LoadWorldEntities(string world) => entities.GetValueOrDefault(world);
+    public byte[]? LoadEntities() => entities;
 }

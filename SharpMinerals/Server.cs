@@ -95,6 +95,11 @@ public class Server : ITickable {
     public EventBus Events { get; }
 
     public ConcurrentDictionary<string, World> Worlds => context.Worlds;
+
+    /// <summary>Creates the host-backed store for a world, for creating PERSISTENT worlds at runtime - pass
+    /// the result to the <see cref="World"/> constructor in a <see cref="GetOrCreateWorld"/> factory; the
+    /// world owns it from then on. Null when the host runs without persistence (the world is then in-memory).</summary>
+    public IWorldStore? CreateWorldStore(string world) => context.WorldStoreFactory?.Invoke(world);
     public ChatComponent MOTD { get => context.MOTD; set => context.MOTD = value; }
     public int MaxPlayers => context.MaxPlayers;
     public double TicksPerSecond => context.TicksPerSecond;
@@ -332,6 +337,8 @@ public class Server : ITickable {
             var world = factory.Invoke(n, this);
             world.Events = Events;             // wire a dynamically-created world the same as the startup ones
             world.NextEntityId = NextEntityId; // ...incl. the loose-entity id allocator (else items/falling blocks get id 0)
+            world.LoadEntities();              // respawn saved loose entities for a store-backed world (no-op otherwise);
+                                               // safe pre-publication: the tick loop can't see the world until GetOrAdd returns
             return world;
         });
 
@@ -346,6 +353,7 @@ public class Server : ITickable {
                 return false; // never pull a world out from under a player
             if (!Worlds.TryRemove(new KeyValuePair<string, World>(target.Name, target)))
                 return false; // already gone, or a different instance under that name
+            target.Save(); // flush dirty chunks + loose entities first (no-op without a store)
             target.Unload();
         }
         Log.LogInformation("Unloaded world '{World}'", target.Name);
